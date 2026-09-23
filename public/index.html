@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Asset & Lifecycle Management | VB EXPORTS</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
+</head>
+<body>
+
+  <!-- =========================================================================
+       SIDEBAR NAVIGATION
+       ========================================================================= -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-section">
+      <div class="brand-logo-icon">💻</div>
+      <div class="brand-info">
+        <h2>IT Asset Hub</h2>
+        <span>VB EXPORTS</span>
+      </div>
+    </div>
+
+    <ul class="nav-menu">
+      <div class="nav-section-title">Operations</div>
+      <li class="nav-item">
+        <a class="nav-link active" data-view="dashboard" onclick="navigate('dashboard')">
+          <span class="nav-icon">📊</span>
+          <span>Dashboard</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-view="assets" onclick="navigate('assets')">
+          <span class="nav-icon">💻</span>
+          <span>IT Assets</span>
+          <span class="nav-badge badge-blue" id="sidebar-asset-count">51</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-view="repairs" onclick="navigate('repairs')">
+          <span class="nav-icon">🔧</span>
+          <span>Repairs & Lifecycle</span>
+          <span class="nav-badge badge-amber" id="sidebar-repair-count">2</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-view="keys" onclick="navigate('keys')">
+          <span class="nav-icon">🔑</span>
+          <span>Quick Heal Keys</span>
+          <span class="nav-badge badge-purple" id="sidebar-key-count">30</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-view="accessories" onclick="navigate('accessories')">
+          <span class="nav-icon">🖱️</span>
+          <span>Accessories</span>
+          <span class="nav-badge" id="sidebar-acc-count">6</span>
+        </a>
+      </li>
+
+      <div class="nav-section-title">Intelligence</div>
+      <li class="nav-item">
+        <a class="nav-link" data-view="search" onclick="navigate('search')">
+          <span class="nav-icon">🔍</span>
+          <span>Master Search</span>
+        </a>
+      </li>
+
+      <div class="nav-section-title admin-only" style="display:none;">Administration</div>
+      <li class="nav-item admin-only" style="display:none;">
+        <a class="nav-link" data-view="settings" onclick="navigate('settings')">
+          <span class="nav-icon">⚙️</span>
+          <span>Settings & Users</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-user">
+      <div class="user-avatar" id="sidebar-avatar">A</div>
+      <div class="user-details">
+        <div class="user-name" id="sidebar-user-name">Administrator</div>
+        <span class="user-role-badge role-admin" id="sidebar-user-role">ADMIN</span>
+      </div>
+      <button class="btn-logout" title="Sign Out" onclick="logout()">🚪</button>
+    </div>
+  </aside>
+
+  <!-- =========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================= -->
+  <main class="main-content">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
+        <div class="master-search-trigger" onclick="openMasterSearchModal()">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Global search assets, repairs, keys, users..." readonly>
+          <span class="search-shortcut">Ctrl+K</span>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button class="topbar-btn btn-secondary tech-action" onclick="openRepairModal()">+ Log Repair</button>
+        <button class="topbar-btn btn-primary tech-action" onclick="openNewAssetModal()">+ Add IT Asset</button>
+      </div>
+    </header>
+
+    <!-- =========================================================================
+         VIEW 1: DASHBOARD
+         ========================================================================= -->
+    <section class="view-container active" id="view-dashboard">
+      <div class="view-header">
+        <div>
+          <h1>IT Systems & Infrastructure Dashboard</h1>
+          <p>Real-time asset telemetry, maintenance records, and antivirus licensing overview</p>
+        </div>
+        <div>
+          <button class="topbar-btn btn-secondary" onclick="loadDashboard()">🔄 Refresh Telemetry</button>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card card-blue" onclick="navigate('assets')">
+          <div class="kpi-info">
+            <h3>Total IT Assets</h3>
+            <div class="kpi-value" id="kpi-total-assets">51</div>
+            <div class="kpi-subtext" id="kpi-assets-sub">Systems registered</div>
+          </div>
+          <div class="kpi-icon-box">💻</div>
+        </div>
+
+        <div class="kpi-card card-green" onclick="navigate('assets', { status: 'Working' })">
+          <div class="kpi-info">
+            <h3>Operational Assets</h3>
+            <div class="kpi-value" id="kpi-working-assets">49</div>
+            <div class="kpi-subtext">Healthy & deployed</div>
+          </div>
+          <div class="kpi-icon-box">✅</div>
+        </div>
+
+        <div class="kpi-card card-amber" onclick="navigate('repairs')">
+          <div class="kpi-info">
+            <h3>Under Repair</h3>
+            <div class="kpi-value" id="kpi-repair-assets">2</div>
+            <div class="kpi-subtext">Active maintenance</div>
+          </div>
+          <div class="kpi-icon-box">🔧</div>
+        </div>
+
+        <div class="kpi-card card-red" onclick="navigate('assets', { status: 'Not Working' })">
+          <div class="kpi-info">
+            <h3>EOL / Non-Working</h3>
+            <div class="kpi-value" id="kpi-eol-assets">2</div>
+            <div class="kpi-subtext">Requires attention</div>
+          </div>
+          <div class="kpi-icon-box">⚠️</div>
+        </div>
+
+        <div class="kpi-card card-purple" onclick="navigate('keys')">
+          <div class="kpi-info">
+            <h3>Quick Heal Keys</h3>
+            <div class="kpi-value" id="kpi-total-keys">30</div>
+            <div class="kpi-subtext" id="kpi-keys-sub">Available licenses</div>
+          </div>
+          <div class="kpi-icon-box">🔑</div>
+        </div>
+
+        <div class="kpi-card card-teal">
+          <div class="kpi-info">
+            <h3>Total Repair Spend</h3>
+            <div class="kpi-value" id="kpi-repair-cost">₹3,600</div>
+            <div class="kpi-subtext">Lifecycle upkeep</div>
+          </div>
+          <div class="kpi-icon-box">💰</div>
+        </div>
+      </div>
+
+      <!-- Dashboard Visual Breakdown -->
+      <div class="dashboard-grid">
+        <div class="content-card">
+          <div class="card-header-row">
+            <h3>🏢 Assets Distribution by Department</h3>
+            <span class="badge badge-working">Live Count</span>
+          </div>
+          <div id="dept-breakdown-container" style="display:flex; flex-direction:column; gap:12px;">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <div class="content-card">
+          <div class="card-header-row">
+            <h3>🖥️ System Types</h3>
+          </div>
+          <div id="type-breakdown-container" style="display:flex; flex-direction:column; gap:10px;">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Repairs & EOL Warnings Section -->
+      <div class="dashboard-grid">
+        <div class="content-card">
+          <div class="card-header-row">
+            <h3>🛠️ Recent Maintenance & Repair Activity</h3>
+            <button class="topbar-btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="navigate('repairs')">View All</button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Ticket</th>
+                  <th>Asset</th>
+                  <th>Issue</th>
+                  <th>Vendor / Tech</th>
+                  <th>Cost</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-recent-repairs">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="content-card">
+          <div class="card-header-row">
+            <h3>⚠️ Lifecycle Attention / EOL Watch</h3>
+          </div>
+          <div id="dashboard-eol-warnings" style="display:flex; flex-direction:column; gap:12px;">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         VIEW 2: IT ASSETS REGISTRY
+         ========================================================================= -->
+    <section class="view-container" id="view-assets">
+      <div class="view-header">
+        <div>
+          <h1>IT Assets Registry</h1>
+          <p>Comprehensive inventory of workstations, printers, scanners, laptops and peripherals</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="topbar-btn btn-secondary" onclick="exportAssetsCSV()">📥 Export CSV</button>
+          <button class="topbar-btn btn-primary tech-action" onclick="openNewAssetModal()">+ Add New IT Asset</button>
+        </div>
+      </div>
+
+      <!-- Filter Controls -->
+      <div class="filter-bar">
+        <div class="filter-group" style="flex:1; min-width: 200px;">
+          <input type="text" id="asset-filter-search" class="input-control" placeholder="Search serial, brand, user, dept, remarks..." style="width: 100%;" oninput="debounceAssetSearch()">
+        </div>
+        <div class="filter-group">
+          <label>Type:</label>
+          <select id="asset-filter-type" class="select-control" onchange="loadAssets()">
+            <option value="">All Types</option>
+            <option value="Desktop">Desktop</option>
+            <option value="Laptop">Laptop</option>
+            <option value="Normal Printer">Normal Printer</option>
+            <option value="Tag Printer">Tag Printer</option>
+            <option value="Label Printer">Label Printer</option>
+            <option value="Scanner">Scanner</option>
+            <option value="WebCam">WebCam</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Department:</label>
+          <select id="asset-filter-dept" class="select-control" onchange="loadAssets()">
+            <option value="">All Departments</option>
+            <option value="Orders">Orders</option>
+            <option value="Dispatch">Dispatch</option>
+            <option value="Listings">Listings</option>
+            <option value="Company">Company</option>
+            <option value="Accounts">Accounts</option>
+            <option value="Data Analysis">Data Analysis</option>
+            <option value="Return">Return</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Status:</label>
+          <select id="asset-filter-status" class="select-control" onchange="loadAssets()">
+            <option value="">All Statuses</option>
+            <option value="Working">Working</option>
+            <option value="In Repair">In Repair</option>
+            <option value="Not Working">Not Working</option>
+            <option value="Retired">Retired</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Antivirus:</label>
+          <select id="asset-filter-key" class="select-control" onchange="loadAssets()">
+            <option value="">All</option>
+            <option value="mapped">Mapped Key</option>
+            <option value="unmapped">No Key Mapped</option>
+          </select>
+        </div>
+        <button class="topbar-btn btn-secondary" onclick="resetAssetFilters()">Reset</button>
+      </div>
+
+      <!-- Assets Table -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Serial #</th>
+              <th>Type</th>
+              <th>Brand / Model</th>
+              <th>Department</th>
+              <th>Location</th>
+              <th>Assigned User</th>
+              <th>Quick Heal Key</th>
+              <th>Status</th>
+              <th>Lifecycle / Health</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="assets-table-body">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 14px; font-size: 13px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+        <span id="assets-count-label">Showing 51 assets</span>
+        <span>Tip: Click any asset row or 👁️ to view complete repair history, parts added, and specs</span>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         VIEW 3: REPAIRS & LIFECYCLE MANAGEMENT
+         ========================================================================= -->
+    <section class="view-container" id="view-repairs">
+      <div class="view-header">
+        <div>
+          <h1>Repair & Lifecycle Maintenance Flow</h1>
+          <p>Track repairs, part replacements, service expenses, and identify assets reaching End of Life</p>
+        </div>
+        <div>
+          <button class="topbar-btn btn-primary tech-action" onclick="openRepairModal()">+ Log New Repair Ticket</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-group" style="flex:1; min-width: 220px;">
+          <input type="text" id="repair-filter-search" class="input-control" placeholder="Search ticket #, issue, technician, parts..." style="width: 100%;" oninput="debounceRepairSearch()">
+        </div>
+        <div class="filter-group">
+          <label>Status:</label>
+          <select id="repair-filter-status" class="select-control" onchange="loadRepairs()">
+            <option value="">All Statuses</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Awaiting Parts">Awaiting Parts</option>
+            <option value="Completed">Completed</option>
+            <option value="Beyond Repair">Beyond Repair</option>
+          </select>
+        </div>
+        <button class="topbar-btn btn-secondary" onclick="loadRepairs()">Refresh</button>
+      </div>
+
+      <!-- Repair Tickets Table -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Ticket #</th>
+              <th>Asset Serial</th>
+              <th>Issue & Diagnosis</th>
+              <th>Parts Added / Replaced</th>
+              <th>Technician / Vendor</th>
+              <th>Service Date</th>
+              <th>Cost (₹)</th>
+              <th>Status</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="repairs-table-body">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- End-of-Life (EOL) Intelligence Panel -->
+      <div class="content-card" style="margin-top: 28px;">
+        <div class="card-header-row">
+          <div>
+            <h3>🧠 Asset Lifecycle & End-of-Life (EOL) Intelligence</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">Automated scoring based on recurring part failures, repair cost accumulation, and operational age</p>
+          </div>
+          <span class="badge badge-health-warning">Automated Audit</span>
+        </div>
+
+        <div id="eol-recommendations-list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px;">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         VIEW 4: QUICK HEAL KEYS MANAGEMENT
+         ========================================================================= -->
+    <section class="view-container" id="view-keys">
+      <div class="view-header">
+        <div>
+          <h1>Quick Heal Antivirus License Management</h1>
+          <p>Track 30 bundle licenses, expiration dates, and 1-click map/unmap to workstations</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="topbar-btn btn-secondary tech-action" onclick="openBulkKeyModal()">📋 Bulk Import Keys</button>
+          <button class="topbar-btn btn-primary tech-action" onclick="openKeyModal()">+ Add New Key</button>
+        </div>
+      </div>
+
+      <!-- Quick Heal KPI Cards -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+        <div class="kpi-card card-purple">
+          <div class="kpi-info">
+            <h3>Total Keys</h3>
+            <div class="kpi-value" id="keys-kpi-total">30</div>
+            <div class="kpi-subtext">In license vault</div>
+          </div>
+          <div class="kpi-icon-box">🛡️</div>
+        </div>
+        <div class="kpi-card card-green">
+          <div class="kpi-info">
+            <h3>Available</h3>
+            <div class="kpi-value" id="keys-kpi-avail">30</div>
+            <div class="kpi-subtext">Ready to assign</div>
+          </div>
+          <div class="kpi-icon-box">✨</div>
+        </div>
+        <div class="kpi-card card-blue">
+          <div class="kpi-info">
+            <h3>Assigned</h3>
+            <div class="kpi-value" id="keys-kpi-assigned">0</div>
+            <div class="kpi-subtext">Active on machines</div>
+          </div>
+          <div class="kpi-icon-box">💻</div>
+        </div>
+        <div class="kpi-card card-amber">
+          <div class="kpi-info">
+            <h3>Expiring (90d)</h3>
+            <div class="kpi-value" id="keys-kpi-expiring">0</div>
+            <div class="kpi-subtext">Needs renewal</div>
+          </div>
+          <div class="kpi-icon-box">⏳</div>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-group" style="flex:1; min-width: 220px;">
+          <input type="text" id="key-filter-search" class="input-control" placeholder="Search product key, assigned asset, user..." style="width: 100%;" oninput="debounceKeySearch()">
+        </div>
+        <div class="filter-group">
+          <label>Status:</label>
+          <select id="key-filter-status" class="select-control" onchange="loadKeys()">
+            <option value="">All Statuses</option>
+            <option value="Available">Available</option>
+            <option value="Assigned">Assigned</option>
+          </select>
+        </div>
+        <button class="topbar-btn btn-secondary" onclick="loadKeys()">Refresh</button>
+      </div>
+
+      <!-- Keys Table -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Product Key</th>
+              <th>Edition</th>
+              <th>Validity Date</th>
+              <th>Remaining Validity</th>
+              <th>Status</th>
+              <th>Mapped IT Asset</th>
+              <th>Assigned User</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="keys-table-body">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         VIEW 5: ACCESSORIES INVENTORY
+         ========================================================================= -->
+    <section class="view-container" id="view-accessories">
+      <div class="view-header">
+        <div>
+          <h1>Accessories & Peripherals Inventory</h1>
+          <p>Mice, keyboards, barcode scanners, thermal printheads, power adapters, and UPS units</p>
+        </div>
+        <div>
+          <button class="topbar-btn btn-primary tech-action" onclick="openAccessoryModal()">+ Add Accessory</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-group" style="flex:1; min-width: 220px;">
+          <input type="text" id="acc-filter-search" class="input-control" placeholder="Search code, accessory name, brand, user..." style="width:100%;" oninput="debounceAccSearch()">
+        </div>
+        <div class="filter-group">
+          <label>Category:</label>
+          <select id="acc-filter-cat" class="select-control" onchange="loadAccessories()">
+            <option value="">All Categories</option>
+            <option value="Mouse">Mouse</option>
+            <option value="Keyboard">Keyboard</option>
+            <option value="Scanner">Scanner</option>
+            <option value="Print Head">Print Head</option>
+            <option value="Cable/Adapter">Cable/Adapter</option>
+            <option value="UPS">UPS</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Status:</label>
+          <select id="acc-filter-status" class="select-control" onchange="loadAccessories()">
+            <option value="">All Statuses</option>
+            <option value="In Stock">In Stock</option>
+            <option value="Assigned">Assigned</option>
+            <option value="Damaged">Damaged</option>
+          </select>
+        </div>
+        <button class="topbar-btn btn-secondary" onclick="loadAccessories()">Refresh</button>
+      </div>
+
+      <!-- Accessories Table -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Brand / Model</th>
+              <th>Stock Qty</th>
+              <th>Location</th>
+              <th>Assigned To</th>
+              <th>Status</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="accessories-table-body">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         VIEW 6: MASTER SEARCH
+         ========================================================================= -->
+    <section class="view-container" id="view-search">
+      <div class="view-header">
+        <div>
+          <h1>Master Intelligence Search</h1>
+          <p>Instant multi-index query across Assets, Repairs, Parts Added, Antivirus Keys, Accessories, and Staff</p>
+        </div>
+      </div>
+
+      <div style="background-color:#ffffff; padding:24px; border-radius:var(--radius-lg); border:1px solid var(--border-color); box-shadow:var(--shadow-sm); margin-bottom:24px;">
+        <div style="position:relative;">
+          <input type="text" id="dedicated-search-input" class="input-control" placeholder="Type keyword: 'Lenovo', 'Chandan', 'Citizen', 'Printer', '50007', 'SSD', 'Scanner'..." style="width:100%; font-size:16px; padding:16px 20px;" autofocus oninput="debounceMasterSearch()">
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; font-size:12px; color:var(--text-muted); align-items:center;">
+          <span>Popular searches:</span>
+          <button class="demo-chip" onclick="quickSearch('Lenovo')">Lenovo</button>
+          <button class="demo-chip" onclick="quickSearch('Chandan Yadav')">Chandan Yadav</button>
+          <button class="demo-chip" onclick="quickSearch('Tag Printer')">Tag Printer</button>
+          <button class="demo-chip" onclick="quickSearch('Zebra')">Zebra</button>
+          <button class="demo-chip" onclick="quickSearch('Orders')">Orders Floor</button>
+          <button class="demo-chip" onclick="quickSearch('Not Working')">Not Working</button>
+        </div>
+      </div>
+
+      <div id="master-search-results-container">
+        <!-- Populated via JS -->
+        <div style="text-align:center; padding:60px 20px; color:var(--text-muted);">
+          <div style="font-size:42px; margin-bottom:12px;">🔍</div>
+          <h3>Ready for Master Search</h3>
+          <p>Enter any keyword above to search through all 5 databases simultaneously.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         VIEW 7: SETTINGS & USER MANAGEMENT (ADMIN ONLY)
+         ========================================================================= -->
+    <section class="view-container" id="view-settings">
+      <div class="view-header">
+        <div>
+          <h1>System Settings & User Role Administration</h1>
+          <p>Manage staff accounts, assign granular permissions (Admin, Technician, Viewer), and download backups</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="topbar-btn btn-secondary" onclick="downloadDatabaseBackup()">💾 Download JSON Backup</button>
+          <button class="topbar-btn btn-primary" onclick="openUserModal()">+ Add New User</button>
+        </div>
+      </div>
+
+      <!-- Users Table -->
+      <div class="content-card" style="margin-bottom: 28px;">
+        <div class="card-header-row">
+          <h3>👥 System Users & Role Definitions</h3>
+          <span class="badge badge-health-healthy">Role Based Access Control</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Assigned Role</th>
+                <th>Account Status</th>
+                <th>Created At</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Audit Logs Table -->
+      <div class="content-card">
+        <div class="card-header-row">
+          <h3>📜 System Audit Trail</h3>
+          <button class="topbar-btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="loadAuditLogs()">Refresh Audit</button>
+        </div>
+        <div class="table-responsive" style="max-height: 380px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="audit-logs-table-body">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =========================================================================
+       MODALS
+       ========================================================================= -->
+
+  <!-- 1. ASSET PROFILE DOSSIER MODAL -->
+  <div class="modal-backdrop" id="modal-asset-detail">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2 id="dossier-header-title">Asset Dossier: #50001</h2>
+        <button class="modal-close" onclick="closeModal('modal-asset-detail')">✕</button>
+      </div>
+      <div class="modal-body" id="dossier-body">
+        <!-- Populated via JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="topbar-btn btn-secondary" onclick="printAssetTag()">🏷️ Print Asset Tag / QR</button>
+        <button class="topbar-btn btn-secondary tech-action" id="dossier-btn-repair">🔧 Log Repair</button>
+        <button class="topbar-btn btn-primary tech-action" id="dossier-btn-edit">✏️ Edit Details</button>
+        <button class="topbar-btn btn-secondary" onclick="closeModal('modal-asset-detail')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. ADD / EDIT ASSET MODAL -->
+  <div class="modal-backdrop" id="modal-asset-form">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2 id="asset-form-title">Add New IT Asset</h2>
+        <button class="modal-close" onclick="closeModal('modal-asset-form')">✕</button>
+      </div>
+      <form id="form-asset" onsubmit="handleAssetSubmit(event)">
+        <input type="hidden" id="asset-form-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="asset-serial">Internal Serial Number *</label>
+              <input type="text" id="asset-serial" class="input-control" placeholder="e.g. 50052" required>
+            </div>
+            <div class="form-group">
+              <label for="asset-type">Asset / System Type *</label>
+              <select id="asset-type" class="select-control" required>
+                <option value="Desktop">Desktop</option>
+                <option value="Laptop">Laptop</option>
+                <option value="Normal Printer">Normal Printer</option>
+                <option value="Tag Printer">Tag Printer</option>
+                <option value="Label Printer">Label Printer</option>
+                <option value="Scanner">Scanner</option>
+                <option value="WebCam">WebCam</option>
+                <option value="Server">Server</option>
+                <option value="Network Switch">Network Switch</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="asset-brand">Brand of the Product *</label>
+              <input type="text" id="asset-brand" class="input-control" placeholder="e.g. Lenovo, HP, Citizen, TSC, Zebra, Asus, Dell" required>
+            </div>
+            <div class="form-group">
+              <label for="asset-model">Model Name / Number</label>
+              <input type="text" id="asset-model" class="input-control" placeholder="e.g. ThinkCentre M70q, TE244, DS2208">
+            </div>
+            <div class="form-group">
+              <label for="asset-hw-serial">Manufacturer Hardware Serial</label>
+              <input type="text" id="asset-hw-serial" class="input-control" placeholder="e.g. S/N or Service Tag">
+            </div>
+            <div class="form-group">
+              <label for="asset-purchase-date">Purchase Date</label>
+              <input type="date" id="asset-purchase-date" class="input-control">
+            </div>
+            <div class="form-group">
+              <label for="asset-vendor">Purchased From (Vendor)</label>
+              <input type="text" id="asset-vendor" class="input-control" placeholder="e.g. Compunet Infotech, Amazon Business">
+            </div>
+            <div class="form-group">
+              <label for="asset-cost">Purchase Cost (₹)</label>
+              <input type="number" id="asset-cost" class="input-control" placeholder="0" min="0" step="1">
+            </div>
+            <div class="form-group">
+              <label for="asset-department">Department *</label>
+              <select id="asset-department" class="select-control" required>
+                <option value="Orders">Orders</option>
+                <option value="Dispatch">Dispatch</option>
+                <option value="Listings">Listings</option>
+                <option value="Company">Company</option>
+                <option value="Accounts">Accounts</option>
+                <option value="Data Analysis">Data Analysis</option>
+                <option value="Return">Return</option>
+                <option value="IT">IT Infrastructure</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="asset-location">Where in use? (Location)</label>
+              <input type="text" id="asset-location" class="input-control" placeholder="e.g. Orders Floor 1st Table, Dispatch Bay Desk 2">
+            </div>
+            <div class="form-group">
+              <label for="asset-user">Who is using? (Assigned User) *</label>
+              <input type="text" id="asset-user" class="input-control" placeholder="e.g. Chandan Yadav, Komal Parate, Sachin Das" required>
+            </div>
+            <div class="form-group">
+              <label for="asset-status">Working Status *</label>
+              <select id="asset-status" class="select-control" required>
+                <option value="Working">Working</option>
+                <option value="In Repair">In Repair</option>
+                <option value="Not Working">Not Working</option>
+                <option value="Retired">Retired / Scrapped</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="asset-key-select">Map Quick Heal Antivirus Key</label>
+              <select id="asset-key-select" class="select-control">
+                <option value="">-- No Key Mapped --</option>
+                <!-- Populated via JS -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="asset-condition">Condition Rating</label>
+              <select id="asset-condition" class="select-control">
+                <option value="New">Brand New</option>
+                <option value="Good" selected>Good Condition</option>
+                <option value="Fair">Fair / Minor Wear</option>
+                <option value="Poor">Poor / Aging</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="asset-parts">Parts Added / Upgraded Summary</label>
+              <input type="text" id="asset-parts" class="input-control" placeholder="e.g. Added 8GB DDR4 RAM; Installed 512GB Kingston NVMe SSD; Replaced printhead">
+            </div>
+            <div class="form-group col-span-2">
+              <label for="asset-remarks">Remarks & Operational Purpose</label>
+              <textarea id="asset-remarks" class="input-control" rows="3" placeholder="Describe asset usage (e.g. This printer is using for picklist printing 75*35mm stickers)"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-asset-form')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary" id="btn-save-asset">Save Asset Details</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. CREATE / EDIT REPAIR TICKET MODAL -->
+  <div class="modal-backdrop" id="modal-repair-form">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="repair-form-title">Log Asset Repair / Part Replacement</h2>
+        <button class="modal-close" onclick="closeModal('modal-repair-form')">✕</button>
+      </div>
+      <form id="form-repair" onsubmit="handleRepairSubmit(event)">
+        <input type="hidden" id="repair-form-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group col-span-2">
+              <label for="repair-asset-select">Select IT Asset to Service *</label>
+              <select id="repair-asset-select" class="select-control" required>
+                <!-- Populated via JS -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="repair-date">Service Date *</label>
+              <input type="date" id="repair-date" class="input-control" required>
+            </div>
+            <div class="form-group">
+              <label for="repair-type">Repair / Service Type</label>
+              <select id="repair-type" class="select-control">
+                <option value="Component Repair">Component Repair</option>
+                <option value="Part Replacement">Part Replacement</option>
+                <option value="Hardware Upgrade">Hardware Upgrade (SSD/RAM)</option>
+                <option value="Preventive Maintenance">Preventive Maintenance</option>
+              </select>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="repair-issue">Issue / Fault Description *</label>
+              <textarea id="repair-issue" class="input-control" rows="2" placeholder="e.g. Thermal printhead printing blank lines; Desktop failing to boot; Key panel not working" required></textarea>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="repair-parts">New Parts Added / Replaced</label>
+              <input type="text" id="repair-parts" class="input-control" placeholder="e.g. Installed New Thermal Printhead 203 DPI, 1x 256GB SSD">
+            </div>
+            <div class="form-group">
+              <label for="repair-vendor">Repair Vendor / Service Center</label>
+              <input type="text" id="repair-vendor" class="input-control" placeholder="e.g. Lenovo Care, Canon Service, Local Vendor">
+            </div>
+            <div class="form-group">
+              <label for="repair-tech">Technician Name & Contact</label>
+              <input type="text" id="repair-tech" class="input-control" placeholder="e.g. Suresh Kumar (9876543210)">
+            </div>
+            <div class="form-group">
+              <label for="repair-cost">Repair & Parts Cost (₹)</label>
+              <input type="number" id="repair-cost" class="input-control" placeholder="0" min="0" step="1">
+            </div>
+            <div class="form-group">
+              <label for="repair-status">Ticket Status *</label>
+              <select id="repair-status" class="select-control" required>
+                <option value="In Progress">In Progress (At Service Center)</option>
+                <option value="Awaiting Parts">Awaiting Parts</option>
+                <option value="Completed">Completed & Returned to Service</option>
+                <option value="Beyond Repair">Beyond Repair (Decommission / EOL)</option>
+              </select>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="repair-remarks">Technician Remarks & Warranty</label>
+              <input type="text" id="repair-remarks" class="input-control" placeholder="e.g. 6 Months warranty on printhead. Tested OK with 100 sample prints.">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-repair-form')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary" id="btn-save-repair">Save Repair Ticket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. QUICK HEAL KEY MODALS -->
+  <div class="modal-backdrop" id="modal-key-form">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Add Quick Heal License Key</h2>
+        <button class="modal-close" onclick="closeModal('modal-key-form')">✕</button>
+      </div>
+      <form id="form-key" onsubmit="handleKeySubmit(event)">
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="key-code">Quick Heal Product Key *</label>
+            <input type="text" id="key-code" class="input-control" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" required>
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="key-edition">Antivirus Edition</label>
+            <input type="text" id="key-edition" class="input-control" value="Total Security">
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="key-validity">Validity Expiration Date *</label>
+            <input type="date" id="key-validity" class="input-control" value="2029-08-22" required>
+          </div>
+          <div class="form-group">
+            <label for="key-notes">Notes</label>
+            <input type="text" id="key-notes" class="input-control" placeholder="e.g. Purchased in August 2026 bundle">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-key-form')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary">Save Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-key-bulk">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Bulk Import Quick Heal Keys</h2>
+        <button class="modal-close" onclick="closeModal('modal-key-bulk')">✕</button>
+      </div>
+      <form id="form-key-bulk" onsubmit="handleBulkKeySubmit(event)">
+        <div class="modal-body">
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Paste multiple product keys below (one key per line or separated by commas):</p>
+          <div class="form-group" style="margin-bottom:14px;">
+            <textarea id="bulk-key-input" class="input-control" rows="8" placeholder="6X88C-7W62R-7720A-16510&#10;0E8C1-2J76B-06023-82R86&#10;899RA-2N880-4516E-1092D" required></textarea>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="bulk-key-validity">Default Expiration Date</label>
+              <input type="date" id="bulk-key-validity" class="input-control" value="2029-08-22">
+            </div>
+            <div class="form-group">
+              <label for="bulk-key-edition">Edition</label>
+              <input type="text" id="bulk-key-edition" class="input-control" value="Total Security">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-key-bulk')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary">Import All Keys</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Map Key Quick Modal -->
+  <div class="modal-backdrop" id="modal-map-key">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Map Antivirus Key to IT Asset</h2>
+        <button class="modal-close" onclick="closeModal('modal-map-key')">✕</button>
+      </div>
+      <form id="form-map-key" onsubmit="handleMapKeySubmit(event)">
+        <input type="hidden" id="map-key-id">
+        <div class="modal-body">
+          <div style="background:#f8fafc; padding:12px 16px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px;">
+            <span style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:600;">Mapping Key:</span>
+            <div style="font-size:15px; font-weight:700; color:var(--primary); font-family:monospace; margin-top:2px;" id="map-key-display">6X88C-7W62R-7720A-16510</div>
+          </div>
+          <div class="form-group">
+            <label for="map-asset-select">Choose Destination IT Asset *</label>
+            <select id="map-asset-select" class="select-control" required style="width:100%;">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-map-key')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary">Assign Key to Asset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. ACCESSORY MODAL -->
+  <div class="modal-backdrop" id="modal-accessory-form">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="acc-form-title">Add Accessory / Component</h2>
+        <button class="modal-close" onclick="closeModal('modal-accessory-form')">✕</button>
+      </div>
+      <form id="form-accessory" onsubmit="handleAccessorySubmit(event)">
+        <input type="hidden" id="acc-form-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="acc-code">Code (Optional)</label>
+              <input type="text" id="acc-code" class="input-control" placeholder="e.g. ACC-007">
+            </div>
+            <div class="form-group">
+              <label for="acc-category">Category *</label>
+              <select id="acc-category" class="select-control" required>
+                <option value="Mouse">Mouse</option>
+                <option value="Keyboard">Keyboard</option>
+                <option value="Scanner">Scanner</option>
+                <option value="Monitor">Monitor</option>
+                <option value="Print Head">Print Head</option>
+                <option value="Cable/Adapter">Cable/Adapter</option>
+                <option value="UPS">UPS</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="acc-name">Item Name *</label>
+              <input type="text" id="acc-name" class="input-control" placeholder="e.g. Logitech M90 USB Optical Mouse" required>
+            </div>
+            <div class="form-group">
+              <label for="acc-brand">Brand</label>
+              <input type="text" id="acc-brand" class="input-control" placeholder="e.g. Logitech, Dell, Zebra">
+            </div>
+            <div class="form-group">
+              <label for="acc-qty">Stock Quantity</label>
+              <input type="number" id="acc-qty" class="input-control" value="1" min="1">
+            </div>
+            <div class="form-group">
+              <label for="acc-location">Location</label>
+              <input type="text" id="acc-location" class="input-control" placeholder="e.g. IT Store Room, Dispatch Bay">
+            </div>
+            <div class="form-group">
+              <label for="acc-status">Status</label>
+              <select id="acc-status" class="select-control">
+                <option value="In Stock">In Stock</option>
+                <option value="Assigned">Assigned</option>
+                <option value="Damaged">Damaged</option>
+              </select>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="acc-remarks">Remarks</label>
+              <input type="text" id="acc-remarks" class="input-control" placeholder="Notes or specifications">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-accessory-form')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary">Save Accessory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 6. USER MANAGEMENT MODAL -->
+  <div class="modal-backdrop" id="modal-user-form">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="user-form-title">Add System User</h2>
+        <button class="modal-close" onclick="closeModal('modal-user-form')">✕</button>
+      </div>
+      <form id="form-user" onsubmit="handleUserSubmit(event)">
+        <input type="hidden" id="user-form-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="user-username">Username *</label>
+              <input type="text" id="user-username" class="input-control" placeholder="e.g. rajesh.tech" required>
+            </div>
+            <div class="form-group">
+              <label for="user-fullname">Full Name *</label>
+              <input type="text" id="user-fullname" class="input-control" placeholder="e.g. Rajesh Kumar" required>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="user-email">Email Address</label>
+              <input type="email" id="user-email" class="input-control" placeholder="e.g. rajesh@vbexports.co.in">
+            </div>
+            <div class="form-group">
+              <label for="user-role">Assigned Role *</label>
+              <select id="user-role" class="select-control" required>
+                <option value="admin">👑 Administrator (Full Control)</option>
+                <option value="technician" selected>🔧 Technician (Assets, Repairs & Keys)</option>
+                <option value="viewer">👁️ Viewer (Read Only)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="user-status">Account Status</label>
+              <select id="user-status" class="select-control">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive / Suspended</option>
+              </select>
+            </div>
+            <div class="form-group col-span-2">
+              <label for="user-password" id="user-password-label">Password *</label>
+              <input type="password" id="user-password" class="input-control" placeholder="At least 6 characters" required>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-user-form')">Cancel</button>
+          <button type="submit" class="topbar-btn btn-primary">Save User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 7. MASTER SEARCH POPUP MODAL (CTRL+K) -->
+  <div class="modal-backdrop" id="modal-master-search">
+    <div class="modal-content modal-lg" style="max-height: 85vh;">
+      <div class="modal-header" style="border:none; padding-bottom: 0;">
+        <div style="position:relative; width:100%;">
+          <input type="text" id="popup-search-input" class="input-control" placeholder="Quick search assets, repairs, keys, users (ESC to close)..." style="width:100%; font-size:16px; padding:14px 18px;" oninput="debouncePopupSearch()">
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-master-search')" style="margin-left: 12px;">✕</button>
+      </div>
+      <div class="modal-body" id="popup-search-results" style="max-height: 500px;">
+        <div style="text-align:center; padding:30px; color:var(--text-muted);">
+          Start typing to search across the entire IT infrastructure...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. PRINT ASSET TAG STICKER PREVIEW MODAL -->
+  <div class="modal-backdrop" id="modal-print-tag">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h2>Asset Barcode & QR Sticker</h2>
+        <button class="modal-close" onclick="closeModal('modal-print-tag')">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center;">
+        <div id="print-sticker-container" style="border: 2px dashed #94a3b8; padding: 24px; border-radius: 12px; background: #ffffff;">
+          <h3 style="color:#0f172a; margin-bottom: 4px;">VB EXPORTS IT ASSET</h3>
+          <div style="font-size:26px; font-weight:800; color:var(--primary); letter-spacing:2px; font-family:monospace;" id="tag-serial">50001</div>
+          <div style="font-size:14px; font-weight:600; color:#334155; margin: 6px 0;" id="tag-type-brand">Normal Printer - HP</div>
+          <div style="font-size:12px; color:#64748b;" id="tag-dept-user">Dept: Orders | User: Chandan Yadav</div>
+          <div style="margin: 16px auto; width: 120px; height: 120px; background: #f1f5f9; display:flex; align-items:center; justify-content:center; border-radius: 8px; border:1px solid #cbd5e1;">
+            <span style="font-size: 48px;">🏷️</span>
+          </div>
+          <div style="font-size:11px; color:#94a3b8;">PROPERTY OF VB EXPORTS • DO NOT REMOVE</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="topbar-btn btn-secondary" onclick="closeModal('modal-print-tag')">Close</button>
+        <button class="topbar-btn btn-primary" onclick="window.print()">🖨️ Print Label</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container"></div>
+
+  <!-- Core Scripts -->
+  <script src="/js/app.js"></script>
+</body>
+</html>

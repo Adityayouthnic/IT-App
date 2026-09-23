@@ -1,0 +1,687 @@
+{
+  "IT Assets": [
+    {
+      "Internal Serial Number": "50001",
+      "Type of System": "Normal Printer",
+      "Purchase Date": "",
+      "Brand of the product": "HP",
+      "Department": "Orders",
+      "User Name": "Chandan yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is leserjet printer and scanner, this printer is using for picklist printing"
+    },
+    {
+      "Internal Serial Number": "50002",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Orders",
+      "User Name": "Chandan Yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by chandan for tag printing and general work"
+    },
+    {
+      "Internal Serial Number": "50003",
+      "Type of System": "Tag Printer",
+      "Purchase Date": "",
+      "Brand of the product": "Citizen",
+      "Department": "Orders",
+      "User Name": "Chandan yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This printer is tag printer which in use for consignment and Orders tag print,\n\nPrinting 75*35mm sticker in this printer"
+    },
+    {
+      "Internal Serial Number": "50004",
+      "Type of System": "Tag Printer",
+      "Purchase Date": "",
+      "Brand of the product": "Citizen",
+      "Department": "Orders",
+      "User Name": "Chandan Yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is tag printer, this print is used for youthnic and ethnic junction tag print"
+    },
+    {
+      "Internal Serial Number": "50005",
+      "Type of System": "Tag Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Orders",
+      "User Name": "Chandan Yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is tag printer which is in use for 100x50mm sticker print for consignment"
+    },
+    {
+      "Internal Serial Number": "50006",
+      "Type of System": "Label Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Orders",
+      "User Name": "Chandan Yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is label printer use for order label print of flipkart,amazon and meesho"
+    },
+    {
+      "Internal Serial Number": "50007",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Orders",
+      "User Name": "Komal parate",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This lenovo system is using by komal for order processing"
+    },
+    {
+      "Internal Serial Number": "50008",
+      "Type of System": "Label Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Orders",
+      "User Name": "Komal parate",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is label printer which is use by komal for order processing"
+    },
+    {
+      "Internal Serial Number": "50009",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Zebra",
+      "Department": "Orders",
+      "User Name": "Komal Parate",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This scanner is using by komal only"
+    },
+    {
+      "Internal Serial Number": "50010",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "ASUS",
+      "Department": "Dispatch",
+      "User Name": "Sachin Das",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by Sachin das for order scanning purposes"
+    },
+    {
+      "Internal Serial Number": "50011",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Zebra",
+      "Department": "Dispatch",
+      "User Name": "Sachin Das",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This Scanner is using by sachin das only for order scanning purposes"
+    },
+    {
+      "Internal Serial Number": "50012",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Orders",
+      "User Name": "Komal Parate",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is used for order packing purposes and this system is in front of Komal"
+    },
+    {
+      "Internal Serial Number": "50013",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "DELL",
+      "Department": "Orders",
+      "User Name": "Vishal Tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is dell laptop is using as OMSGuru server managed by Vishal tiwari and komal"
+    },
+    {
+      "Internal Serial Number": "50014",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Dispatch",
+      "User Name": "Sachin Das",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is lenovo tiny system which is using by sachin das To raise claim"
+    },
+    {
+      "Internal Serial Number": "50015",
+      "Type of System": "Label Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Dispatch",
+      "User Name": "Sachin Das",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This printer use for pending labels to print by sachin"
+    },
+    {
+      "Internal Serial Number": "50016",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Return",
+      "User Name": "Sachin Das",
+      "Quick Heal Key": "",
+      "Working Status": "Not Working",
+      "Remarks": "This lenovo tiny system is in the return department 1st table which are not at all use and at this movement not working"
+    },
+    {
+      "Internal Serial Number": "50017",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "Zebronics",
+      "Department": "Return",
+      "User Name": "Suraj Rajak",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system was puchased from tusar bhai, this is working system using for create return orders video for claim purposes"
+    },
+    {
+      "Internal Serial Number": "50018",
+      "Type of System": "WebCam",
+      "Purchase Date": "",
+      "Brand of the product": "Option 15",
+      "Department": "Return",
+      "User Name": "Suraj Rajak",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This Is GMEET webcam using for to create return orders video and photo for claim"
+    },
+    {
+      "Internal Serial Number": "50019",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Orders",
+      "User Name": "Vishal Tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This lenovo tiny system is using for order packing only"
+    },
+    {
+      "Internal Serial Number": "50020",
+      "Type of System": "WebCam",
+      "Purchase Date": "",
+      "Brand of the product": "Zebronics",
+      "Department": "Orders",
+      "User Name": "Vishal tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This zerbronix webcam is using for VMS"
+    },
+    {
+      "Internal Serial Number": "50021",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Orders",
+      "User Name": "Vishal tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by vishal tiwari for order process"
+    },
+    {
+      "Internal Serial Number": "50022",
+      "Type of System": "Label Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Orders",
+      "User Name": "Vishal tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This printer is using by vishal tiwari for order process"
+    },
+    {
+      "Internal Serial Number": "50023",
+      "Type of System": "WebCam",
+      "Purchase Date": "",
+      "Brand of the product": "Option 15",
+      "Department": "Orders",
+      "User Name": "Vishal tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This GMeet webcam is using for VMS"
+    },
+    {
+      "Internal Serial Number": "50024",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Zebra",
+      "Department": "Orders",
+      "User Name": "Vishal tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This scanner is using by vishal tiwari for order process"
+    },
+    {
+      "Internal Serial Number": "50025",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Zebra",
+      "Department": "Orders",
+      "User Name": "Vishal tiwari",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This scanner is use for VMS"
+    },
+    {
+      "Internal Serial Number": "50026",
+      "Type of System": "Label Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Orders",
+      "User Name": "FREE",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This tag Printer is current free and not in used stored in aditya pawan cabin"
+    },
+    {
+      "Internal Serial Number": "50027",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "MI",
+      "Department": "Dispatch",
+      "User Name": "Chandan Yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This mi laptop is used for consignment video packing and data upload only for chandan"
+    },
+    {
+      "Internal Serial Number": "50028",
+      "Type of System": "WebCam",
+      "Purchase Date": "",
+      "Brand of the product": "Option 15",
+      "Department": "Dispatch",
+      "User Name": "Chandan Yadav",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This GMeet webcam is using for consignment video packing and managed by chandan and consignment team"
+    },
+    {
+      "Internal Serial Number": "50029",
+      "Type of System": "Normal Printer",
+      "Purchase Date": "",
+      "Brand of the product": "Option 15",
+      "Department": "Accounts",
+      "User Name": "Aditya Shah",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This epson brand color printer is used by aditya and pawan for printer purposes"
+    },
+    {
+      "Internal Serial Number": "50030",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "MI",
+      "Department": "Data Analysis",
+      "User Name": "Aditya Shah",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": ""
+    },
+    {
+      "Internal Serial Number": "50031",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "HONOR",
+      "Department": "Data Analysis",
+      "User Name": "Pawan Shukla",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "Pawan's laptop"
+    },
+    {
+      "Internal Serial Number": "50032",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Orders",
+      "User Name": "Anisha laheri",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This lenovo tiny system is using by anisha for order purposes only"
+    },
+    {
+      "Internal Serial Number": "50033",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Zebra",
+      "Department": "Orders",
+      "User Name": "Anisha lehri",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This scanner is used by anisha for order processing only"
+    },
+    {
+      "Internal Serial Number": "50034",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "Zebronics",
+      "Department": "Orders",
+      "User Name": "Anisha laheri",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using for VMS and this is first system purchased from tusar bhai"
+    },
+    {
+      "Internal Serial Number": "50035",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Option 15",
+      "Department": "Orders",
+      "User Name": "Anisha laheri",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is Retsol 2D scanner using for VMS packing only"
+    },
+    {
+      "Internal Serial Number": "50036",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "Inifinix",
+      "Department": "Accounts",
+      "User Name": "Mujammil",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is used by mujammil"
+    },
+    {
+      "Internal Serial Number": "50037",
+      "Type of System": "Normal Printer",
+      "Purchase Date": "",
+      "Brand of the product": "HP",
+      "Department": "Accounts",
+      "User Name": "Vishal vyas",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is hp 1020 printer currently using by vishal vyas"
+    },
+    {
+      "Internal Serial Number": "50038",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Accounts",
+      "User Name": "Vishal vyas",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This is lenovo tiny system using by vishal vyas for accounts"
+    },
+    {
+      "Internal Serial Number": "50039",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "ASUS",
+      "Department": "Orders",
+      "User Name": "FREE",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This laptop is currently free,it was used to by omsguru server system but now this system is too slow"
+    },
+    {
+      "Internal Serial Number": "50040",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "ASUS",
+      "Department": "Orders",
+      "User Name": "FREE",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system was used earlier in production team, currently now free"
+    },
+    {
+      "Internal Serial Number": "50042",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "DELL",
+      "Department": "Accounts",
+      "User Name": "Dilip Jain",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": ""
+    },
+    {
+      "Internal Serial Number": "50043",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "DELL",
+      "Department": "Listings",
+      "User Name": "Jinal bhagat",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by jinal"
+    },
+    {
+      "Internal Serial Number": "50044",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "Zebronics",
+      "Department": "Listings",
+      "User Name": "Daksha rathod",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by daksha and this cpu is puchased from tusar bhai"
+    },
+    {
+      "Internal Serial Number": "50045",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Listings",
+      "User Name": "Joyti",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by joyti"
+    },
+    {
+      "Internal Serial Number": "50046",
+      "Type of System": "Normal Printer",
+      "Purchase Date": "",
+      "Brand of the product": "CANON",
+      "Department": "Company",
+      "User Name": "NOT WORKING",
+      "Quick Heal Key": "",
+      "Working Status": "Not Working",
+      "Remarks": "This is cannon not working printer was confirm by ajay key panel is not working also, have to setup evey time"
+    },
+    {
+      "Internal Serial Number": "50047",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "DELL",
+      "Department": "Listings",
+      "User Name": "Ekta bhayani",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is used by ekta"
+    },
+    {
+      "Internal Serial Number": "50048",
+      "Type of System": "Desktop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Listings",
+      "User Name": "Krishna bhayani",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This system is using by krishna"
+    },
+    {
+      "Internal Serial Number": "50049",
+      "Type of System": "Laptop",
+      "Purchase Date": "",
+      "Brand of the product": "LENOVO",
+      "Department": "Return",
+      "User Name": "Suraj Rajak",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This laptop is used by Suraj rajak for return"
+    },
+    {
+      "Internal Serial Number": "50050",
+      "Type of System": "Label Printer",
+      "Purchase Date": "",
+      "Brand of the product": "TSC",
+      "Department": "Orders",
+      "User Name": "Anisha laheri",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This label printer is in use for order processing by anisha"
+    },
+    {
+      "Internal Serial Number": "50080",
+      "Type of System": "Scanner",
+      "Purchase Date": "",
+      "Brand of the product": "Zebra",
+      "Department": "Dispatch",
+      "User Name": "Chandan",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": "This scanner is useing for consignment packing and given to chadan date - 28-02-2026"
+    },
+    {
+      "Internal Serial Number": "500041",
+      "Type of System": "Normal Printer",
+      "Purchase Date": "",
+      "Brand of the product": "HP",
+      "Department": "Accounts",
+      "User Name": "Dilip jain",
+      "Quick Heal Key": "",
+      "Working Status": "Working",
+      "Remarks": ""
+    }
+  ],
+  "Quick Heal Keys": [
+    {
+      "Quick Heal Keys": "6X88C-7W62R-7720A-16510",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "0E8C1-2J76B-06023-82R86",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "899RA-2N880-4516E-1092D",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "DM620-8N7B6-64RA8-05121",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "2L882-CJ6R2-83560-B1D07",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "DG1A2-RJ048-22890-8EE66",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "17B56-ASR02-6102A-71878",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "R9024-6U1B6-00C28-782A8",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "0X64D-1NE0A-2985R-8928B",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "BY768-1S255-18786-2A0R0",
+      "Vaildity": "2029-08-22 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "DG86E-4J12R-8720D-44610",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "CT046-2G240-1868B-2B0R0",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "0941A-1SC05-2930R-8A266",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "RS026-6J1D4-00F28-D84A6",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "1SD44-BHR02-B1029-82668",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "AP152-RS013-228A0-69C45",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "24884-FJ4R2-63460-D1D0D",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "CP920-8L6DB-44RB6-04122",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "8FAR5-2J360-15C4C-1042A",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "0A6F1-2JD4D-06046-82R86",
+      "Vaildity": "2027-12-27 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "016E1-2LB4B-E6020-62R84",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "83DR8-2S660-45F40-1072D",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "BW420-8J5DA-44RA6-03121",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "2Y682-EZ4R2-63240-B1B0B",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "DD182-RY046-228D0-6C042",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "1MD34-ANR02-A1028-61658",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "R2023-4L1B4-00E28-B6286",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "0G44D-1J008-2962R-8D269",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "C3F46-1S233-1858A-2A0R0",
+      "Vaildity": "2028-08-06 00:00:00"
+    },
+    {
+      "Quick Heal Keys": "BD86D-8HF2R-6720B-24410",
+      "Vaildity": "2028-08-06 00:00:00"
+    }
+  ]
+}

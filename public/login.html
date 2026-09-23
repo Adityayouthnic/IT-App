@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | IT Asset Management System</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body {
+      background: radial-gradient(circle at 10% 20%, rgb(15, 23, 42) 0%, rgb(30, 27, 75) 90.2%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(16px);
+      border-radius: 20px;
+      padding: 40px 36px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(79, 70, 229, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .login-logo {
+      width: 58px;
+      height: 58px;
+      background: var(--primary-gradient);
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
+    }
+    .login-header h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+    .login-header p {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 6px;
+    }
+    .login-form .form-group {
+      margin-bottom: 18px;
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 12px;
+      margin-top: 10px;
+    }
+    .demo-credentials {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    .demo-credentials h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+    .demo-chips {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .demo-chip {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .demo-chip:hover {
+      background: #e2e8f0;
+      border-color: #94a3b8;
+      transform: translateY(-1px);
+    }
+    .alert-error {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="login-header">
+      <div class="login-logo">💻</div>
+      <h1>IT Asset Manager</h1>
+      <p>VB EXPORTS Enterprise Portal</p>
+    </div>
+
+    <div id="login-error" class="alert-error"></div>
+
+    <form id="login-form" class="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" class="input-control" placeholder="Enter your username" required autofocus>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" class="input-control" placeholder="••••••••" required>
+      </div>
+
+      <button type="submit" id="btn-login" class="topbar-btn btn-primary btn-submit">Sign In to Dashboard</button>
+    </form>
+
+    <div class="demo-credentials">
+      <h4>⚡ Quick Demo Access</h4>
+      <div class="demo-chips">
+        <button type="button" class="demo-chip" onclick="fillCreds('admin', 'admin123')">👑 Admin</button>
+        <button type="button" class="demo-chip" onclick="fillCreds('technician', 'tech123')">🔧 Technician</button>
+        <button type="button" class="demo-chip" onclick="fillCreds('viewer', 'view123')">👁️ Viewer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function fillCreds(u, p) {
+      document.getElementById('username').value = u;
+      document.getElementById('password').value = p;
+      document.getElementById('login-error').style.display = 'none';
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('login-error');
+      const btn = document.getElementById('btn-login');
+      errBox.style.display = 'none';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      btn.disabled = true;
+      btn.innerText = 'Authenticating...';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          localStorage.setItem('it_app_token', data.token);
+          localStorage.setItem('it_app_user', JSON.stringify(data.user));
+          window.location.href = '/';
+        } else {
+          errBox.innerText = data.error || 'Authentication failed.';
+          errBox.style.display = 'block';
+          btn.disabled = false;
+          btn.innerText = 'Sign In to Dashboard';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error. Please try again.';
+        errBox.style.display = 'block';
+        btn.disabled = false;
+        btn.innerText = 'Sign In to Dashboard';
+      }
+    });
+
+    // Check if already logged in
+    (async () => {
+      try {
+        const token = localStorage.getItem('it_app_token');
+        if (token) {
+          const res = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            window.location.href = '/';
+          }
+        }
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>

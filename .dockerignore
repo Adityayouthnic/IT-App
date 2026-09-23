@@ -1,0 +1,6 @@
+node_modules
+npm-debug.log
+.git
+.env
+data/it_inventory.db-shm
+data/it_inventory.db-wal
