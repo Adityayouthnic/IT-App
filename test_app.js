@@ -66,8 +66,26 @@ async function runTests() {
 
   // Test 4: Search Precision - "pawan shukla" test
   console.log('\nTest 4: Search Precision - Searching for "pawan shukla"');
-  const resPawan = await fetch(`${BASE_URL}/api/assets?search=pawan+shukla`, { headers: authHeaders });
-  const dataPawan = await resPawan.json();
+  let resPawan = await fetch(`${BASE_URL}/api/assets?search=pawan+shukla`, { headers: authHeaders });
+  let dataPawan = await resPawan.json();
+  if (dataPawan.assets.length === 0) {
+    await fetch(`${BASE_URL}/api/assets`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        internal_serial_number: '50010',
+        asset_type: 'Desktop',
+        brand: 'Lenovo',
+        model_name: 'ThinkCentre M70q',
+        assigned_user: 'Pawan Shukla',
+        department: 'Orders',
+        location: 'Orders Floor',
+        working_status: 'Working'
+      })
+    });
+    resPawan = await fetch(`${BASE_URL}/api/assets?search=pawan+shukla`, { headers: authHeaders });
+    dataPawan = await resPawan.json();
+  }
   console.log(`Search "pawan shukla" returned ${dataPawan.assets.length} result(s):`);
   dataPawan.assets.forEach(a => {
     console.log(`  - #${a.internal_serial_number} | ${a.brand} ${a.asset_type} | User: ${a.assigned_user}`);
@@ -792,7 +810,8 @@ async function runTests() {
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');
 
-  const { db } = require('./database');
+  const { db, purgeOperationalData } = require('./database');
+  purgeOperationalData();
   try { db.close(); } catch(e) {}
 
   if (server.server) {
