@@ -1,8 +1,8 @@
-FROM node:22-bullseye-slim
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-# Install python and build essentials for native sqlite module
+# Install python and build tools for native compilation if required
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
