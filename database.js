@@ -355,12 +355,67 @@ function seedFromSheet() {
   transaction();
 }
 
+// Migration: If any accessory has status = 'Assigned' and quantity > 1 (e.g. ACC-001 with 15 units assigned),
+// split it into 1 assigned unit and (quantity - 1) in stock units.
+function patchAssignedQuantities() {
+  try {
+    const anomalous = db.prepare("SELECT * FROM accessories WHERE status = 'Assigned' AND quantity > 1 AND assigned_user IS NOT NULL").all();
+    for (const item of anomalous) {
+      const assignedQty = 1;
+      const stockQty = item.quantity - assignedQty;
+
+      // Update original to stockQty with 'In Stock'
+      db.prepare(`
+        UPDATE accessories
+        SET quantity = ?, status = 'In Stock', assigned_user = NULL, assigned_asset_id = NULL
+        WHERE id = ?
+      `).run(stockQty, item.id);
+
+      // Create new assigned row with 1 unit
+      const baseCode = item.accessory_code.replace(/-A\d+$/, '');
+      let newCode = `${baseCode}-A1`;
+      let counter = 1;
+      while (db.prepare('SELECT id FROM accessories WHERE accessory_code = ?').get(newCode)) {
+        counter++;
+        newCode = `${baseCode}-A${counter}`;
+      }
+
+      db.prepare(`
+        INSERT INTO accessories (
+          accessory_code, name, category, brand, model, serial_number,
+          quantity, assigned_user, assigned_asset_id, location, status,
+          purchase_date, cost, remarks
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Assigned', ?, ?, ?)
+      `).run(
+        newCode,
+        item.name,
+        item.category,
+        item.brand || '',
+        item.model || '',
+        item.serial_number || '',
+        assignedQty,
+        item.assigned_user,
+        item.assigned_asset_id || null,
+        item.location || 'Assigned to Staff',
+        item.purchase_date || null,
+        item.cost || 0,
+        item.remarks || ''
+      );
+      console.log(`Auto-migrated accessory ${item.accessory_code}: split into ${stockQty} in stock and ${assignedQty} assigned to ${item.assigned_user}`);
+    }
+  } catch (err) {
+    console.warn('patchAssignedQuantities error:', err.message);
+  }
+}
+
 // Initialize tables and run seeding
 initSchema();
 seedUsers();
 seedFromSheet();
+patchAssignedQuantities();
 
 module.exports = {
   db,
   initSchema
 };
+

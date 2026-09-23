@@ -1490,7 +1490,7 @@ router.put('/accessories/:id', requireRoles('admin', 'technician'), (req, res) =
   }
 });
 
-// POST /api/accessories/:id/assign - Assign accessory to a person or asset
+// POST /api/accessories/:id/assign - Assign accessory to a person or asset with quantity support
 router.post('/accessories/:id/assign', requireRoles('admin', 'technician'), (req, res) => {
   try {
     const accId = req.params.id;
@@ -1499,31 +1499,85 @@ router.post('/accessories/:id/assign', requireRoles('admin', 'technician'), (req
       return res.status(404).json({ error: 'Accessory not found.' });
     }
 
-    const { assigned_user, assigned_asset_id, location, remarks } = req.body;
+    const { assigned_user, assigned_asset_id, location, remarks, quantity } = req.body;
     if (!assigned_user || !assigned_user.trim()) {
       return res.status(400).json({ error: 'Person/User name is required for assignment.' });
     }
 
-    db.prepare(`
-      UPDATE accessories SET
-        status = 'Assigned',
-        assigned_user = ?,
-        assigned_asset_id = ?,
-        location = COALESCE(?, location),
-        remarks = COALESCE(?, remarks),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      assigned_user.trim(),
-      assigned_asset_id || null,
-      location ? location.trim() : null,
-      remarks ? remarks.trim() : null,
-      accId
-    );
+    const assignQty = Math.max(1, parseInt(quantity, 10) || 1);
+    if (assignQty > existing.quantity) {
+      return res.status(400).json({
+        error: `Requested quantity (${assignQty}) exceeds available stock (${existing.quantity}).`
+      });
+    }
 
-    logAudit(req.user.id, req.user.username, 'ASSIGN_ACCESSORY', 'accessory', accId, `Assigned accessory ${existing.accessory_code} to ${assigned_user}`);
+    const transaction = db.transaction(() => {
+      if (assignQty === existing.quantity) {
+        // Entire batch is assigned to this user
+        db.prepare(`
+          UPDATE accessories SET
+            status = 'Assigned',
+            assigned_user = ?,
+            assigned_asset_id = ?,
+            location = COALESCE(?, location),
+            remarks = COALESCE(?, remarks),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(
+          assigned_user.trim(),
+          assigned_asset_id || null,
+          location ? location.trim() : null,
+          remarks ? remarks.trim() : null,
+          accId
+        );
+      } else {
+        // Partial assignment: deduct assignQty from available in-stock batch
+        db.prepare(`
+          UPDATE accessories SET
+            quantity = quantity - ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(assignQty, accId);
 
-    res.json({ message: `Accessory successfully assigned to ${assigned_user.trim()}.` });
+        // Find a unique accessory code for the newly assigned batch
+        const baseCode = existing.accessory_code.replace(/-A\d+$/, '');
+        let newCode = `${baseCode}-A1`;
+        let counter = 1;
+        while (db.prepare('SELECT id FROM accessories WHERE accessory_code = ?').get(newCode)) {
+          counter++;
+          newCode = `${baseCode}-A${counter}`;
+        }
+
+        // Insert new assigned record
+        db.prepare(`
+          INSERT INTO accessories (
+            accessory_code, name, category, brand, model, serial_number,
+            quantity, assigned_user, assigned_asset_id, location, status,
+            purchase_date, cost, remarks
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Assigned', ?, ?, ?)
+        `).run(
+          newCode,
+          existing.name,
+          existing.category,
+          existing.brand || '',
+          existing.model || '',
+          existing.serial_number || '',
+          assignQty,
+          assigned_user.trim(),
+          assigned_asset_id || null,
+          location ? location.trim() : (existing.location || 'Assigned to Staff'),
+          existing.purchase_date || null,
+          existing.cost || 0,
+          remarks ? remarks.trim() : existing.remarks
+        );
+      }
+    });
+
+    transaction();
+
+    logAudit(req.user.id, req.user.username, 'ASSIGN_ACCESSORY', 'accessory', accId, `Assigned ${assignQty} unit(s) of ${existing.name} (${existing.accessory_code}) to ${assigned_user}`);
+
+    res.json({ message: `Successfully assigned ${assignQty} unit(s) of ${existing.name} to ${assigned_user.trim()}.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1538,22 +1592,60 @@ router.post('/accessories/:id/return', requireRoles('admin', 'technician'), (req
       return res.status(404).json({ error: 'Accessory not found.' });
     }
 
-    const { location = 'IT Store Room', remarks } = req.body;
+    const { location = 'IT Store Room', remarks, quantity } = req.body;
+    const returnQty = Math.min(existing.quantity, Math.max(1, parseInt(quantity, 10) || existing.quantity));
 
-    db.prepare(`
-      UPDATE accessories SET
-        status = 'In Stock',
-        assigned_user = '',
-        assigned_asset_id = NULL,
-        location = ?,
-        remarks = COALESCE(?, remarks),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(location.trim(), remarks ? remarks.trim() : null, accId);
+    const transaction = db.transaction(() => {
+      // Look for a parent or matching in-stock batch
+      const baseCode = existing.accessory_code.replace(/-A\d+$/, '');
+      const inStockBatch = db.prepare(`
+        SELECT * FROM accessories
+        WHERE (accessory_code = ? OR (name = ? AND category = ? AND status = 'In Stock'))
+          AND status = 'In Stock'
+        ORDER BY id ASC LIMIT 1
+      `).get(baseCode, existing.name, existing.category);
 
-    logAudit(req.user.id, req.user.username, 'RETURN_ACCESSORY', 'accessory', accId, `Returned accessory ${existing.accessory_code} to stock`);
+      if (inStockBatch && inStockBatch.id !== existing.id) {
+        // Merge returned units into the in-stock batch
+        db.prepare(`
+          UPDATE accessories SET
+            quantity = quantity + ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(returnQty, inStockBatch.id);
 
-    res.json({ message: `Accessory ${existing.accessory_code} returned to ${location}.` });
+        if (returnQty >= existing.quantity) {
+          // Remove the assigned record
+          db.prepare('DELETE FROM accessories WHERE id = ?').run(accId);
+        } else {
+          // Decrement remaining assigned units
+          db.prepare(`
+            UPDATE accessories SET
+              quantity = quantity - ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(returnQty, accId);
+        }
+      } else {
+        // Restore this item itself back to In Stock
+        db.prepare(`
+          UPDATE accessories SET
+            status = 'In Stock',
+            assigned_user = '',
+            assigned_asset_id = NULL,
+            location = ?,
+            remarks = COALESCE(?, remarks),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(location.trim(), remarks ? remarks.trim() : null, accId);
+      }
+    });
+
+    transaction();
+
+    logAudit(req.user.id, req.user.username, 'RETURN_ACCESSORY', 'accessory', accId, `Returned ${returnQty} unit(s) of accessory ${existing.accessory_code} to stock`);
+
+    res.json({ message: `Accessory returned to stock (${location}).` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -450,7 +450,7 @@
 
           <select id="asset-filter-key" onchange="loadAssets()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Antivirus</option>
-            <option value="unprotected">⚠️ Unprotected Workstations (Laptops & Desktops)</option>
+            <option value="unprotected">Unprotected Workstations (Laptops & Desktops)</option>
             <option value="mapped">Mapped Key</option>
             <option value="unmapped">No Key Mapped (Any Asset)</option>
           </select>
@@ -1204,44 +1204,85 @@
 
   <!-- Map Key Quick Modal -->
   <div id="modal-map-key" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
-    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold text-slate-900">Map Key to Workstation</h3>
-        <button onclick="closeModal('modal-map-key')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+    <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Map License Key to Workstation</h3>
+            <p class="text-xs text-slate-500">Assign Quick Heal Protection to an eligible Laptop or Desktop</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-map-key')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <form id="form-map-key" onsubmit="handleMapKeySubmit(event)" class="space-y-4">
+
+      <form id="form-map-key" onsubmit="handleMapKeySubmit(event)" class="flex flex-col flex-1 overflow-hidden p-6 space-y-4">
         <input type="hidden" id="map-key-id">
-        <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Assigning License Key:</span>
-          <div id="map-key-display" class="font-mono font-bold text-sm text-purple-900 mt-0.5">6X88C-7W62R-7720A-16510</div>
-        </div>
-        <div class="relative">
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-semibold text-slate-700">Choose Destination Workstation *</label>
-            <span class="text-[10px] text-purple-600 font-bold uppercase">Laptops & Desktops Only</span>
+        <input type="hidden" id="map-asset-select" required>
+
+        <!-- Product Key Header Badge -->
+        <div class="p-3 bg-purple-50/80 border border-purple-200/90 rounded-xl flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600 block">Selected Product License:</span>
+            <span id="map-key-display" class="font-mono font-black text-sm text-purple-950">6X88C-7W62R-7720A-16510</span>
           </div>
-          <input type="hidden" id="map-asset-select" required>
-          <div id="combobox-map-asset" class="relative">
-            <div class="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-purple-500">
-              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 mr-2 flex-shrink-0"></i>
-              <input type="text" id="combobox-map-asset-input" placeholder="Type serial #, user, brand to select workstation..." autocomplete="off" class="w-full bg-transparent border-none text-xs p-0 focus:outline-none focus:ring-0 text-slate-800">
-              <button type="button" id="combobox-map-asset-clear" class="hidden text-slate-400 hover:text-slate-600 p-0.5 ml-1">
-                <i data-lucide="x" class="w-3 h-3"></i>
+          <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-200/70 text-purple-800 border border-purple-300">
+            Laptops & Desktops Only
+          </span>
+        </div>
+
+        <!-- Filter & Search Controls -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <label class="block text-xs font-bold text-slate-800">Select Target Destination Workstation *</label>
+            <div class="flex items-center gap-1.5" id="map-filter-tabs">
+              <button type="button" onclick="setMapWorkstationFilter('unprotected')" id="map-filter-unprotected" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-all flex items-center gap-1">
+                <i data-lucide="shield-alert" class="w-3 h-3 text-rose-500"></i>
+                <span>Unprotected (<span id="map-count-unprotected">0</span>)</span>
+              </button>
+              <button type="button" onclick="setMapWorkstationFilter('all')" id="map-filter-all" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-900 text-white transition-all">
+                All (<span id="map-count-all">0</span>)
+              </button>
+              <button type="button" onclick="setMapWorkstationFilter('laptop')" id="map-filter-laptop" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                Laptops
+              </button>
+              <button type="button" onclick="setMapWorkstationFilter('desktop')" id="map-filter-desktop" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                Desktops
               </button>
             </div>
-            <div id="combobox-map-asset-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl z-50 divide-y divide-slate-100 text-xs">
-              <!-- Filtered options populated via JS -->
-            </div>
           </div>
-          <div id="map-selected-asset-preview" class="hidden mt-1.5 p-2 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-[11px] text-purple-900 font-medium">
-            <span id="map-selected-asset-text"></span>
+
+          <!-- Live Search Bar -->
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input type="text" id="map-workstation-search" oninput="renderMapWorkstationList()" placeholder="Type staff name, serial #, department, brand to search..." autocomplete="off" class="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none">
+            <button type="button" id="map-workstation-clear" onclick="clearMapWorkstationSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
         </div>
-        <div class="flex items-center justify-end gap-2 pt-2">
+
+        <!-- Scrollable Workstation Cards List -->
+        <div id="map-workstations-container" class="flex-1 overflow-y-auto max-h-60 border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/40 p-1 space-y-1">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- Selected Asset Preview Bar -->
+        <div id="map-selected-preview" class="p-2.5 rounded-xl border bg-slate-50 border-slate-200 text-xs flex items-center justify-between">
+          <div class="flex items-center gap-2 text-slate-500 truncate">
+            <i data-lucide="info" class="w-4 h-4 text-slate-400 flex-shrink-0"></i>
+            <span id="map-selected-text" class="truncate">No workstation selected yet. Click an eligible workstation above.</span>
+          </div>
+          <span id="map-selected-badge" class="hidden px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 text-purple-700 flex-shrink-0">Selected</span>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
           <button type="button" onclick="closeModal('modal-map-key')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
-          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20">Confirm Assignment</button>
+          <button type="submit" id="btn-submit-map-key" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed">Confirm Key Assignment</button>
         </div>
       </form>
     </div>
@@ -1427,9 +1468,18 @@
           <div id="assign-acc-item-info" class="text-purple-700 text-[11px] mt-0.5">Brand: Dell • Available Quantity: 10</div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Issue To Personnel / Staff Name *</label>
-          <input type="text" id="assign-acc-user" placeholder="e.g. Komal Parate, Chandan Yadav" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500" required>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-700">Quantity to Issue *</label>
+              <span id="assign-acc-max-hint" class="text-[10px] text-purple-600 font-bold">Max: 1</span>
+            </div>
+            <input type="number" id="assign-acc-quantity" min="1" value="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-purple-800 focus:bg-white focus:ring-2 focus:ring-purple-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Issue To Personnel *</label>
+            <input type="text" id="assign-acc-user" placeholder="e.g. Pawan Shukla, Chandan" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500" required>
+          </div>
         </div>
 
         <div>

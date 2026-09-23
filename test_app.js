@@ -222,11 +222,12 @@ async function runTests() {
   }
 
   // Create test accessory
+  const testAccCode = 'ACC-TEST-' + Math.floor(Math.random() * 100000);
   const resNewAcc = await fetch(`${BASE_URL}/api/accessories`, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({
-      accessory_code: 'ACC-TEST-99',
+      accessory_code: testAccCode,
       category: 'Mouse',
       name: 'Logitech M90 Optical Mouse',
       brand: 'Logitech',
@@ -240,11 +241,12 @@ async function runTests() {
   const accId = dataNewAcc.id;
   console.log(`Created accessory ID ${accId}`);
 
-  // Assign accessory to personnel
+  // Assign 1 unit out of 5 to personnel (partial quantity assignment)
   const resAssignAcc = await fetch(`${BASE_URL}/api/accessories/${accId}/assign`, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({
+      quantity: 1,
       assigned_user: 'Vikram Patel',
       location: 'Dispatch Cabin Desk 4',
       remarks: 'Issued for barcode station'
@@ -253,26 +255,40 @@ async function runTests() {
   const dataAssignAcc = await resAssignAcc.json();
   console.log('Assign Accessory Response:', dataAssignAcc.message);
 
-  // Verify assigned status
+  // Verify that original stock was decremented from 5 to 4, and 1 unit is assigned to Vikram Patel
   const resVerifyAcc = await fetch(`${BASE_URL}/api/accessories`, { headers: authHeaders });
   const dataVerifyAcc = await resVerifyAcc.json();
-  const assignedItem = dataVerifyAcc.accessories.find(a => a.id === accId);
-  if (assignedItem.status !== 'Assigned' || assignedItem.assigned_user !== 'Vikram Patel') {
-    throw new Error(`Accessory assignment failed! Status: ${assignedItem.status}, User: ${assignedItem.assigned_user}`);
-  }
+  const stockItem = dataVerifyAcc.accessories.find(a => a.id === accId);
+  const assignedItem = dataVerifyAcc.accessories.find(a => a.assigned_user === 'Vikram Patel');
 
-  // Return accessory to stock
-  const resReturnAcc = await fetch(`${BASE_URL}/api/accessories/${accId}/return`, {
+  if (!stockItem || stockItem.quantity !== 4 || stockItem.status !== 'In Stock') {
+    throw new Error(`In-stock quantity deduction failed! Remaining qty: ${stockItem?.quantity}, Status: ${stockItem?.status}`);
+  }
+  if (!assignedItem || assignedItem.quantity !== 1 || assignedItem.status !== 'Assigned') {
+    throw new Error(`Assigned quantity tracking failed! Assigned qty: ${assignedItem?.quantity}, Status: ${assignedItem?.status}`);
+  }
+  console.log(`Partial quantity verified: ${stockItem.quantity} in stock, ${assignedItem.quantity} assigned to ${assignedItem.assigned_user}`);
+
+  // Return assigned accessory unit back to stock
+  const resReturnAcc = await fetch(`${BASE_URL}/api/accessories/${assignedItem.id}/return`, {
     method: 'POST',
     headers: authHeaders,
-    body: JSON.stringify({ location: 'Store Room' })
+    body: JSON.stringify({ location: 'Store Room Cupboard 2' })
   });
   const dataReturnAcc = await resReturnAcc.json();
   console.log('Return Accessory Response:', dataReturnAcc.message);
 
-  // Clean up accessory
+  // Verify stock merged back to 5
+  const resMergedAcc = await fetch(`${BASE_URL}/api/accessories`, { headers: authHeaders });
+  const dataMergedAcc = await resMergedAcc.json();
+  const restoredStockItem = dataMergedAcc.accessories.find(a => a.id === accId);
+  if (!restoredStockItem || restoredStockItem.quantity !== 5) {
+    throw new Error(`Stock return merge failed! Qty is ${restoredStockItem?.quantity}, expected 5`);
+  }
+
+  // Clean up test accessory
   await fetch(`${BASE_URL}/api/accessories/${accId}`, { method: 'DELETE', headers: authHeaders });
-  console.log('✅ Accessories tracking verified: Stock counters, Personnel assignment, Return to stock!');
+  console.log('✅ Accessories tracking verified: Stock counters, Partial quantity assignment, Return to stock merge!');
 
   // Test 9: Bulk Import IT Assets
   console.log('\nTest 9: Bulk Import IT Assets Inventory');

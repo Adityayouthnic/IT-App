@@ -300,8 +300,19 @@ function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
     modal.classList.remove('hidden');
+    modal.scrollTop = 0;
+    const scrollContainers = modal.querySelectorAll('.overflow-y-auto, [id$="-body"]');
+    scrollContainers.forEach(c => { c.scrollTop = 0; });
     const firstInput = modal.querySelector('input:not([type=hidden]), select, textarea');
-    if (firstInput) setTimeout(() => firstInput.focus(), 100);
+    if (firstInput) {
+      setTimeout(() => {
+        try {
+          firstInput.focus({ preventScroll: true });
+        } catch (e) {
+          firstInput.focus();
+        }
+      }, 60);
+    }
     lucide.createIcons();
   }
 }
@@ -571,17 +582,17 @@ async function loadAssets(filterParams = {}) {
 
       // Quick Heal pill (Laptops & Desktops strictly prioritized)
       const isWorkstation = ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase());
-      let keyBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] text-slate-400 bg-slate-50 border border-slate-200" title="Antivirus not required for ${escapeHtml(a.asset_type)}">Not Required</span>`;
+      let keyBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-200" title="Antivirus not required for ${escapeHtml(a.asset_type)}">Not Required</span>`;
 
       if (a.quick_heal_key_str) {
-        keyBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="License: ${escapeHtml(a.quick_heal_key_str)}">
+        keyBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200" title="License: ${escapeHtml(a.quick_heal_key_str)}">
           <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
           <span>Mapped</span>
         </span>`;
       } else if (isWorkstation) {
-        keyBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-300 animate-pulse shadow-sm" title="HIGH PRIORITY SECURITY RISK: This ${escapeHtml(a.asset_type)} requires an antivirus key!">
-          <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-rose-600"></i>
-          <span>⚠️ Unprotected</span>
+        keyBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 shadow-xs" title="Antivirus key not assigned to this ${escapeHtml(a.asset_type)}">
+          <i data-lucide="shield-alert" class="w-3 h-3 text-rose-500"></i>
+          <span>Unprotected</span>
         </span>`;
       }
 
@@ -841,6 +852,16 @@ async function viewAssetDetail(assetId) {
 
     window.currentDossierAsset = asset;
     openModal('modal-asset-detail');
+    const dossierBody = document.getElementById('dossier-body');
+    if (dossierBody) {
+      dossierBody.scrollTop = 0;
+    }
+    requestAnimationFrame(() => {
+      const db = document.getElementById('dossier-body');
+      if (db) db.scrollTop = 0;
+      const md = document.getElementById('modal-asset-detail');
+      if (md) md.scrollTop = 0;
+    });
     lucide.createIcons();
   } catch (err) {
     console.error('Asset detail view error:', err);
@@ -1109,12 +1130,12 @@ function initSearchableCombobox({
           </div>
           <div class="text-right flex flex-col items-end gap-1 flex-shrink-0 ml-2">
             ${needsKey ? `
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-300 shadow-xs" title="High Priority Security Risk: Missing Antivirus Key">
-                <i data-lucide="shield-alert" class="w-3 h-3 text-rose-600"></i>
-                <span>⚠️ Unprotected</span>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 shadow-xs" title="Missing Antivirus Key">
+                <i data-lucide="shield-alert" class="w-3 h-3 text-rose-500"></i>
+                <span>Unprotected</span>
               </span>
             ` : a.quick_heal_key_str ? `
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="Key: ${escapeHtml(a.quick_heal_key_str)}">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200" title="Key: ${escapeHtml(a.quick_heal_key_str)}">
                 <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
                 <span>Mapped</span>
               </span>
@@ -1768,37 +1789,220 @@ async function handleBulkKeySubmit(e) {
   }
 }
 
-let mapKeyCombobox = null;
+let currentMapKeyId = null;
+let activeMapWorkstationFilter = 'all';
+let selectedMapAssetId = null;
+let mapWorkstationCandidates = [];
+
 async function openMapKeyModal(keyId, keyCode) {
-  document.getElementById('map-key-id').value = keyId;
-  document.getElementById('map-key-display').textContent = keyCode;
+  currentMapKeyId = keyId;
+  selectedMapAssetId = null;
+
+  const keyIdInput = document.getElementById('map-key-id');
+  if (keyIdInput) keyIdInput.value = keyId;
+
+  const assetSelectInput = document.getElementById('map-asset-select');
+  if (assetSelectInput) assetSelectInput.value = '';
+
+  const displayEl = document.getElementById('map-key-display');
+  if (displayEl) displayEl.textContent = keyCode;
+
+  const searchInput = document.getElementById('map-workstation-search');
+  if (searchInput) searchInput.value = '';
+
+  const clearBtn = document.getElementById('map-workstation-clear');
+  if (clearBtn) clearBtn.classList.add('hidden');
+
+  const previewText = document.getElementById('map-selected-text');
+  if (previewText) previewText.textContent = 'No workstation selected yet. Click an eligible workstation above.';
+
+  const previewBadge = document.getElementById('map-selected-badge');
+  if (previewBadge) previewBadge.classList.add('hidden');
+
+  const submitBtn = document.getElementById('btn-submit-map-key');
+  if (submitBtn) submitBtn.disabled = true;
 
   await fetchMasterAssets(true);
 
-  if (!mapKeyCombobox) {
-    mapKeyCombobox = initSearchableCombobox({
-      containerId: 'combobox-map-asset',
-      inputId: 'combobox-map-asset-input',
-      dropdownId: 'combobox-map-asset-dropdown',
-      hiddenInputId: 'map-asset-select',
-      clearBtnId: 'combobox-map-asset-clear',
-      previewContainerId: 'map-selected-asset-preview',
-      previewTextId: 'map-selected-asset-text',
-      getAssetsFn: () => (window._allMasterAssets || []).filter(a => ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase())),
-      // Quick Heal keys are required ONLY for Laptops and Desktops!
-      filterFn: (a) => ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase())
+  // Quick Heal keys are required ONLY for Laptops and Desktops!
+  mapWorkstationCandidates = (window._allMasterAssets || []).filter(a =>
+    ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase())
+  );
+
+  const unprotectedCount = mapWorkstationCandidates.filter(a => !a.quick_heal_key_str).length;
+  const totalCount = mapWorkstationCandidates.length;
+
+  const countUnprot = document.getElementById('map-count-unprotected');
+  if (countUnprot) countUnprot.textContent = unprotectedCount;
+
+  const countAll = document.getElementById('map-count-all');
+  if (countAll) countAll.textContent = totalCount;
+
+  // Default to 'unprotected' if there are unprotected workstations, else 'all'
+  setMapWorkstationFilter(unprotectedCount > 0 ? 'unprotected' : 'all');
+
+  openModal('modal-map-key');
+}
+
+function setMapWorkstationFilter(filterType) {
+  activeMapWorkstationFilter = filterType;
+
+  const tabs = ['unprotected', 'all', 'laptop', 'desktop'];
+  tabs.forEach(t => {
+    const el = document.getElementById(`map-filter-${t}`);
+    if (!el) return;
+    const isActive = t === filterType;
+    if (t === 'unprotected') {
+      el.className = isActive
+        ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-600 text-white shadow-sm flex items-center gap-1 transition-all'
+        : 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 flex items-center gap-1 transition-all';
+    } else {
+      el.className = isActive
+        ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-900 text-white shadow-sm transition-all'
+        : 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all';
+    }
+  });
+
+  renderMapWorkstationList();
+}
+
+function renderMapWorkstationList() {
+  const container = document.getElementById('map-workstations-container');
+  if (!container) return;
+
+  const q = (document.getElementById('map-workstation-search')?.value || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('map-workstation-clear');
+  if (clearBtn) {
+    if (q) clearBtn.classList.remove('hidden');
+    else clearBtn.classList.add('hidden');
+  }
+
+  let list = mapWorkstationCandidates.slice();
+
+  // Tab filter
+  if (activeMapWorkstationFilter === 'unprotected') {
+    list = list.filter(a => !a.quick_heal_key_str);
+  } else if (activeMapWorkstationFilter === 'laptop') {
+    list = list.filter(a => String(a.asset_type || '').toLowerCase() === 'laptop');
+  } else if (activeMapWorkstationFilter === 'desktop') {
+    list = list.filter(a => String(a.asset_type || '').toLowerCase() === 'desktop');
+  }
+
+  // Live search query filter
+  if (q) {
+    list = list.filter(a => {
+      const haystack = `${a.internal_serial_number} ${a.asset_type} ${a.brand || ''} ${a.model_name || ''} ${a.assigned_user || ''} ${a.department || ''} ${a.location || ''} ${a.serial_number || ''}`.toLowerCase();
+      return haystack.includes(q);
     });
   }
 
-  mapKeyCombobox.setValue(null);
-  openModal('modal-map-key');
+  // Sort: Unprotected first, then by assigned user
+  list.sort((a, b) => {
+    const aNeeds = !a.quick_heal_key_str;
+    const bNeeds = !b.quick_heal_key_str;
+    if (aNeeds && !bNeeds) return -1;
+    if (!aNeeds && bNeeds) return 1;
+    return (a.assigned_user || '').localeCompare(b.assigned_user || '');
+  });
 
-  // Automatically render and open options dropdown on modal launch
-  setTimeout(() => {
-    if (mapKeyCombobox && typeof mapKeyCombobox.openDropdown === 'function') {
-      mapKeyCombobox.openDropdown();
+  if (list.length === 0) {
+    container.innerHTML = `
+      <div class="p-8 text-center text-xs text-slate-400 font-medium">
+        <i data-lucide="search-x" class="w-6 h-6 mx-auto mb-1 text-slate-300"></i>
+        <span>No matching workstations found for current filter.</span>
+      </div>
+    `;
+    lucide.createIcons();
+    return;
+  }
+
+  container.innerHTML = list.map(a => {
+    const isSelected = selectedMapAssetId === a.id;
+    const isUnprotected = !a.quick_heal_key_str;
+
+    let statusBadge = '';
+    if (isUnprotected) {
+      statusBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 shadow-xs"><i data-lucide="shield-alert" class="w-3 h-3 text-rose-500"></i><span>Unprotected</span></span>`;
+    } else {
+      statusBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200"><i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i><span>Mapped</span></span>`;
     }
-  }, 100);
+
+    const initial = (a.assigned_user || 'U').charAt(0).toUpperCase();
+
+    return `
+      <div onclick="selectMapWorkstation(${a.id})" class="p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+        isSelected
+          ? 'bg-purple-50/80 border-purple-500 ring-2 ring-purple-500/25 shadow-sm'
+          : 'bg-white hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+      }">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 transition-colors ${
+            isSelected ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700'
+          }">
+            ${isSelected ? '<i data-lucide="check" class="w-4 h-4"></i>' : initial}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-bold text-xs text-slate-900 truncate">${escapeHtml(a.assigned_user || 'Unassigned')}</span>
+              <span class="font-mono font-bold text-brand-600 text-xs">#${escapeHtml(a.internal_serial_number)}</span>
+              <span class="text-xs text-slate-600 font-medium">• ${escapeHtml(a.brand || '')} ${escapeHtml(a.asset_type)}</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 truncate">
+              Dept: ${escapeHtml(a.department || 'General')} • Loc: ${escapeHtml(a.location || 'Head Office')} ${a.serial_number ? `• S/N: ${escapeHtml(a.serial_number)}` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+          ${statusBadge}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  lucide.createIcons();
+}
+
+function selectMapWorkstation(assetId) {
+  selectedMapAssetId = assetId;
+  const selectEl = document.getElementById('map-asset-select');
+  if (selectEl) selectEl.value = assetId;
+
+  const a = mapWorkstationCandidates.find(w => w.id === assetId);
+  const previewText = document.getElementById('map-selected-text');
+  const previewBadge = document.getElementById('map-selected-badge');
+  const submitBtn = document.getElementById('btn-submit-map-key');
+
+  if (a && previewText) {
+    previewText.innerHTML = `Selected: <strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong> (#${escapeHtml(a.internal_serial_number)} • ${escapeHtml(a.brand || '')} ${escapeHtml(a.asset_type)})`;
+    if (previewBadge) previewBadge.classList.remove('hidden');
+    if (submitBtn) submitBtn.disabled = false;
+  }
+
+  renderMapWorkstationList();
+}
+
+function clearMapWorkstationSearch() {
+  const searchInput = document.getElementById('map-workstation-search');
+  if (searchInput) searchInput.value = '';
+  renderMapWorkstationList();
+}
+
+async function openMapKeyModalForAsset(assetId) {
+  try {
+    const res = await apiFetch('/api/keys');
+    if (!res.ok) return;
+    const data = await res.json();
+    const availableKey = (data.keys || []).find(k => k.status === 'Available');
+    if (!availableKey) {
+      showToast('No Available Quick Heal keys in the license pool. Please add or unmap a key first.', 'error');
+      navigate('keys');
+      return;
+    }
+    await openMapKeyModal(availableKey.id, availableKey.product_key);
+    selectMapWorkstation(assetId);
+  } catch (err) {
+    console.error('openMapKeyModalForAsset error:', err);
+  }
 }
 
 async function handleMapKeySubmit(e) {
@@ -2063,6 +2267,18 @@ function openAssignAccessoryModal(accId) {
   document.getElementById('assign-acc-id').value = item.id;
   document.getElementById('assign-acc-item-title').textContent = `${item.name} (${item.accessory_code})`;
   document.getElementById('assign-acc-item-info').textContent = `Brand: ${item.brand || 'Standard'} • Available Quantity: ${item.quantity}`;
+  
+  const qtyInput = document.getElementById('assign-acc-quantity');
+  if (qtyInput) {
+    qtyInput.value = 1;
+    qtyInput.max = item.quantity;
+    qtyInput.min = 1;
+  }
+  const maxHint = document.getElementById('assign-acc-max-hint');
+  if (maxHint) {
+    maxHint.textContent = `Max: ${item.quantity}`;
+  }
+
   document.getElementById('assign-acc-user').value = '';
   document.getElementById('assign-acc-location').value = item.location || '';
   document.getElementById('assign-acc-remarks').value = '';
@@ -2073,7 +2289,16 @@ function openAssignAccessoryModal(accId) {
 async function submitAssignAccessory(e) {
   e.preventDefault();
   const accId = document.getElementById('assign-acc-id').value;
+  const qtyInput = document.getElementById('assign-acc-quantity');
+  const qty = qtyInput ? (parseInt(qtyInput.value, 10) || 1) : 1;
+
+  if (qty < 1) {
+    showToast('Assignment quantity must be at least 1', 'error');
+    return;
+  }
+
   const payload = {
+    quantity: qty,
     assigned_user: document.getElementById('assign-acc-user').value.trim(),
     location: document.getElementById('assign-acc-location').value.trim(),
     remarks: document.getElementById('assign-acc-remarks').value.trim()
