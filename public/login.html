@@ -1,168 +1,163 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-950">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login | IT Asset Management System</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <style>
-    body {
-      background: radial-gradient(circle at 10% 20%, rgb(15, 23, 42) 0%, rgb(30, 27, 75) 90.2%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
+  <title>Sign In | IT Asset Hub • VB EXPORTS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN with Forms & Typography -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+              950: '#1e1b4b',
+            }
+          }
+        }
+      }
     }
-    .login-container {
-      width: 100%;
-      max-width: 440px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(16px);
-      border-radius: 20px;
-      padding: 40px 36px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(79, 70, 229, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-    .login-header {
-      text-align: center;
-      margin-bottom: 28px;
-    }
-    .login-logo {
-      width: 58px;
-      height: 58px;
-      background: var(--primary-gradient);
-      border-radius: 16px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      margin-bottom: 16px;
-      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
-    }
-    .login-header h1 {
-      font-size: 22px;
-      font-weight: 800;
-      color: #0f172a;
-      letter-spacing: -0.5px;
-    }
-    .login-header p {
-      font-size: 13px;
-      color: #64748b;
-      margin-top: 6px;
-    }
-    .login-form .form-group {
-      margin-bottom: 18px;
-    }
-    .btn-submit {
-      width: 100%;
-      padding: 13px;
-      font-size: 15px;
-      font-weight: 700;
-      border-radius: 12px;
-      margin-top: 10px;
-    }
-    .demo-credentials {
-      margin-top: 28px;
-      padding-top: 20px;
-      border-top: 1px solid #e2e8f0;
-      text-align: center;
-    }
-    .demo-credentials h4 {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: #64748b;
-      margin-bottom: 10px;
-    }
-    .demo-chips {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .demo-chip {
-      background: #f1f5f9;
-      border: 1px solid #cbd5e1;
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #334155;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .demo-chip:hover {
-      background: #e2e8f0;
-      border-color: #94a3b8;
-      transform: translateY(-1px);
-    }
-    .alert-error {
-      background-color: #fef2f2;
-      border: 1px solid #fecaca;
-      color: #991b1b;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 18px;
-      display: none;
-    }
-  </style>
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body>
+<body class="h-full antialiased font-sans text-slate-100 selection:bg-brand-500 selection:text-white flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
 
-  <div class="login-container">
-    <div class="login-header">
-      <div class="login-logo">💻</div>
-      <h1>IT Asset Manager</h1>
-      <p>VB EXPORTS Enterprise Portal</p>
+  <!-- Ambient Background Glows -->
+  <div class="absolute -top-40 -left-40 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-sky-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+  <div class="w-full max-w-md relative z-10">
+    <!-- Brand Header -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-400 shadow-xl shadow-brand-500/25 ring-1 ring-white/20 mb-4 transform hover:scale-105 transition-transform duration-300">
+        <i data-lucide="cpu" class="w-8 h-8 text-white"></i>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">IT Asset Hub</h1>
+      <p class="text-sm text-slate-400 mt-1 font-medium">Enterprise Infrastructure & Licensing • <span class="text-indigo-400 font-semibold">VB EXPORTS</span></p>
     </div>
 
-    <div id="login-error" class="alert-error"></div>
+    <!-- Login Card -->
+    <div class="bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 shadow-2xl rounded-2xl p-6 sm:p-8 relative overflow-hidden ring-1 ring-white/5">
+      <div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-500 via-indigo-500 to-sky-400"></div>
 
-    <form id="login-form" class="login-form">
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input type="text" id="username" class="input-control" placeholder="Enter your username" required autofocus>
+      <!-- Error Alert -->
+      <div id="login-error" class="hidden mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs sm:text-sm font-medium flex items-center gap-2.5">
+        <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400 flex-shrink-0"></i>
+        <span id="error-message">Invalid credentials.</span>
       </div>
 
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" class="input-control" placeholder="••••••••" required>
-      </div>
+      <form id="login-form" class="space-y-5">
+        <div>
+          <label for="username" class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">Username</label>
+          <div class="relative rounded-xl shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="user" class="w-4 h-4"></i>
+            </div>
+            <input type="text" id="username" class="block w-full pl-10 pr-3 py-2.5 bg-slate-950/60 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors" placeholder="Enter username (e.g. admin)" required autofocus>
+          </div>
+        </div>
 
-      <button type="submit" id="btn-login" class="topbar-btn btn-primary btn-submit">Sign In to Dashboard</button>
-    </form>
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label for="password" class="block text-xs font-semibold uppercase tracking-wider text-slate-300">Password</label>
+          </div>
+          <div class="relative rounded-xl shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <input type="password" id="password" class="block w-full pl-10 pr-10 py-2.5 bg-slate-950/60 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors" placeholder="••••••••" required>
+            <button type="button" onclick="togglePassword()" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 focus:outline-none">
+              <i id="eye-icon" data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
 
-    <div class="demo-credentials">
-      <h4>⚡ Quick Demo Access</h4>
-      <div class="demo-chips">
-        <button type="button" class="demo-chip" onclick="fillCreds('admin', 'admin123')">👑 Admin</button>
-        <button type="button" class="demo-chip" onclick="fillCreds('technician', 'tech123')">🔧 Technician</button>
-        <button type="button" class="demo-chip" onclick="fillCreds('viewer', 'view123')">👁️ Viewer</button>
+        <button type="submit" id="btn-login" class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-indigo-700 hover:from-brand-500 hover:to-indigo-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow-lg shadow-brand-500/25 transform active:scale-[0.98] transition-all duration-150">
+          <span>Sign In to Dashboard</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <!-- Quick Fill Credentials -->
+      <div class="mt-8 pt-6 border-t border-slate-800">
+        <p class="text-xs text-center font-semibold text-slate-400 uppercase tracking-wider mb-3">⚡ Quick Role Access</p>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" onclick="fillCreds('admin', 'admin123')" class="px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-200 text-center transition-all hover:border-slate-600 hover:text-white flex flex-col items-center gap-1">
+            <span class="text-rose-400 text-base">👑</span>
+            <span>Admin</span>
+          </button>
+          <button type="button" onclick="fillCreds('technician', 'tech123')" class="px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-200 text-center transition-all hover:border-slate-600 hover:text-white flex flex-col items-center gap-1">
+            <span class="text-sky-400 text-base">🔧</span>
+            <span>Technician</span>
+          </button>
+          <button type="button" onclick="fillCreds('viewer', 'view123')" class="px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-200 text-center transition-all hover:border-slate-600 hover:text-white flex flex-col items-center gap-1">
+            <span class="text-emerald-400 text-base">👁️</span>
+            <span>Viewer</span>
+          </button>
+        </div>
       </div>
+    </div>
+
+    <!-- Security Footer -->
+    <div class="mt-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+      <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+      <span>Protected by Enterprise RBAC & JWT Session Security</span>
     </div>
   </div>
 
   <script>
+    lucide.createIcons();
+
+    function togglePassword() {
+      const pwd = document.getElementById('password');
+      const icon = document.getElementById('eye-icon');
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        pwd.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
     function fillCreds(u, p) {
       document.getElementById('username').value = u;
       document.getElementById('password').value = p;
-      document.getElementById('login-error').style.display = 'none';
+      document.getElementById('login-error').classList.add('hidden');
     }
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const errBox = document.getElementById('login-error');
+      const errMsg = document.getElementById('error-message');
       const btn = document.getElementById('btn-login');
-      errBox.style.display = 'none';
 
+      errBox.classList.add('hidden');
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
 
       btn.disabled = true;
-      btn.innerText = 'Authenticating...';
+      btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Authenticating...`;
 
       try {
         const res = await fetch('/api/auth/login', {
@@ -177,20 +172,21 @@
           localStorage.setItem('it_app_user', JSON.stringify(data.user));
           window.location.href = '/';
         } else {
-          errBox.innerText = data.error || 'Authentication failed.';
-          errBox.style.display = 'block';
+          errMsg.textContent = data.error || 'Authentication failed.';
+          errBox.classList.remove('hidden');
           btn.disabled = false;
-          btn.innerText = 'Sign In to Dashboard';
+          btn.innerHTML = `<span>Sign In to Dashboard</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+          lucide.createIcons();
         }
       } catch (err) {
-        errBox.innerText = 'Network error. Please try again.';
-        errBox.style.display = 'block';
+        errMsg.textContent = 'Network or server error. Please try again.';
+        errBox.classList.remove('hidden');
         btn.disabled = false;
-        btn.innerText = 'Sign In to Dashboard';
+        btn.innerHTML = `<span>Sign In to Dashboard</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+        lucide.createIcons();
       }
     });
 
-    // Check if already logged in
     (async () => {
       try {
         const token = localStorage.getItem('it_app_token');
@@ -198,9 +194,7 @@
           const res = await fetch('/api/auth/me', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (res.ok) {
-            window.location.href = '/';
-          }
+          if (res.ok) window.location.href = '/';
         }
       } catch (e) {}
     })();

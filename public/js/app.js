@@ -1,6 +1,6 @@
 /**
- * IT Asset & Lifecycle Management Web Application
- * Core Client Application Script
+ * IT Asset & Lifecycle Hub • Core Client Application Script
+ * Powered by Tailwind CSS & Lucide Icons
  */
 
 let currentUser = null;
@@ -58,7 +58,13 @@ function updateUserUI() {
 
   if (roleEl) {
     roleEl.textContent = currentUser.role.toUpperCase();
-    roleEl.className = `user-role-badge role-${currentUser.role}`;
+    if (currentUser.role === 'admin') {
+      roleEl.className = 'inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30';
+    } else if (currentUser.role === 'technician') {
+      roleEl.className = 'inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30';
+    } else {
+      roleEl.className = 'inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+    }
   }
 
   // Handle Role-based visibility
@@ -71,6 +77,8 @@ function updateUserUI() {
   techActions.forEach(el => {
     el.style.display = (currentUser.role === 'viewer') ? 'none' : '';
   });
+
+  lucide.createIcons();
 }
 
 async function logout() {
@@ -82,7 +90,7 @@ async function logout() {
   showToast('Logged out successfully', 'info');
   setTimeout(() => {
     window.location.href = '/login';
-  }, 300);
+  }, 250);
 }
 
 // Global API Fetch helper with Auth Header
@@ -120,22 +128,30 @@ function navigate(viewName, params = {}, updateHash = true) {
   }
 
   // Update Nav links
-  document.querySelectorAll('.nav-link').forEach(link => {
-    link.classList.toggle('active', link.dataset.view === viewName);
+  document.querySelectorAll('.nav-btn').forEach(link => {
+    const isActive = link.dataset.view === viewName;
+    link.classList.toggle('active', isActive);
+    if (isActive) {
+      link.className = 'nav-btn active flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-150';
+    } else {
+      link.className = 'nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150';
+    }
   });
 
-  // Switch View Containers
-  document.querySelectorAll('.view-container').forEach(view => {
+  // Switch View Panels
+  document.querySelectorAll('.view-panel').forEach(view => {
+    view.classList.add('hidden');
     view.classList.remove('active');
   });
 
   const activeViewEl = document.getElementById(`view-${viewName}`);
   if (activeViewEl) {
+    activeViewEl.classList.remove('hidden');
     activeViewEl.classList.add('active');
   }
 
   // Close mobile sidebar if open
-  document.getElementById('sidebar').classList.remove('mobile-open');
+  closeSidebar();
 
   // Trigger view data loaders
   switch (viewName) {
@@ -167,10 +183,22 @@ function navigate(viewName, params = {}, updateHash = true) {
       }
       break;
   }
+
+  setTimeout(() => lucide.createIcons(), 50);
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('mobile-open');
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  sidebar.classList.toggle('-translate-x-full');
+  backdrop.classList.toggle('hidden');
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (sidebar) sidebar.classList.add('-translate-x-full');
+  if (backdrop) backdrop.classList.add('hidden');
 }
 
 // ==========================================
@@ -180,37 +208,49 @@ function toggleSidebar() {
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-  toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
+  toast.className = 'toast-item pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-xs font-semibold text-white transition-all';
+
+  if (type === 'success') {
+    toast.classList.add('bg-emerald-600');
+    toast.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-200"></i><span>${escapeHtml(message)}</span>`;
+  } else if (type === 'error') {
+    toast.classList.add('bg-rose-600');
+    toast.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 text-rose-200"></i><span>${escapeHtml(message)}</span>`;
+  } else {
+    toast.classList.add('bg-slate-900');
+    toast.innerHTML = `<i data-lucide="info" class="w-4 h-4 text-sky-400"></i><span>${escapeHtml(message)}</span>`;
+  }
+
   container.appendChild(toast);
+  lucide.createIcons();
 
   setTimeout(() => {
     toast.style.opacity = '0';
-    toast.style.transform = 'translateX(50px)';
+    toast.style.transform = 'translateY(10px)';
     setTimeout(() => toast.remove(), 300);
-  }, 4000);
+  }, 3500);
 }
 
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
-    modal.classList.add('active');
+    modal.classList.remove('hidden');
     const firstInput = modal.querySelector('input:not([type=hidden]), select, textarea');
     if (firstInput) setTimeout(() => firstInput.focus(), 100);
+    lucide.createIcons();
   }
 }
 
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
-    modal.classList.remove('active');
+    modal.classList.add('hidden');
   }
 }
 
 function setupGlobalEvents() {
   // Close modals on backdrop click
-  document.querySelectorAll('.modal-backdrop').forEach(modal => {
+  document.querySelectorAll('.fixed.inset-0.z-50').forEach(modal => {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         closeModal(modal.id);
@@ -224,7 +264,7 @@ function setupGlobalEvents() {
       e.preventDefault();
       openMasterSearchModal();
     } else if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-backdrop.active').forEach(m => closeModal(m.id));
+      document.querySelectorAll('.fixed.inset-0.z-50:not(.hidden)').forEach(m => closeModal(m.id));
     }
   });
 }
@@ -249,7 +289,7 @@ async function loadDashboard() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // Update KPI counters
+    // KPI Numbers
     document.getElementById('kpi-total-assets').textContent = data.assets.total || 0;
     document.getElementById('sidebar-asset-count').textContent = data.assets.total || 0;
 
@@ -265,38 +305,41 @@ async function loadDashboard() {
 
     document.getElementById('kpi-repair-cost').textContent = `₹${(data.repairs.total_cost || 0).toLocaleString('en-IN')}`;
 
-    // Render Department Distribution
+    // Render Department Breakdown
     const deptContainer = document.getElementById('dept-breakdown-container');
     deptContainer.innerHTML = '';
-    const maxDeptCount = data.deptBreakdown[0]?.count || 1;
+    const maxDept = data.deptBreakdown[0]?.count || 1;
 
     data.deptBreakdown.forEach(item => {
-      const pct = Math.round((item.count / maxDeptCount) * 100);
+      const pct = Math.round((item.count / maxDept) * 100);
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex; flex-direction:column; gap:4px; cursor:pointer;';
+      row.className = 'cursor-pointer hover:bg-slate-50 p-2 rounded-xl transition-colors';
       row.onclick = () => navigate('assets', { department: item.department });
       row.innerHTML = `
-        <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+        <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
           <span>${escapeHtml(item.department)}</span>
-          <span style="color:var(--primary); font-weight:700;">${item.count} assets</span>
+          <span class="text-brand-600 font-bold">${item.count} units</span>
         </div>
-        <div style="height:8px; background:#f1f5f9; border-radius:4px; overflow:hidden;">
-          <div style="width:${pct}%; height:100%; background:var(--primary-gradient); border-radius:4px;"></div>
+        <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="h-full bg-gradient-to-r from-brand-600 to-indigo-500 rounded-full" style="width: ${pct}%"></div>
         </div>
       `;
       deptContainer.appendChild(row);
     });
 
-    // Render System Types Tags
+    // Render System Types Breakdown
     const typeContainer = document.getElementById('type-breakdown-container');
     typeContainer.innerHTML = '';
     data.typeBreakdown.forEach(item => {
       const tag = document.createElement('div');
-      tag.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f8fafc; border:1px solid var(--border-color); border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;';
+      tag.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 cursor-pointer text-xs font-semibold text-slate-700 transition-colors';
       tag.onclick = () => navigate('assets', { type: item.asset_type });
       tag.innerHTML = `
-        <span>💻 ${escapeHtml(item.asset_type)}</span>
-        <span class="badge badge-key-assigned">${item.count}</span>
+        <div class="flex items-center gap-2">
+          <i data-lucide="monitor" class="w-3.5 h-3.5 text-indigo-500"></i>
+          <span>${escapeHtml(item.asset_type)}</span>
+        </div>
+        <span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold">${item.count}</span>
       `;
       typeContainer.appendChild(tag);
     });
@@ -305,19 +348,21 @@ async function loadDashboard() {
     const repairsTbody = document.getElementById('dashboard-recent-repairs');
     repairsTbody.innerHTML = '';
     if (data.recentRepairs.length === 0) {
-      repairsTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:20px;">No repair tickets logged yet.</td></tr>`;
+      repairsTbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-400">No recent maintenance tickets.</td></tr>`;
     } else {
       data.recentRepairs.forEach(r => {
         const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
+        tr.className = 'hover:bg-slate-50/80 cursor-pointer transition-colors';
         tr.onclick = () => navigate('repairs', { search: r.ticket_number });
         tr.innerHTML = `
-          <td><strong>${escapeHtml(r.ticket_number)}</strong></td>
-          <td><span class="badge badge-key-assigned">#${escapeHtml(r.internal_serial_number)}</span></td>
-          <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(r.issue_description)}</td>
-          <td>${escapeHtml(r.repair_vendor || r.technician_name || 'Internal IT')}</td>
-          <td>₹${(r.repair_cost || 0).toLocaleString('en-IN')}</td>
-          <td><span class="badge badge-repair">${escapeHtml(r.status)}</span></td>
+          <td class="py-2.5 px-3 font-mono font-bold text-brand-600">${escapeHtml(r.ticket_number)}</td>
+          <td class="py-2.5 px-3 font-mono font-semibold text-slate-800">#${escapeHtml(r.internal_serial_number)}</td>
+          <td class="py-2.5 px-3 text-slate-600 max-w-xs truncate">${escapeHtml(r.issue_description)}</td>
+          <td class="py-2.5 px-3 text-slate-500">${escapeHtml(r.repair_vendor || r.technician_name || 'In-House')}</td>
+          <td class="py-2.5 px-3 font-semibold text-slate-900">₹${(r.repair_cost || 0).toLocaleString('en-IN')}</td>
+          <td class="py-2.5 px-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(r.status)}</span>
+          </td>
         `;
         repairsTbody.appendChild(tr);
       });
@@ -327,24 +372,25 @@ async function loadDashboard() {
     const eolContainer = document.getElementById('dashboard-eol-warnings');
     eolContainer.innerHTML = '';
     if (data.eolWarnings.length === 0) {
-      eolContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">All registered assets are in good operating condition.</div>`;
+      eolContainer.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">All registered devices are operating normally.</div>`;
     } else {
       data.eolWarnings.forEach(w => {
         const item = document.createElement('div');
-        item.style.cssText = 'padding:12px; background:#fff7ed; border:1px solid #ffedd5; border-radius:8px; cursor:pointer;';
+        item.className = 'p-3 rounded-xl bg-rose-50/60 border border-rose-100 cursor-pointer hover:bg-rose-50 transition-colors';
         item.onclick = () => viewAssetDetail(w.id);
         item.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong>#${escapeHtml(w.internal_serial_number)} - ${escapeHtml(w.brand)} ${escapeHtml(w.asset_type)}</strong>
-            <span class="badge badge-notworking">${escapeHtml(w.working_status)}</span>
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-slate-900">#${escapeHtml(w.internal_serial_number)} • ${escapeHtml(w.brand)} ${escapeHtml(w.asset_type)}</span>
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700">${escapeHtml(w.working_status)}</span>
           </div>
-          <p style="font-size:12px; color:#9a3412; margin-top:4px;">User: ${escapeHtml(w.assigned_user || 'Unassigned')} | ${escapeHtml(w.department || '')}</p>
-          <div style="font-size:11px; color:#c2410c; margin-top:2px;">Repairs: ${w.repair_count} ticket(s) • Total spend: ₹${(w.total_repair_spent || 0).toLocaleString('en-IN')}</div>
+          <p class="text-[11px] text-slate-600 mt-1">User: <strong>${escapeHtml(w.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(w.department || '')}</p>
+          <div class="text-[10px] text-rose-600 font-semibold mt-1">Repairs: ${w.repair_count} tickets • Total spend: ₹${(w.total_repair_spent || 0).toLocaleString('en-IN')}</div>
         `;
         eolContainer.appendChild(item);
       });
     }
 
+    lucide.createIcons();
   } catch (err) {
     console.error('Dashboard load error:', err);
   }
@@ -357,7 +403,7 @@ async function loadDashboard() {
 let assetSearchTimeout = null;
 function debounceAssetSearch() {
   clearTimeout(assetSearchTimeout);
-  assetSearchTimeout = setTimeout(() => loadAssets(), 300);
+  assetSearchTimeout = setTimeout(() => loadAssets(), 250);
 }
 
 function resetAssetFilters() {
@@ -377,7 +423,6 @@ async function loadAssets(filterParams = {}) {
     const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('asset-filter-status')?.value || '';
     const key = filterParams.quick_heal !== undefined ? filterParams.quick_heal : document.getElementById('asset-filter-key')?.value || '';
 
-    // Sync input controls if params passed
     if (filterParams.search && document.getElementById('asset-filter-search')) document.getElementById('asset-filter-search').value = filterParams.search;
     if (filterParams.type && document.getElementById('asset-filter-type')) document.getElementById('asset-filter-type').value = filterParams.type;
     if (filterParams.department && document.getElementById('asset-filter-dept')) document.getElementById('asset-filter-dept').value = filterParams.department;
@@ -401,56 +446,82 @@ async function loadAssets(filterParams = {}) {
     document.getElementById('assets-count-label').textContent = `Showing ${data.total} assets`;
 
     if (data.assets.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">No IT assets match the current filter.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="py-12 text-center text-slate-400">No IT assets match the current filter.</td></tr>`;
       return;
     }
 
     data.assets.forEach(a => {
       const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition-colors';
 
-      // Status pill class
-      let statusBadge = `<span class="badge badge-working">Working</span>`;
-      if (a.working_status === 'In Repair') statusBadge = `<span class="badge badge-repair">In Repair</span>`;
-      else if (a.working_status === 'Not Working') statusBadge = `<span class="badge badge-notworking">Not Working</span>`;
-      else if (a.working_status === 'Retired') statusBadge = `<span class="badge badge-retired">Retired</span>`;
-
-      // Quick Heal pill
-      let keyBadge = `<span style="color:#94a3b8; font-size:12px;">— None —</span>`;
-      if (a.quick_heal_key_str) {
-        keyBadge = `<span class="badge badge-key-available" title="${escapeHtml(a.quick_heal_key_str)}">🔑 Mapped</span>`;
+      // Status pill
+      let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Working</span>`;
+      if (a.working_status === 'In Repair') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">In Repair</span>`;
+      } else if (a.working_status === 'Not Working') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Not Working</span>`;
+      } else if (a.working_status === 'Retired') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Retired</span>`;
       }
 
-      // Lifecycle health badge
-      let healthBadge = `<span class="badge badge-health-healthy">Healthy</span>`;
+      // Quick Heal pill
+      let keyBadge = `<span class="text-slate-400 text-[11px]">—</span>`;
+      if (a.quick_heal_key_str) {
+        keyBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="${escapeHtml(a.quick_heal_key_str)}">
+          <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
+          <span>Mapped</span>
+        </span>`;
+      }
+
+      // Health badge
+      let healthBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700">Healthy</span>`;
       if (a.healthClass === 'danger') {
-        healthBadge = `<span class="badge badge-health-danger" title="${escapeHtml(a.eolReason)}">⚠️ ${escapeHtml(a.healthScore)}</span>`;
+        healthBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="${escapeHtml(a.eolReason)}"><i data-lucide="alert-triangle" class="w-3 h-3"></i><span>${escapeHtml(a.healthScore)}</span></span>`;
       } else if (a.healthClass === 'warning') {
-        healthBadge = `<span class="badge badge-health-warning" title="${escapeHtml(a.eolReason)}">⚡ ${escapeHtml(a.healthScore)}</span>`;
+        healthBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="${escapeHtml(a.eolReason)}"><i data-lucide="zap" class="w-3 h-3"></i><span>${escapeHtml(a.healthScore)}</span></span>`;
       }
 
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
 
       tr.innerHTML = `
-        <td><strong style="color:var(--primary); font-family:monospace; font-size:14px;">${escapeHtml(a.internal_serial_number)}</strong></td>
-        <td>${escapeHtml(a.asset_type)}</td>
-        <td><strong>${escapeHtml(a.brand || '')}</strong> <span style="color:var(--text-muted); font-size:12px;">${escapeHtml(a.model_name || '')}</span></td>
-        <td>${escapeHtml(a.department || '—')}</td>
-        <td><span style="font-size:12px; color:var(--text-muted);">${escapeHtml(a.location || '—')}</span></td>
-        <td><strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong></td>
-        <td>${keyBadge}</td>
-        <td>${statusBadge}</td>
-        <td>${healthBadge}</td>
-        <td style="text-align:right; white-space:nowrap;">
-          <button class="action-btn" title="View Complete Dossier" onclick="viewAssetDetail(${a.id})">👁️</button>
-          ${!isViewer ? `<button class="action-btn" title="Edit Asset" onclick="openEditAssetModal(${a.id})">✏️</button>` : ''}
-          ${!isViewer ? `<button class="action-btn" title="Log Repair" onclick="openRepairModal(${a.id})">🔧</button>` : ''}
-          ${isAdmin ? `<button class="action-btn btn-delete" title="Delete Asset" onclick="deleteAsset(${a.id}, '${escapeHtml(a.internal_serial_number)}')">🗑️</button>` : ''}
+        <td class="py-3 px-4 font-mono font-bold text-brand-600">#${escapeHtml(a.internal_serial_number)}</td>
+        <td class="py-3 px-4 font-semibold text-slate-800">${escapeHtml(a.asset_type)}</td>
+        <td class="py-3 px-4">
+          <div class="font-bold text-slate-900">${escapeHtml(a.brand || '')}</div>
+          <div class="text-[11px] text-slate-400">${escapeHtml(a.model_name || 'Standard Model')}</div>
+        </td>
+        <td class="py-3 px-4 text-slate-600 font-medium">${escapeHtml(a.department || '—')}</td>
+        <td class="py-3 px-4 text-slate-500 text-[11px]">${escapeHtml(a.location || '—')}</td>
+        <td class="py-3 px-4 font-semibold text-slate-800">${escapeHtml(a.assigned_user || 'Unassigned')}</td>
+        <td class="py-3 px-4">${keyBadge}</td>
+        <td class="py-3 px-4">${statusBadge}</td>
+        <td class="py-3 px-4">${healthBadge}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button onclick="viewAssetDetail(${a.id})" title="View Dossier" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+            ${!isViewer ? `
+              <button onclick="openEditAssetModal(${a.id})" title="Edit Details" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button onclick="openRepairModal(${a.id})" title="Log Repair" class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors">
+                <i data-lucide="wrench" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+            ${isAdmin ? `
+              <button onclick="deleteAsset(${a.id}, '${escapeHtml(a.internal_serial_number)}')" title="Delete Asset" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
+    lucide.createIcons();
   } catch (err) {
     console.error('Assets load error:', err);
   }
@@ -460,15 +531,11 @@ async function loadAssets(filterParams = {}) {
 async function viewAssetDetail(assetId) {
   try {
     const res = await apiFetch(`/api/assets/${assetId}`);
-    if (!res.ok) {
-      showToast('Failed to load asset details', 'error');
-      return;
-    }
+    if (!res.ok) return;
     const { asset } = await res.json();
 
     document.getElementById('dossier-header-title').textContent = `Asset Dossier: #${asset.internal_serial_number} (${asset.brand} ${asset.asset_type})`;
 
-    // Action buttons inside dossier
     const btnRepair = document.getElementById('dossier-btn-repair');
     const btnEdit = document.getElementById('dossier-btn-edit');
 
@@ -479,140 +546,161 @@ async function viewAssetDetail(assetId) {
     let repairsHtml = '';
     if (asset.repairs && asset.repairs.length > 0) {
       repairsHtml = `
-        <div style="margin-top:20px;">
-          <h4 style="font-size:14px; font-weight:700; margin-bottom:10px;">🛠️ Maintenance & Repair History (${asset.repairs.length} records, Total: ₹${asset.total_repair_cost.toLocaleString('en-IN')})</h4>
-          <table class="data-table" style="font-size:12px;">
-            <thead>
-              <tr>
-                <th>Ticket</th>
-                <th>Date</th>
-                <th>Issue Description</th>
-                <th>Parts Replaced / Added</th>
-                <th>Vendor / Tech</th>
-                <th>Cost</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${asset.repairs.map(r => `
+        <div class="mt-6 border-t border-slate-100 pt-5">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">🛠️ Maintenance & Repair History (${asset.repairs.length} records • Total ₹${asset.total_repair_cost.toLocaleString('en-IN')})</h4>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold">
                 <tr>
-                  <td><strong>${escapeHtml(r.ticket_number)}</strong></td>
-                  <td>${escapeHtml(r.repair_date)}</td>
-                  <td>${escapeHtml(r.issue_description)}</td>
-                  <td><strong style="color:var(--primary);">${escapeHtml(r.parts_added || 'None')}</strong></td>
-                  <td>${escapeHtml(r.repair_vendor || r.technician_name || 'Internal')}</td>
-                  <td>₹${(r.repair_cost || 0).toLocaleString('en-IN')}</td>
-                  <td><span class="badge badge-repair">${escapeHtml(r.status)}</span></td>
+                  <th class="py-2.5 px-3">Ticket</th>
+                  <th class="py-2.5 px-3">Date</th>
+                  <th class="py-2.5 px-3">Issue Description</th>
+                  <th class="py-2.5 px-3">Parts Replaced</th>
+                  <th class="py-2.5 px-3">Vendor / Tech</th>
+                  <th class="py-2.5 px-3">Cost</th>
+                  <th class="py-2.5 px-3">Status</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${asset.repairs.map(r => `
+                  <tr class="hover:bg-slate-50">
+                    <td class="py-2 px-3 font-mono font-bold text-brand-600">${escapeHtml(r.ticket_number)}</td>
+                    <td class="py-2 px-3 text-slate-500">${escapeHtml(r.repair_date)}</td>
+                    <td class="py-2 px-3 font-medium text-slate-800">${escapeHtml(r.issue_description)}</td>
+                    <td class="py-2 px-3 font-semibold text-sky-600">${escapeHtml(r.parts_added || 'None')}</td>
+                    <td class="py-2 px-3 text-slate-500">${escapeHtml(r.repair_vendor || r.technician_name || 'In-House')}</td>
+                    <td class="py-2 px-3 font-bold text-slate-900">₹${(r.repair_cost || 0).toLocaleString('en-IN')}</td>
+                    <td class="py-2 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(r.status)}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     } else {
-      repairsHtml = `<div style="margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px; font-size:13px; color:var(--text-muted);">✨ No repairs or component replacements logged yet.</div>`;
+      repairsHtml = `<div class="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500 text-center">✨ No maintenance tickets logged for this asset. Machine has standard factory components.</div>`;
     }
 
     const body = document.getElementById('dossier-body');
     body.innerHTML = `
-      <div class="asset-profile-header">
-        <div class="asset-profile-title">
-          <h2>💻 #${escapeHtml(asset.internal_serial_number)} - ${escapeHtml(asset.brand)} ${escapeHtml(asset.asset_type)}</h2>
-          <p>Assigned to <strong>${escapeHtml(asset.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(asset.department || 'General')} • Location: ${escapeHtml(asset.location || 'Head Office')}</p>
+      <!-- Hero Banner -->
+      <div class="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white flex items-center justify-between shadow-lg">
+        <div>
+          <div class="flex items-center gap-3">
+            <h2 class="text-2xl font-black font-mono tracking-wide text-white">#${escapeHtml(asset.internal_serial_number)}</h2>
+            <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${asset.working_status === 'Working' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">
+              ${escapeHtml(asset.working_status)}
+            </span>
+          </div>
+          <p class="text-sm font-semibold text-slate-300 mt-1">${escapeHtml(asset.brand)} ${escapeHtml(asset.asset_type)} • Assigned to <strong class="text-white">${escapeHtml(asset.assigned_user || 'Unassigned')}</strong></p>
+          <div class="text-xs text-slate-400 mt-0.5">Department: ${escapeHtml(asset.department || 'General')} • Location: ${escapeHtml(asset.location || 'Head Office')}</div>
+        </div>
+        <div class="hidden sm:block text-right">
+          <div class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Lifecycle Status</div>
+          <div class="text-sm font-bold text-indigo-300 mt-0.5">${escapeHtml(asset.healthScore)}</div>
+        </div>
+      </div>
+
+      <!-- Lifecycle Evaluation Banner -->
+      <div class="p-4 rounded-2xl border ${asset.healthClass === 'danger' ? 'bg-rose-50/80 border-rose-200 text-rose-800' : asset.healthClass === 'warning' ? 'bg-amber-50/80 border-amber-200 text-amber-800' : 'bg-emerald-50/80 border-emerald-200 text-emerald-800'} flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${asset.healthClass === 'danger' ? 'bg-rose-100 text-rose-600' : asset.healthClass === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}">
+          <i data-lucide="${asset.healthClass === 'danger' ? 'alert-octagon' : asset.healthClass === 'warning' ? 'zap' : 'shield-check'}" class="w-5 h-5"></i>
         </div>
         <div>
-          <span class="badge ${asset.working_status === 'Working' ? 'badge-working' : asset.working_status === 'In Repair' ? 'badge-repair' : 'badge-notworking'}" style="font-size:14px; padding:6px 14px;">
-            ${escapeHtml(asset.working_status)}
-          </span>
+          <h4 class="text-xs font-bold uppercase tracking-wider">Lifecycle Intelligence Assessment: ${escapeHtml(asset.healthScore)}</h4>
+          <p class="text-xs mt-0.5 font-medium">${escapeHtml(asset.eolReason)}</p>
         </div>
       </div>
 
-      <!-- Lifecycle & EOL Status Banner -->
-      <div class="lifecycle-banner ${asset.healthClass === 'danger' ? 'health-danger' : asset.healthClass === 'warning' ? 'health-warning' : 'health-healthy'}">
-        <div style="font-size:26px;">${asset.healthClass === 'danger' ? '⚠️' : asset.healthClass === 'warning' ? '⚡' : '🛡️'}</div>
-        <div>
-          <strong style="font-size:14px;">Lifecycle Rating: ${escapeHtml(asset.healthScore)}</strong>
-          <p style="font-size:12px; margin-top:2px;">${escapeHtml(asset.eolReason)}</p>
+      <!-- Technical Specifications Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Brand & Model</span>
+          <strong class="text-slate-800 font-bold">${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model_name || '')}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Hardware Serial</span>
+          <strong class="text-slate-800 font-mono font-semibold">${escapeHtml(asset.serial_number || 'N/A')}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Operational Age</span>
+          <strong class="text-slate-800 font-semibold">${escapeHtml(asset.ageString)}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Purchase Date</span>
+          <strong class="text-slate-800 font-semibold">${escapeHtml(asset.purchase_date || 'Standard Setup')}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Procured From</span>
+          <strong class="text-slate-800 font-semibold">${escapeHtml(asset.purchase_vendor || 'IT Vendor')}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Procurement Cost</span>
+          <strong class="text-slate-800 font-semibold">₹${(asset.purchase_cost || 0).toLocaleString('en-IN')}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Total Maintenance Spend</span>
+          <strong class="text-brand-600 font-bold">₹${(asset.total_repair_cost || 0).toLocaleString('en-IN')}</strong>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Condition Rating</span>
+          <strong class="text-slate-800 font-semibold">${escapeHtml(asset.condition_rating || 'Good')}</strong>
         </div>
       </div>
 
-      <!-- Key Details Grid -->
-      <div class="asset-dossier-grid">
-        <div class="dossier-box">
-          <span>Brand & Model</span>
-          <strong>${escapeHtml(asset.brand || '—')} ${escapeHtml(asset.model_name || '')}</strong>
+      <!-- Quick Heal License Card -->
+      <div class="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-wider text-purple-700">Quick Heal Antivirus Protection</div>
+            <div class="font-mono font-bold text-sm text-purple-900 mt-0.5">${escapeHtml(asset.quick_heal_key_str || 'No Antivirus Key Mapped')}</div>
+            ${asset.quick_heal_validity ? `<div class="text-[11px] text-purple-600 mt-0.5">License valid until: <strong>${escapeHtml(asset.quick_heal_validity)}</strong></div>` : ''}
+          </div>
         </div>
-        <div class="dossier-box">
-          <span>Hardware Serial Number</span>
-          <strong style="font-family:monospace;">${escapeHtml(asset.serial_number || 'N/A')}</strong>
-        </div>
-        <div class="dossier-box">
-          <span>Operational Age</span>
-          <strong>${escapeHtml(asset.ageString)}</strong>
-        </div>
-        <div class="dossier-box">
-          <span>Purchase Date</span>
-          <strong>${escapeHtml(asset.purchase_date || 'Not recorded in sheet')}</strong>
-        </div>
-        <div class="dossier-box">
-          <span>Purchased From (Vendor)</span>
-          <strong>${escapeHtml(asset.purchase_vendor || 'Standard Procurement')}</strong>
-        </div>
-        <div class="dossier-box">
-          <span>Procurement Cost</span>
-          <strong>₹${(asset.purchase_cost || 0).toLocaleString('en-IN')}</strong>
-        </div>
-        <div class="dossier-box">
-          <span>Quick Heal Antivirus</span>
-          <strong style="font-family:monospace; color:var(--primary); font-size:12px;">${escapeHtml(asset.quick_heal_key_str || 'No key mapped yet')}</strong>
-          ${asset.quick_heal_validity ? `<span style="display:block; font-size:11px; color:#16a34a;">Valid till: ${escapeHtml(asset.quick_heal_validity)}</span>` : ''}
-        </div>
-        <div class="dossier-box">
-          <span>Condition Rating</span>
-          <strong>${escapeHtml(asset.condition_rating || 'Good')}</strong>
-        </div>
-        <div class="dossier-box">
-          <span>Total Maintenance Spend</span>
-          <strong>₹${(asset.total_repair_cost || 0).toLocaleString('en-IN')} (${asset.repair_count} repairs)</strong>
-        </div>
+        ${!asset.quick_heal_key_str ? `
+          <button onclick="closeModal('modal-asset-detail'); openMapKeyModalForAsset(${asset.id});" class="tech-action px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-sm">
+            Assign Key
+          </button>
+        ` : ''}
       </div>
 
-      <!-- Parts Added / Upgraded Ledger -->
-      <div style="margin-bottom:16px; padding:14px; background:#f1f5f9; border-radius:8px; border:1px solid #cbd5e1;">
-        <span style="font-size:11px; text-transform:uppercase; font-weight:700; color:#475569;">🧩 Parts Added & Component Upgrades Summary:</span>
-        <div style="font-size:13px; font-weight:600; color:#1e293b; margin-top:4px;">
-          ${escapeHtml(asset.parts_added_summary || 'No components upgraded/added yet.')}
+      <!-- Parts Added Ledger -->
+      <div class="p-4 rounded-2xl bg-sky-50/60 border border-sky-200/80">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-sky-700">🧩 Installed Upgrades & Added Parts Ledger:</span>
+        <div class="text-xs font-semibold text-slate-800 mt-1">
+          ${escapeHtml(asset.parts_added_summary || 'No secondary components installed. Machine has standard factory components.')}
         </div>
       </div>
 
       <!-- Operational Remarks -->
-      <div style="padding:14px; background:#f8fafc; border-radius:8px; border:1px solid var(--border-color);">
-        <span style="font-size:11px; text-transform:uppercase; font-weight:700; color:#64748b;">📝 Operational Usage & Remarks:</span>
-        <div style="font-size:13px; color:#334155; margin-top:4px; line-height:1.5;">
-          ${escapeHtml(asset.remarks || 'No remarks provided.')}
-        </div>
+      <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">📝 Operational Notes & Usage:</span>
+        <p class="text-xs text-slate-700 mt-1 font-medium leading-relaxed">${escapeHtml(asset.remarks || 'No usage notes recorded.')}</p>
       </div>
 
       ${repairsHtml}
     `;
 
-    // Store for printing tag
     window.currentDossierAsset = asset;
     openModal('modal-asset-detail');
-
+    lucide.createIcons();
   } catch (err) {
     console.error('Asset detail view error:', err);
   }
 }
 
-// Print Asset Tag / Sticker
+// Print Asset Physical Tag / Sticker
 function printAssetTag() {
   const asset = window.currentDossierAsset;
   if (!asset) return;
 
   document.getElementById('tag-serial').textContent = asset.internal_serial_number;
   document.getElementById('tag-type-brand').textContent = `${asset.asset_type} - ${asset.brand || ''}`;
-  document.getElementById('tag-dept-user').textContent = `Dept: ${asset.department || 'N/A'} | User: ${asset.assigned_user || 'Unassigned'}`;
+  document.getElementById('tag-dept-user').textContent = `Dept: ${asset.department || 'N/A'} • User: ${asset.assigned_user || 'Unassigned'}`;
 
   openModal('modal-print-tag');
 }
@@ -624,16 +712,12 @@ async function openNewAssetModal() {
   document.getElementById('asset-form-title').textContent = 'Add New IT Asset';
 
   try {
-    // Auto-fetch recommended serial number
     const res = await apiFetch('/api/assets/next-serial');
     if (res.ok) {
       const data = await res.json();
       document.getElementById('asset-serial').value = data.nextSerial;
     }
-
-    // Populate available Quick Heal keys in dropdown
     await populateKeySelector();
-
     openModal('modal-asset-form');
   } catch (err) {
     console.error('Error opening new asset modal:', err);
@@ -666,7 +750,6 @@ async function openEditAssetModal(assetId) {
     document.getElementById('asset-remarks').value = asset.remarks || '';
 
     await populateKeySelector(asset.quick_heal_key_id);
-
     openModal('modal-asset-form');
   } catch (err) {
     console.error('Error opening edit asset modal:', err);
@@ -682,7 +765,6 @@ async function populateKeySelector(selectedKeyId = null) {
   const data = await res.json();
 
   data.keys.forEach(k => {
-    // Only show available keys OR the currently mapped key for this asset
     if (k.status === 'Available' || k.id === Number(selectedKeyId)) {
       const opt = document.createElement('option');
       opt.value = k.id;
@@ -746,9 +828,8 @@ async function handleAssetSubmit(e) {
   }
 }
 
-// Delete Asset (Admin only)
 async function deleteAsset(assetId, serial) {
-  if (!confirm(`Are you sure you want to permanently delete Asset #${serial}? All linked repair logs will be deleted.`)) {
+  if (!confirm(`Are you sure you want to permanently delete Asset #${serial}? Linked maintenance tickets will also be deleted.`)) {
     return;
   }
 
@@ -778,7 +859,7 @@ function exportAssetsCSV() {
 let repairSearchTimeout = null;
 function debounceRepairSearch() {
   clearTimeout(repairSearchTimeout);
-  repairSearchTimeout = setTimeout(() => loadRepairs(), 300);
+  repairSearchTimeout = setTimeout(() => loadRepairs(), 250);
 }
 
 async function loadRepairs(filterParams = {}) {
@@ -802,38 +883,52 @@ async function loadRepairs(filterParams = {}) {
     tbody.innerHTML = '';
 
     if (data.repairs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--text-muted);">No repair tickets found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-slate-400">No maintenance tickets logged.</td></tr>`;
       return;
     }
 
     data.repairs.forEach(r => {
       const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition-colors';
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
 
-      let statusBadge = `<span class="badge badge-repair">${escapeHtml(r.status)}</span>`;
-      if (r.status === 'Completed') statusBadge = `<span class="badge badge-working">Completed</span>`;
-      else if (r.status === 'Beyond Repair') statusBadge = `<span class="badge badge-notworking">Beyond Repair (EOL)</span>`;
+      let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(r.status)}</span>`;
+      if (r.status === 'Completed') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>`;
+      else if (r.status === 'Beyond Repair') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Beyond Repair</span>`;
 
       tr.innerHTML = `
-        <td><strong style="color:var(--primary); font-family:monospace;">${escapeHtml(r.ticket_number)}</strong></td>
-        <td><span class="badge badge-key-assigned" style="cursor:pointer;" onclick="viewAssetDetail(${r.asset_id})">#${escapeHtml(r.internal_serial_number)}</span></td>
-        <td style="max-width:240px;">${escapeHtml(r.issue_description)}</td>
-        <td><strong style="color:#0284c7;">${escapeHtml(r.parts_added || '— None —')}</strong></td>
-        <td>${escapeHtml(r.repair_vendor || r.technician_name || 'In-House IT')}</td>
-        <td>${escapeHtml(r.repair_date)}</td>
-        <td><strong>₹${(r.repair_cost || 0).toLocaleString('en-IN')}</strong></td>
-        <td>${statusBadge}</td>
-        <td style="text-align:right; white-space:nowrap;">
-          ${!isViewer ? `<button class="action-btn" title="Edit Repair Status" onclick="openEditRepairModal(${r.id})">✏️</button>` : ''}
-          ${isAdmin ? `<button class="action-btn btn-delete" title="Delete Ticket" onclick="deleteRepair(${r.id}, '${escapeHtml(r.ticket_number)}')">🗑️</button>` : ''}
+        <td class="py-3 px-4 font-mono font-bold text-brand-600">${escapeHtml(r.ticket_number)}</td>
+        <td class="py-3 px-4">
+          <span onclick="viewAssetDetail(${r.asset_id})" class="cursor-pointer font-mono font-bold text-slate-900 hover:text-brand-600 hover:underline">#${escapeHtml(r.internal_serial_number)}</span>
+          <div class="text-[10px] text-slate-400">${escapeHtml(r.brand)} ${escapeHtml(r.asset_type)}</div>
+        </td>
+        <td class="py-3 px-4 font-medium text-slate-800 max-w-xs">${escapeHtml(r.issue_description)}</td>
+        <td class="py-3 px-4 font-semibold text-sky-600">${escapeHtml(r.parts_added || '— None —')}</td>
+        <td class="py-3 px-4 text-slate-500">${escapeHtml(r.repair_vendor || r.technician_name || 'In-House')}</td>
+        <td class="py-3 px-4 text-slate-500">${escapeHtml(r.repair_date)}</td>
+        <td class="py-3 px-4 font-bold text-slate-900">₹${(r.repair_cost || 0).toLocaleString('en-IN')}</td>
+        <td class="py-3 px-4">${statusBadge}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex items-center justify-end gap-1">
+            ${!isViewer ? `
+              <button onclick="openEditRepairModal(${r.id})" title="Update Ticket" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+            ${isAdmin ? `
+              <button onclick="deleteRepair(${r.id}, '${escapeHtml(r.ticket_number)}')" title="Delete Ticket" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
     loadEolAnalysis();
-
+    lucide.createIcons();
   } catch (err) {
     console.error('Repairs load error:', err);
   }
@@ -849,33 +944,41 @@ async function loadEolAnalysis() {
     const container = document.getElementById('eol-recommendations-list');
     container.innerHTML = '';
 
-    // Filter assets that have repairs or warning flags
     const flagged = data.assets.filter(a => a.repair_count > 0 || a.working_status !== 'Working' || a.healthClass !== 'success');
 
     if (flagged.length === 0) {
-      container.innerHTML = `<div style="padding:20px; color:var(--text-muted); font-size:13px;">No assets currently meet the high-wear threshold. All devices operational.</div>`;
+      container.innerHTML = `<div class="col-span-3 py-6 text-center text-xs text-slate-400">All registered devices are operating at nominal performance thresholds.</div>`;
       return;
     }
 
     flagged.forEach(a => {
       const card = document.createElement('div');
-      card.style.cssText = 'background:#ffffff; border:1px solid var(--border-color); border-radius:12px; padding:16px; box-shadow:var(--shadow-sm); cursor:pointer;';
+      card.className = 'p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all';
       card.onclick = () => viewAssetDetail(a.id);
 
       card.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div class="flex items-center justify-between">
           <div>
-            <strong style="font-size:15px; color:var(--text-main);">#${escapeHtml(a.internal_serial_number)} - ${escapeHtml(a.brand)} ${escapeHtml(a.asset_type)}</strong>
-            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">User: ${escapeHtml(a.assigned_user || 'Unassigned')} • ${escapeHtml(a.department || '')}</div>
+            <div class="font-mono font-bold text-sm text-slate-900">#${escapeHtml(a.internal_serial_number)} • ${escapeHtml(a.brand)} ${escapeHtml(a.asset_type)}</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">User: ${escapeHtml(a.assigned_user || 'Unassigned')} • ${escapeHtml(a.department || '')}</div>
           </div>
-          <span class="badge ${a.healthClass === 'danger' ? 'badge-notworking' : 'badge-repair'}">${escapeHtml(a.healthScore)}</span>
+          <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${a.healthClass === 'danger' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">${escapeHtml(a.healthScore)}</span>
         </div>
-        <div style="margin: 10px 0; padding: 10px; background:#f8fafc; border-radius:8px; font-size:12px;">
-          <div><strong>Repairs Logged:</strong> ${a.repair_count} ticket(s)</div>
-          <div><strong>Total Repair Spend:</strong> ₹${(a.total_repair_cost || 0).toLocaleString('en-IN')}</div>
-          <div><strong>Parts Replaced:</strong> ${escapeHtml(a.parts_added_summary || 'Standard servicing')}</div>
+        <div class="my-3 p-2.5 rounded-xl bg-white border border-slate-200/60 text-xs space-y-1">
+          <div class="flex justify-between text-slate-600">
+            <span>Maintenance Tickets:</span>
+            <strong class="text-slate-900">${a.repair_count} ticket(s)</strong>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Total Maintenance Cost:</span>
+            <strong class="text-slate-900">₹${(a.total_repair_cost || 0).toLocaleString('en-IN')}</strong>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Parts Installed:</span>
+            <span class="font-semibold text-sky-600 truncate max-w-[180px]">${escapeHtml(a.parts_added_summary || 'Standard')}</span>
+          </div>
         </div>
-        <p style="font-size:12px; color:#b91c1c; font-weight:500;">💡 Recommendation: ${escapeHtml(a.eolReason)}</p>
+        <p class="text-xs text-rose-700 font-medium">💡 Recommendation: ${escapeHtml(a.eolReason)}</p>
       `;
       container.appendChild(card);
     });
@@ -892,7 +995,6 @@ async function openRepairModal(preselectedAssetId = null) {
   document.getElementById('repair-form-title').textContent = 'Log Asset Repair / Part Replacement';
   document.getElementById('repair-date').value = new Date().toISOString().split('T')[0];
 
-  // Populate Asset Select Dropdown
   const select = document.getElementById('repair-asset-select');
   select.innerHTML = '<option value="">-- Choose IT Asset --</option>';
 
@@ -926,8 +1028,6 @@ async function openEditRepairModal(repairId) {
     if (!repair) return;
 
     document.getElementById('repair-form-title').textContent = `Update Ticket ${repair.ticket_number}`;
-    document.getElementById('repair-form-id').value = repair.id;
-
     await openRepairModal(repair.asset_id);
 
     document.getElementById('repair-form-id').value = repair.id;
@@ -946,7 +1046,6 @@ async function openEditRepairModal(repairId) {
   }
 }
 
-// Submit Repair Ticket
 async function handleRepairSubmit(e) {
   e.preventDefault();
   const id = document.getElementById('repair-form-id').value;
@@ -1020,7 +1119,7 @@ async function deleteRepair(repairId, ticketNo) {
 let keySearchTimeout = null;
 function debounceKeySearch() {
   clearTimeout(keySearchTimeout);
-  keySearchTimeout = setTimeout(() => loadKeys(), 300);
+  keySearchTimeout = setTimeout(() => loadKeys(), 250);
 }
 
 async function loadKeys(filterParams = {}) {
@@ -1037,7 +1136,6 @@ async function loadKeys(filterParams = {}) {
     const data = await res.json();
     cachedKeys = data.keys;
 
-    // Update Quick Heal KPIs
     const total = data.keys.length;
     const avail = data.keys.filter(k => k.status === 'Available').length;
     const assigned = data.keys.filter(k => k.status === 'Assigned').length;
@@ -1052,56 +1150,78 @@ async function loadKeys(filterParams = {}) {
     tbody.innerHTML = '';
 
     if (data.keys.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">No Quick Heal keys found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="py-12 text-center text-slate-400">No Quick Heal keys found.</td></tr>`;
       return;
     }
 
     data.keys.forEach(k => {
       const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition-colors';
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
 
-      let statusBadge = `<span class="badge badge-key-available">Available</span>`;
+      let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Available</span>`;
       if (k.status === 'Assigned') {
-        statusBadge = `<span class="badge badge-key-assigned">Assigned</span>`;
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">Assigned</span>`;
       }
 
-      // Remaining validity
-      let validityDisplay = '<span style="color:#64748b;">N/A</span>';
+      let validityDisplay = '<span class="text-slate-400">N/A</span>';
       if (k.days_remaining !== null) {
         if (k.is_expired) {
-          validityDisplay = `<span class="badge badge-notworking">Expired (${Math.abs(k.days_remaining)}d ago)</span>`;
+          validityDisplay = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Expired</span>`;
         } else if (k.is_expiring_soon) {
-          validityDisplay = `<span class="badge badge-repair">${k.days_remaining} days left</span>`;
+          validityDisplay = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${k.days_remaining}d left</span>`;
         } else {
           const yrs = (k.days_remaining / 365).toFixed(1);
-          validityDisplay = `<span class="badge badge-working">~${yrs} years left</span>`;
+          validityDisplay = `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700">~${yrs} yrs</span>`;
         }
       }
 
-      // Mapped Asset info
-      let mappedAsset = `<span style="color:#94a3b8; font-size:12px;">Not Assigned</span>`;
+      let mappedAsset = `<span class="text-slate-400 text-xs">—</span>`;
       if (k.assigned_asset_id && k.internal_serial_number) {
-        mappedAsset = `<span class="badge badge-key-assigned" style="cursor:pointer;" onclick="viewAssetDetail(${k.assigned_asset_id})">#${escapeHtml(k.internal_serial_number)} (${escapeHtml(k.asset_type || '')})</span>`;
+        mappedAsset = `<span onclick="viewAssetDetail(${k.assigned_asset_id})" class="cursor-pointer font-mono font-bold text-brand-600 hover:underline">#${escapeHtml(k.internal_serial_number)} (${escapeHtml(k.asset_type || '')})</span>`;
       }
 
       tr.innerHTML = `
-        <td><strong style="color:var(--primary); font-family:monospace; font-size:13px; letter-spacing:1px;">${escapeHtml(k.product_key)}</strong></td>
-        <td>${escapeHtml(k.edition || 'Total Security')}</td>
-        <td>${escapeHtml(k.validity_date || '—')}</td>
-        <td>${validityDisplay}</td>
-        <td>${statusBadge}</td>
-        <td>${mappedAsset}</td>
-        <td>${escapeHtml(k.assigned_user || k.asset_assigned_user || '—')}</td>
-        <td style="text-align:right; white-space:nowrap;">
-          ${!isViewer && k.status === 'Available' ? `<button class="topbar-btn btn-primary" style="padding:4px 10px; font-size:11px;" onclick="openMapKeyModal(${k.id}, '${escapeHtml(k.product_key)}')">🔗 Map to Asset</button>` : ''}
-          ${!isViewer && k.status === 'Assigned' ? `<button class="topbar-btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="unmapKey(${k.id})">Unmap</button>` : ''}
-          ${isAdmin ? `<button class="action-btn btn-delete" title="Delete Key" onclick="deleteKey(${k.id}, '${escapeHtml(k.product_key)}')">🗑️</button>` : ''}
+        <td class="py-3 px-4">
+          <div class="flex items-center gap-2">
+            <span class="font-mono font-bold text-slate-900 tracking-wide">${escapeHtml(k.product_key)}</span>
+            <button onclick="navigator.clipboard.writeText('${escapeHtml(k.product_key)}'); showToast('Copied to clipboard', 'info');" title="Copy Key" class="p-1 text-slate-400 hover:text-slate-600">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </td>
+        <td class="py-3 px-4 font-semibold text-slate-700">${escapeHtml(k.edition || 'Total Security')}</td>
+        <td class="py-3 px-4 text-slate-600 font-mono">${escapeHtml(k.validity_date || '—')}</td>
+        <td class="py-3 px-4">${validityDisplay}</td>
+        <td class="py-3 px-4">${statusBadge}</td>
+        <td class="py-3 px-4">${mappedAsset}</td>
+        <td class="py-3 px-4 font-medium text-slate-800">${escapeHtml(k.assigned_user || k.asset_assigned_user || '—')}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex items-center justify-end gap-1.5">
+            ${!isViewer && k.status === 'Available' ? `
+              <button onclick="openMapKeyModal(${k.id}, '${escapeHtml(k.product_key)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200">
+                <i data-lucide="link" class="w-3 h-3"></i>
+                <span>Map</span>
+              </button>
+            ` : ''}
+            ${!isViewer && k.status === 'Assigned' ? `
+              <button onclick="unmapKey(${k.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200">
+                <span>Unmap</span>
+              </button>
+            ` : ''}
+            ${isAdmin ? `
+              <button onclick="deleteKey(${k.id}, '${escapeHtml(k.product_key)}')" class="p-1 text-slate-400 hover:text-rose-600">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
+    lucide.createIcons();
   } catch (err) {
     console.error('Keys load error:', err);
   }
@@ -1170,13 +1290,12 @@ async function handleBulkKeySubmit(e) {
   }
 }
 
-// 1-Click Map Key to Asset Modal
 async function openMapKeyModal(keyId, keyCode) {
   document.getElementById('map-key-id').value = keyId;
   document.getElementById('map-key-display').textContent = keyCode;
 
   const select = document.getElementById('map-asset-select');
-  select.innerHTML = '<option value="">-- Select Workstation / Laptop / Asset --</option>';
+  select.innerHTML = '<option value="">-- Choose IT Asset to Map --</option>';
 
   try {
     const res = await apiFetch('/api/assets');
@@ -1185,7 +1304,7 @@ async function openMapKeyModal(keyId, keyCode) {
       data.assets.forEach(a => {
         const opt = document.createElement('option');
         opt.value = a.id;
-        opt.textContent = `#${a.internal_serial_number} - ${a.brand || ''} ${a.asset_type} (${a.assigned_user || 'Unassigned'} - ${a.department || 'General'})`;
+        opt.textContent = `#${a.internal_serial_number} - ${a.brand || ''} ${a.asset_type} (${a.assigned_user || 'Unassigned'})`;
         select.appendChild(opt);
       });
     }
@@ -1261,7 +1380,7 @@ async function deleteKey(keyId, keyCode) {
 let accSearchTimeout = null;
 function debounceAccSearch() {
   clearTimeout(accSearchTimeout);
-  accSearchTimeout = setTimeout(() => loadAccessories(), 300);
+  accSearchTimeout = setTimeout(() => loadAccessories(), 250);
 }
 
 async function loadAccessories(filterParams = {}) {
@@ -1285,36 +1404,48 @@ async function loadAccessories(filterParams = {}) {
     tbody.innerHTML = '';
 
     if (data.accessories.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--text-muted);">No accessories found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-slate-400">No accessories found.</td></tr>`;
       return;
     }
 
     data.accessories.forEach(item => {
       const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition-colors';
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
 
-      let statusBadge = `<span class="badge badge-working">${escapeHtml(item.status)}</span>`;
-      if (item.status === 'Assigned') statusBadge = `<span class="badge badge-key-assigned">Assigned</span>`;
-      else if (item.status === 'Damaged') statusBadge = `<span class="badge badge-notworking">Damaged</span>`;
+      let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">${escapeHtml(item.status)}</span>`;
+      if (item.status === 'Assigned') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Assigned</span>`;
+      else if (item.status === 'Damaged') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Damaged</span>`;
 
       tr.innerHTML = `
-        <td><strong style="font-family:monospace; color:var(--primary);">${escapeHtml(item.accessory_code)}</strong></td>
-        <td><strong>${escapeHtml(item.name)}</strong></td>
-        <td><span class="badge badge-repair">${escapeHtml(item.category)}</span></td>
-        <td>${escapeHtml(item.brand || '')} ${escapeHtml(item.model || '')}</td>
-        <td><strong>${item.quantity}</strong></td>
-        <td>${escapeHtml(item.location || 'IT Store')}</td>
-        <td>${escapeHtml(item.assigned_user || (item.asset_serial ? '#' + item.asset_serial : '—'))}</td>
-        <td>${statusBadge}</td>
-        <td style="text-align:right; white-space:nowrap;">
-          ${!isViewer ? `<button class="action-btn" title="Edit" onclick="openEditAccessoryModal(${item.id})">✏️</button>` : ''}
-          ${isAdmin ? `<button class="action-btn btn-delete" title="Delete" onclick="deleteAccessory(${item.id})">🗑️</button>` : ''}
+        <td class="py-3 px-4 font-mono font-bold text-brand-600">${escapeHtml(item.accessory_code)}</td>
+        <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(item.name)}</td>
+        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700">${escapeHtml(item.category)}</span></td>
+        <td class="py-3 px-4 text-slate-600">${escapeHtml(item.brand || '')} ${escapeHtml(item.model || '')}</td>
+        <td class="py-3 px-4 font-black text-slate-900">${item.quantity}</td>
+        <td class="py-3 px-4 text-slate-500">${escapeHtml(item.location || 'Store Room')}</td>
+        <td class="py-3 px-4 text-slate-700 font-medium">${escapeHtml(item.assigned_user || (item.asset_serial ? '#' + item.asset_serial : '—'))}</td>
+        <td class="py-3 px-4">${statusBadge}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex items-center justify-end gap-1">
+            ${!isViewer ? `
+              <button onclick="openEditAccessoryModal(${item.id})" class="p-1.5 text-slate-400 hover:text-brand-600">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+            ${isAdmin ? `
+              <button onclick="deleteAccessory(${item.id})" class="p-1.5 text-slate-400 hover:text-rose-600">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
+    lucide.createIcons();
   } catch (err) {
     console.error('Accessories load error:', err);
   }
@@ -1404,7 +1535,7 @@ async function deleteAccessory(id) {
 }
 
 // ==========================================
-// 9. MASTER SEARCH INTELLIGENCE
+// 9. MASTER INTELLIGENCE SEARCH
 // ==========================================
 
 function openMasterSearchModal() {
@@ -1420,7 +1551,7 @@ function debounceMasterSearch() {
   const q = document.getElementById('dedicated-search-input').value.trim();
   masterSearchTimeout = setTimeout(() => {
     executeMasterSearch(q, 'master-search-results-container');
-  }, 250);
+  }, 200);
 }
 
 let popupSearchTimeout = null;
@@ -1429,7 +1560,7 @@ function debouncePopupSearch() {
   const q = document.getElementById('popup-search-input').value.trim();
   popupSearchTimeout = setTimeout(() => {
     executeMasterSearch(q, 'popup-search-results', true);
-  }, 250);
+  }, 200);
 }
 
 function quickSearch(keyword) {
@@ -1441,15 +1572,14 @@ async function executeMasterSearch(query, targetContainerId, isModal = false) {
   const container = document.getElementById(targetContainerId);
   if (!query) {
     container.innerHTML = `
-      <div style="text-align:center; padding:40px 20px; color:var(--text-muted);">
-        <div style="font-size:36px; margin-bottom:8px;">🔍</div>
-        <p>Type a search keyword (e.g. brand, staff name, serial, part, ticket) to search all modules.</p>
+      <div class="text-center py-12 text-slate-400">
+        <p class="text-xs">Type a keyword above to search all modules.</p>
       </div>
     `;
     return;
   }
 
-  container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--primary); font-weight:600;">Searching all databases for "${escapeHtml(query)}"...</div>`;
+  container.innerHTML = `<div class="text-center py-6 text-xs text-brand-600 font-semibold">Searching across all 5 databases for "${escapeHtml(query)}"...</div>`;
 
   try {
     const res = await apiFetch(`/api/search?q=${encodeURIComponent(query)}`);
@@ -1458,114 +1588,140 @@ async function executeMasterSearch(query, targetContainerId, isModal = false) {
 
     if (data.totalResults === 0) {
       container.innerHTML = `
-        <div style="text-align:center; padding:50px 20px; color:var(--text-muted);">
-          <div style="font-size:36px; margin-bottom:8px;">🤷‍♂️</div>
-          <h3>No matching records found</h3>
-          <p>We searched Assets, Repairs, Keys, Accessories, and Users for "<strong>${escapeHtml(query)}</strong>" without any matches.</p>
+        <div class="text-center py-12 text-slate-400">
+          <div class="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+            <i data-lucide="search-x" class="w-5 h-5"></i>
+          </div>
+          <h4 class="text-sm font-bold text-slate-700">No matching records</h4>
+          <p class="text-xs text-slate-400 mt-0.5">Nothing found matching "${escapeHtml(query)}".</p>
         </div>
       `;
+      lucide.createIcons();
       return;
     }
 
-    let html = `<div style="margin-bottom:16px; font-size:13px; font-weight:600; color:var(--text-muted);">Found ${data.totalResults} matching results across infrastructure</div>`;
+    let html = `<div class="text-xs font-semibold text-slate-400 mb-3">Found ${data.totalResults} matching results:</div>`;
 
-    // 1. Assets Results
+    // 1. Assets
     if (data.assets && data.assets.length > 0) {
       html += `
-        <div class="search-results-section">
-          <div class="search-section-title">💻 IT Assets (${data.assets.length})</div>
-          ${data.assets.map(a => `
-            <div class="search-result-item" onclick="if(${isModal}){closeModal('modal-master-search');} viewAssetDetail(${a.id})">
-              <div>
-                <strong style="color:var(--primary); font-size:14px;">#${escapeHtml(a.internal_serial_number)} - ${escapeHtml(a.brand)} ${escapeHtml(a.asset_type)}</strong>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">User: <strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong> | Dept: ${escapeHtml(a.department || '—')} | Location: ${escapeHtml(a.location || '—')}</div>
-                ${a.remarks ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(a.remarks)}</div>` : ''}
+        <div class="space-y-2 mb-4">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="laptop" class="w-3.5 h-3.5 text-sky-500"></i>
+            <span>IT Assets (${data.assets.length})</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            ${data.assets.map(a => `
+              <div onclick="if(${isModal}){closeModal('modal-master-search');} viewAssetDetail(${a.id})" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
+                <div>
+                  <span class="font-mono font-bold text-brand-600 text-xs">#${escapeHtml(a.internal_serial_number)}</span>
+                  <span class="font-bold text-slate-900 text-xs ml-1">${escapeHtml(a.brand)} ${escapeHtml(a.asset_type)}</span>
+                  <div class="text-[11px] text-slate-500 mt-0.5">User: <strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong> • Dept: ${escapeHtml(a.department || '—')}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${escapeHtml(a.working_status)}</span>
               </div>
-              <span class="badge ${a.working_status === 'Working' ? 'badge-working' : 'badge-notworking'}">${escapeHtml(a.working_status)}</span>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       `;
     }
 
-    // 2. Repairs Results
+    // 2. Repairs
     if (data.repairs && data.repairs.length > 0) {
       html += `
-        <div class="search-results-section">
-          <div class="search-section-title">🔧 Maintenance & Repair Tickets (${data.repairs.length})</div>
-          ${data.repairs.map(r => `
-            <div class="search-result-item" onclick="if(${isModal}){closeModal('modal-master-search');} navigate('repairs', { search: '${r.ticket_number}' })">
-              <div>
-                <strong style="color:var(--primary); font-size:14px;">${escapeHtml(r.ticket_number)} (Asset #${escapeHtml(r.internal_serial_number)})</strong>
-                <div style="font-size:12px; color:#1e293b; margin-top:2px;"><strong>Fault:</strong> ${escapeHtml(r.issue_description)}</div>
-                ${r.parts_added ? `<div style="font-size:11px; color:#0284c7; margin-top:2px;"><strong>Parts Added:</strong> ${escapeHtml(r.parts_added)}</div>` : ''}
+        <div class="space-y-2 mb-4">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="wrench" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span>Maintenance & Parts (${data.repairs.length})</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            ${data.repairs.map(r => `
+              <div onclick="if(${isModal}){closeModal('modal-master-search');} navigate('repairs', { search: '${r.ticket_number}' })" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
+                <div>
+                  <div class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(r.ticket_number)} • Asset #${escapeHtml(r.internal_serial_number)}</div>
+                  <div class="text-xs font-medium text-slate-800 mt-0.5">${escapeHtml(r.issue_description)}</div>
+                  ${r.parts_added ? `<div class="text-[11px] font-semibold text-sky-600 mt-0.5">Parts: ${escapeHtml(r.parts_added)}</div>` : ''}
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(r.status)}</span>
               </div>
-              <div>
-                <span class="badge badge-repair">${escapeHtml(r.status)}</span>
-                <span style="display:block; font-size:11px; text-align:right; margin-top:4px;">₹${(r.repair_cost || 0).toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       `;
     }
 
-    // 3. Quick Heal Keys Results
+    // 3. Keys
     if (data.keys && data.keys.length > 0) {
       html += `
-        <div class="search-results-section">
-          <div class="search-section-title">🔑 Quick Heal Antivirus Keys (${data.keys.length})</div>
-          ${data.keys.map(k => `
-            <div class="search-result-item" onclick="if(${isModal}){closeModal('modal-master-search');} navigate('keys', { search: '${k.product_key}' })">
-              <div>
-                <strong style="color:var(--primary); font-family:monospace; font-size:13px;">${escapeHtml(k.product_key)}</strong>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Valid till: ${escapeHtml(k.validity_date || 'N/A')} • Assigned: ${escapeHtml(k.assigned_user || (k.internal_serial_number ? 'Asset #' + k.internal_serial_number : 'Available in pool'))}</div>
+        <div class="space-y-2 mb-4">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-purple-500"></i>
+            <span>Quick Heal Antivirus Keys (${data.keys.length})</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            ${data.keys.map(k => `
+              <div onclick="if(${isModal}){closeModal('modal-master-search');} navigate('keys', { search: '${k.product_key}' })" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
+                <div>
+                  <div class="font-mono font-bold text-purple-700 text-xs">${escapeHtml(k.product_key)}</div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">Valid till: ${escapeHtml(k.validity_date || '—')} • Assigned: ${escapeHtml(k.assigned_user || (k.internal_serial_number ? '#' + k.internal_serial_number : 'Available in pool'))}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${k.status === 'Assigned' ? 'bg-purple-50 text-purple-700' : 'bg-emerald-50 text-emerald-700'}">${escapeHtml(k.status)}</span>
               </div>
-              <span class="badge ${k.status === 'Assigned' ? 'badge-key-assigned' : 'badge-key-available'}">${escapeHtml(k.status)}</span>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       `;
     }
 
-    // 4. Accessories Results
+    // 4. Accessories
     if (data.accessories && data.accessories.length > 0) {
       html += `
-        <div class="search-results-section">
-          <div class="search-section-title">🖱️ Accessories & Components (${data.accessories.length})</div>
-          ${data.accessories.map(acc => `
-            <div class="search-result-item" onclick="if(${isModal}){closeModal('modal-master-search');} navigate('accessories', { search: '${acc.accessory_code}' })">
-              <div>
-                <strong style="color:var(--primary); font-size:14px;">${escapeHtml(acc.accessory_code)} - ${escapeHtml(acc.name)}</strong>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Location: ${escapeHtml(acc.location || 'Store Room')} | Stock: ${acc.quantity} units</div>
+        <div class="space-y-2 mb-4">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="mouse" class="w-3.5 h-3.5 text-emerald-500"></i>
+            <span>Accessories (${data.accessories.length})</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            ${data.accessories.map(acc => `
+              <div onclick="if(${isModal}){closeModal('modal-master-search');} navigate('accessories', { search: '${acc.accessory_code}' })" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
+                <div>
+                  <span class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(acc.accessory_code)}</span>
+                  <span class="font-bold text-slate-900 text-xs ml-1">${escapeHtml(acc.name)}</span>
+                  <div class="text-[11px] text-slate-500 mt-0.5">Location: ${escapeHtml(acc.location || 'Store')} • Stock: ${acc.quantity} units</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">${escapeHtml(acc.status)}</span>
               </div>
-              <span class="badge badge-working">${escapeHtml(acc.status)}</span>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       `;
     }
 
-    // 5. Users Results
+    // 5. Users
     if (data.users && data.users.length > 0) {
       html += `
-        <div class="search-results-section">
-          <div class="search-section-title">👥 Staff & System Accounts (${data.users.length})</div>
-          ${data.users.map(u => `
-            <div class="search-result-item">
-              <div>
-                <strong style="font-size:14px;">${escapeHtml(u.full_name)} (@${escapeHtml(u.username)})</strong>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${escapeHtml(u.email || 'No email provided')}</div>
+        <div class="space-y-2 mb-4">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span>Staff & Users (${data.users.length})</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            ${data.users.map(u => `
+              <div class="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                <div>
+                  <div class="font-bold text-slate-900 text-xs">${escapeHtml(u.full_name)} (@${escapeHtml(u.username)})</div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(u.email || 'No email')}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-slate-100 text-slate-700">${escapeHtml(u.role)}</span>
               </div>
-              <span class="user-role-badge role-${u.role}">${escapeHtml(u.role.toUpperCase())}</span>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       `;
     }
 
     container.innerHTML = html;
-
+    lucide.createIcons();
   } catch (err) {
     console.error('Master search error:', err);
   }
@@ -1586,23 +1742,39 @@ async function loadUsers() {
 
     users.forEach(u => {
       const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition-colors';
       const isSelf = currentUser && currentUser.id === u.id;
 
+      let roleBadge = `<span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200">ADMIN</span>`;
+      if (u.role === 'technician') roleBadge = `<span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">TECHNICIAN</span>`;
+      else if (u.role === 'viewer') roleBadge = `<span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">VIEWER</span>`;
+
       tr.innerHTML = `
-        <td><strong>@${escapeHtml(u.username)}</strong> ${isSelf ? '<span class="badge badge-working" style="font-size:10px;">You</span>' : ''}</td>
-        <td>${escapeHtml(u.full_name)}</td>
-        <td>${escapeHtml(u.email || '—')}</td>
-        <td><span class="user-role-badge role-${u.role}">${escapeHtml(u.role.toUpperCase())}</span></td>
-        <td><span class="badge ${u.status === 'active' ? 'badge-working' : 'badge-notworking'}">${escapeHtml(u.status)}</span></td>
-        <td>${new Date(u.created_at).toLocaleDateString()}</td>
-        <td style="text-align:right; white-space:nowrap;">
-          <button class="action-btn" title="Edit User & Role" onclick="openEditUserModal(${u.id})">✏️</button>
-          ${!isSelf ? `<button class="action-btn btn-delete" title="Delete User" onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')">🗑️</button>` : ''}
+        <td class="py-3 px-4 font-bold text-slate-900">@${escapeHtml(u.username)} ${isSelf ? '<span class="ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-brand-50 text-brand-700">You</span>' : ''}</td>
+        <td class="py-3 px-4 font-semibold text-slate-800">${escapeHtml(u.full_name)}</td>
+        <td class="py-3 px-4 text-slate-500">${escapeHtml(u.email || '—')}</td>
+        <td class="py-3 px-4">${roleBadge}</td>
+        <td class="py-3 px-4">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">${escapeHtml(u.status)}</span>
+        </td>
+        <td class="py-3 px-4 text-slate-500">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button onclick="openEditUserModal(${u.id})" class="p-1.5 text-slate-400 hover:text-brand-600">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+            ${!isSelf ? `
+              <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')" class="p-1.5 text-slate-400 hover:text-rose-600">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
+    lucide.createIcons();
   } catch (err) {
     console.error('Users load error:', err);
   }
@@ -1636,7 +1808,7 @@ async function openEditUserModal(userId) {
     document.getElementById('user-status').value = user.status;
 
     document.getElementById('user-password').required = false;
-    document.getElementById('user-password-label').textContent = 'New Password (Leave blank to keep unchanged)';
+    document.getElementById('user-password-label').textContent = 'New Password (Leave blank to keep current)';
 
     openModal('modal-user-form');
   } catch (err) {
@@ -1710,28 +1882,29 @@ async function loadAuditLogs() {
     tbody.innerHTML = '';
 
     if (logs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">No audit events recorded yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400">No audit events recorded yet.</td></tr>`;
       return;
     }
 
     logs.forEach(log => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-size:12px; color:var(--text-muted);">${new Date(log.created_at).toLocaleString()}</td>
-        <td><strong>@${escapeHtml(log.username)}</strong></td>
-        <td><span class="badge badge-key-assigned">${escapeHtml(log.action)}</span></td>
-        <td>${escapeHtml(log.entity_type)}</td>
-        <td style="font-size:12px; max-width:300px;">${escapeHtml(log.details)}</td>
+        <td class="py-2.5 px-4 text-slate-500 font-mono text-[11px]">${new Date(log.created_at).toLocaleString()}</td>
+        <td class="py-2.5 px-4 font-bold text-slate-900">@${escapeHtml(log.username)}</td>
+        <td class="py-2.5 px-4 font-bold text-brand-600">${escapeHtml(log.action)}</td>
+        <td class="py-2.5 px-4 text-slate-500 uppercase text-[10px] font-bold">${escapeHtml(log.entity_type)}</td>
+        <td class="py-2.5 px-4 text-slate-700 max-w-sm truncate">${escapeHtml(log.details)}</td>
       `;
       tbody.appendChild(tr);
     });
 
+    lucide.createIcons();
   } catch (err) {
     console.error('Audit logs error:', err);
   }
 }
 
-// Download Complete JSON Database Backup
+// Download Database JSON Backup
 async function downloadDatabaseBackup() {
   try {
     const [resAssets, resRepairs, resKeys, resAccessories] = await Promise.all([
@@ -1757,7 +1930,7 @@ async function downloadDatabaseBackup() {
     a.download = `IT_App_Backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Database JSON backup downloaded!', 'success');
+    showToast('Database JSON backup generated and downloaded!', 'success');
   } catch (err) {
     showToast('Failed to generate backup: ' + err.message, 'error');
   }

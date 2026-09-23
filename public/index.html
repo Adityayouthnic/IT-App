@@ -1,264 +1,397 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-50">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IT Asset & Lifecycle Management | VB EXPORTS</title>
+  <title>IT Asset & Lifecycle Hub • VB EXPORTS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN with Forms & Typography -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+              950: '#1e1b4b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
 </head>
-<body>
+<body class="h-full antialiased font-sans text-slate-800 flex overflow-hidden">
 
   <!-- =========================================================================
-       SIDEBAR NAVIGATION
+       SIDEBAR NAVIGATION SHELL
        ========================================================================= -->
-  <aside class="sidebar" id="sidebar">
-    <div class="brand-section">
-      <div class="brand-logo-icon">💻</div>
-      <div class="brand-info">
-        <h2>IT Asset Hub</h2>
-        <span>VB EXPORTS</span>
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 text-slate-300 flex flex-col transition-transform duration-300 -translate-x-full md:translate-x-0 border-r border-slate-800/80 shadow-2xl">
+    <!-- Brand Section -->
+    <div class="h-16 px-5 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-md">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/25 ring-1 ring-white/10">
+          <i data-lucide="cpu" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold text-white tracking-tight leading-none">IT Asset Hub</h1>
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">VB EXPORTS</span>
+        </div>
+      </div>
+      <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-white p-1">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Navigation Menu -->
+    <div class="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+      <div>
+        <div class="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Infrastructure</div>
+        <nav class="space-y-1">
+          <a data-view="dashboard" onclick="navigate('dashboard')" class="nav-btn active flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="layout-dashboard" class="w-4 h-4 text-indigo-400"></i>
+              <span>Dashboard</span>
+            </div>
+          </a>
+
+          <a data-view="assets" onclick="navigate('assets')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="laptop" class="w-4 h-4 text-sky-400"></i>
+              <span>IT Assets</span>
+            </div>
+            <span id="sidebar-asset-count" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">51</span>
+          </a>
+
+          <a data-view="repairs" onclick="navigate('repairs')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="wrench" class="w-4 h-4 text-amber-400"></i>
+              <span>Repairs & Lifecycle</span>
+            </div>
+            <span id="sidebar-repair-count" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">2</span>
+          </a>
+
+          <a data-view="keys" onclick="navigate('keys')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="shield-check" class="w-4 h-4 text-purple-400"></i>
+              <span>Quick Heal Keys</span>
+            </div>
+            <span id="sidebar-key-count" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">30</span>
+          </a>
+
+          <a data-view="accessories" onclick="navigate('accessories')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="mouse" class="w-4 h-4 text-emerald-400"></i>
+              <span>Accessories</span>
+            </div>
+            <span id="sidebar-acc-count" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">6</span>
+          </a>
+        </nav>
+      </div>
+
+      <div>
+        <div class="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Intelligence</div>
+        <nav class="space-y-1">
+          <a data-view="search" onclick="navigate('search')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="search" class="w-4 h-4 text-rose-400"></i>
+              <span>Master Search</span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono">⌘K</span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="admin-only" style="display:none;">
+        <div class="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Administration</div>
+        <nav class="space-y-1">
+          <a data-view="settings" onclick="navigate('settings')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="settings" class="w-4 h-4 text-slate-400"></i>
+              <span>Settings & Users</span>
+            </div>
+          </a>
+        </nav>
       </div>
     </div>
 
-    <ul class="nav-menu">
-      <div class="nav-section-title">Operations</div>
-      <li class="nav-item">
-        <a class="nav-link active" data-view="dashboard" onclick="navigate('dashboard')">
-          <span class="nav-icon">📊</span>
-          <span>Dashboard</span>
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" data-view="assets" onclick="navigate('assets')">
-          <span class="nav-icon">💻</span>
-          <span>IT Assets</span>
-          <span class="nav-badge badge-blue" id="sidebar-asset-count">51</span>
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" data-view="repairs" onclick="navigate('repairs')">
-          <span class="nav-icon">🔧</span>
-          <span>Repairs & Lifecycle</span>
-          <span class="nav-badge badge-amber" id="sidebar-repair-count">2</span>
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" data-view="keys" onclick="navigate('keys')">
-          <span class="nav-icon">🔑</span>
-          <span>Quick Heal Keys</span>
-          <span class="nav-badge badge-purple" id="sidebar-key-count">30</span>
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" data-view="accessories" onclick="navigate('accessories')">
-          <span class="nav-icon">🖱️</span>
-          <span>Accessories</span>
-          <span class="nav-badge" id="sidebar-acc-count">6</span>
-        </a>
-      </li>
-
-      <div class="nav-section-title">Intelligence</div>
-      <li class="nav-item">
-        <a class="nav-link" data-view="search" onclick="navigate('search')">
-          <span class="nav-icon">🔍</span>
-          <span>Master Search</span>
-        </a>
-      </li>
-
-      <div class="nav-section-title admin-only" style="display:none;">Administration</div>
-      <li class="nav-item admin-only" style="display:none;">
-        <a class="nav-link" data-view="settings" onclick="navigate('settings')">
-          <span class="nav-icon">⚙️</span>
-          <span>Settings & Users</span>
-        </a>
-      </li>
-    </ul>
-
-    <div class="sidebar-user">
-      <div class="user-avatar" id="sidebar-avatar">A</div>
-      <div class="user-details">
-        <div class="user-name" id="sidebar-user-name">Administrator</div>
-        <span class="user-role-badge role-admin" id="sidebar-user-role">ADMIN</span>
+    <!-- User Profile Footer -->
+    <div class="p-3 border-t border-slate-800/80 bg-slate-950/80">
+      <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+        <div class="flex items-center gap-2.5 overflow-hidden">
+          <div id="sidebar-avatar" class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-xs text-white flex-shrink-0">
+            A
+          </div>
+          <div class="overflow-hidden">
+            <div id="sidebar-user-name" class="text-xs font-semibold text-white truncate">Administrator</div>
+            <span id="sidebar-user-role" class="inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">ADMIN</span>
+          </div>
+        </div>
+        <button onclick="logout()" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
       </div>
-      <button class="btn-logout" title="Sign Out" onclick="logout()">🚪</button>
     </div>
   </aside>
 
+  <!-- Mobile Overlay Backdrop -->
+  <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-sm md:hidden hidden"></div>
+
   <!-- =========================================================================
-       MAIN CONTENT CONTAINER
+       MAIN CONTENT WORKSPACE
        ========================================================================= -->
-  <main class="main-content">
-    <!-- Topbar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
-        <div class="master-search-trigger" onclick="openMasterSearchModal()">
-          <span class="search-icon">🔍</span>
-          <input type="text" placeholder="Global search assets, repairs, keys, users..." readonly>
-          <span class="search-shortcut">Ctrl+K</span>
-        </div>
+  <div class="flex-1 md:ml-64 flex flex-col h-full overflow-hidden bg-slate-50">
+
+    <!-- Topbar Header -->
+    <header class="h-16 px-4 sm:px-8 bg-white/80 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between z-20 flex-shrink-0">
+      <div class="flex items-center gap-3 flex-1 max-w-xl">
+        <button onclick="toggleSidebar()" class="md:hidden p-2 text-slate-600 hover:text-slate-900 rounded-lg">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Command Palette Trigger Button -->
+        <button onclick="openMasterSearchModal()" class="w-full flex items-center justify-between px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 rounded-xl text-xs text-slate-500 transition-colors group">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors"></i>
+            <span class="font-medium text-slate-500">Quick search assets, repairs, keys, users...</span>
+          </div>
+          <kbd class="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-mono font-semibold bg-white border border-slate-300 rounded-md text-slate-500 shadow-sm">
+            Ctrl K
+          </kbd>
+        </button>
       </div>
 
-      <div class="topbar-right">
-        <button class="topbar-btn btn-secondary tech-action" onclick="openRepairModal()">+ Log Repair</button>
-        <button class="topbar-btn btn-primary tech-action" onclick="openNewAssetModal()">+ Add IT Asset</button>
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2.5 ml-4">
+        <button onclick="openRepairModal()" class="tech-action hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 shadow-sm transition-all">
+          <i data-lucide="wrench" class="w-3.5 h-3.5 text-amber-500"></i>
+          <span>Log Repair</span>
+        </button>
+
+        <button onclick="openNewAssetModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Add Asset</span>
+        </button>
       </div>
     </header>
 
-    <!-- =========================================================================
-         VIEW 1: DASHBOARD
-         ========================================================================= -->
-    <section class="view-container active" id="view-dashboard">
-      <div class="view-header">
-        <div>
-          <h1>IT Systems & Infrastructure Dashboard</h1>
-          <p>Real-time asset telemetry, maintenance records, and antivirus licensing overview</p>
-        </div>
-        <div>
-          <button class="topbar-btn btn-secondary" onclick="loadDashboard()">🔄 Refresh Telemetry</button>
-        </div>
-      </div>
+    <!-- Scrollable Views Body -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8">
 
-      <!-- KPI Grid -->
-      <div class="kpi-grid">
-        <div class="kpi-card card-blue" onclick="navigate('assets')">
-          <div class="kpi-info">
-            <h3>Total IT Assets</h3>
-            <div class="kpi-value" id="kpi-total-assets">51</div>
-            <div class="kpi-subtext" id="kpi-assets-sub">Systems registered</div>
+      <!-- =====================================================================
+           VIEW 1: DASHBOARD
+           ===================================================================== -->
+      <section id="view-dashboard" class="view-panel active space-y-6">
+        <!-- Title Row -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">IT Infrastructure Dashboard</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Real-time asset telemetry, maintenance ledger, and antivirus license overview</p>
           </div>
-          <div class="kpi-icon-box">💻</div>
+          <button onclick="loadDashboard()" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Refresh</span>
+          </button>
         </div>
 
-        <div class="kpi-card card-green" onclick="navigate('assets', { status: 'Working' })">
-          <div class="kpi-info">
-            <h3>Operational Assets</h3>
-            <div class="kpi-value" id="kpi-working-assets">49</div>
-            <div class="kpi-subtext">Healthy & deployed</div>
+        <!-- 6 KPI Metric Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+          <!-- Total Assets -->
+          <div onclick="navigate('assets')" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all group">
+            <div class="flex items-center justify-between text-slate-500 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Total Assets</span>
+              <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i data-lucide="laptop" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="kpi-total-assets" class="text-2xl font-black text-slate-900">51</div>
+            <p class="text-[10px] text-slate-500 font-medium mt-1">Workstations & Printers</p>
           </div>
-          <div class="kpi-icon-box">✅</div>
-        </div>
 
-        <div class="kpi-card card-amber" onclick="navigate('repairs')">
-          <div class="kpi-info">
-            <h3>Under Repair</h3>
-            <div class="kpi-value" id="kpi-repair-assets">2</div>
-            <div class="kpi-subtext">Active maintenance</div>
+          <!-- Working -->
+          <div onclick="navigate('assets', { status: 'Working' })" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all group">
+            <div class="flex items-center justify-between text-slate-500 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Operational</span>
+              <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="kpi-working-assets" class="text-2xl font-black text-emerald-600">49</div>
+            <p class="text-[10px] text-emerald-600 font-medium mt-1">96% fleet healthy</p>
           </div>
-          <div class="kpi-icon-box">🔧</div>
-        </div>
 
-        <div class="kpi-card card-red" onclick="navigate('assets', { status: 'Not Working' })">
-          <div class="kpi-info">
-            <h3>EOL / Non-Working</h3>
-            <div class="kpi-value" id="kpi-eol-assets">2</div>
-            <div class="kpi-subtext">Requires attention</div>
+          <!-- Under Repair -->
+          <div onclick="navigate('repairs')" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-amber-300 transition-all group">
+            <div class="flex items-center justify-between text-slate-500 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider">In Repair</span>
+              <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i data-lucide="wrench" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="kpi-repair-assets" class="text-2xl font-black text-amber-600">2</div>
+            <p class="text-[10px] text-amber-600 font-medium mt-1">Active tickets</p>
           </div>
-          <div class="kpi-icon-box">⚠️</div>
-        </div>
 
-        <div class="kpi-card card-purple" onclick="navigate('keys')">
-          <div class="kpi-info">
-            <h3>Quick Heal Keys</h3>
-            <div class="kpi-value" id="kpi-total-keys">30</div>
-            <div class="kpi-subtext" id="kpi-keys-sub">Available licenses</div>
+          <!-- EOL / Non-Working -->
+          <div onclick="navigate('assets', { status: 'Not Working' })" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-rose-300 transition-all group">
+            <div class="flex items-center justify-between text-slate-500 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider">EOL / Defective</span>
+              <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="kpi-eol-assets" class="text-2xl font-black text-rose-600">2</div>
+            <p class="text-[10px] text-rose-600 font-medium mt-1">Requires review</p>
           </div>
-          <div class="kpi-icon-box">🔑</div>
-        </div>
 
-        <div class="kpi-card card-teal">
-          <div class="kpi-info">
-            <h3>Total Repair Spend</h3>
-            <div class="kpi-value" id="kpi-repair-cost">₹3,600</div>
-            <div class="kpi-subtext">Lifecycle upkeep</div>
+          <!-- Antivirus Keys -->
+          <div onclick="navigate('keys')" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-purple-300 transition-all group">
+            <div class="flex items-center justify-between text-slate-500 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Quick Heal</span>
+              <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i data-lucide="shield-check" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="kpi-total-keys" class="text-2xl font-black text-purple-600">30</div>
+            <p id="kpi-keys-sub" class="text-[10px] text-purple-600 font-medium mt-1">30 available keys</p>
           </div>
-          <div class="kpi-icon-box">💰</div>
-        </div>
-      </div>
 
-      <!-- Dashboard Visual Breakdown -->
-      <div class="dashboard-grid">
-        <div class="content-card">
-          <div class="card-header-row">
-            <h3>🏢 Assets Distribution by Department</h3>
-            <span class="badge badge-working">Live Count</span>
-          </div>
-          <div id="dept-breakdown-container" style="display:flex; flex-direction:column; gap:12px;">
-            <!-- Populated via JS -->
-          </div>
-        </div>
-
-        <div class="content-card">
-          <div class="card-header-row">
-            <h3>🖥️ System Types</h3>
-          </div>
-          <div id="type-breakdown-container" style="display:flex; flex-direction:column; gap:10px;">
-            <!-- Populated via JS -->
-          </div>
-        </div>
-      </div>
-
-      <!-- Recent Repairs & EOL Warnings Section -->
-      <div class="dashboard-grid">
-        <div class="content-card">
-          <div class="card-header-row">
-            <h3>🛠️ Recent Maintenance & Repair Activity</h3>
-            <button class="topbar-btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="navigate('repairs')">View All</button>
-          </div>
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Ticket</th>
-                  <th>Asset</th>
-                  <th>Issue</th>
-                  <th>Vendor / Tech</th>
-                  <th>Cost</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="dashboard-recent-repairs">
-                <!-- Populated via JS -->
-              </tbody>
-            </table>
+          <!-- Total Repair Cost -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Total Upkeep</span>
+              <div class="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
+                <i data-lucide="coins" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="kpi-repair-cost" class="text-2xl font-black text-slate-900">₹3,600</div>
+            <p class="text-[10px] text-slate-500 font-medium mt-1">Cumulative parts cost</p>
           </div>
         </div>
 
-        <div class="content-card">
-          <div class="card-header-row">
-            <h3>⚠️ Lifecycle Attention / EOL Watch</h3>
+        <!-- Department & System Types Distribution -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Department Breakdown (2 cols) -->
+          <div class="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <i data-lucide="building" class="w-4 h-4 text-brand-600"></i>
+                <h3 class="text-sm font-bold text-slate-900">Asset Distribution by Department</h3>
+              </div>
+              <span class="text-xs font-semibold text-slate-400">7 Departments</span>
+            </div>
+            <div id="dept-breakdown-container" class="space-y-3">
+              <!-- Populated via JS -->
+            </div>
           </div>
-          <div id="dashboard-eol-warnings" style="display:flex; flex-direction:column; gap:12px;">
-            <!-- Populated via JS -->
+
+          <!-- System Types Breakdown (1 col) -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <i data-lucide="layers" class="w-4 h-4 text-indigo-600"></i>
+                <h3 class="text-sm font-bold text-slate-900">Hardware Fleet Types</h3>
+              </div>
+            </div>
+            <div id="type-breakdown-container" class="space-y-2">
+              <!-- Populated via JS -->
+            </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- =========================================================================
-         VIEW 2: IT ASSETS REGISTRY
-         ========================================================================= -->
-    <section class="view-container" id="view-assets">
-      <div class="view-header">
-        <div>
-          <h1>IT Assets Registry</h1>
-          <p>Comprehensive inventory of workstations, printers, scanners, laptops and peripherals</p>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <button class="topbar-btn btn-secondary" onclick="exportAssetsCSV()">📥 Export CSV</button>
-          <button class="topbar-btn btn-primary tech-action" onclick="openNewAssetModal()">+ Add New IT Asset</button>
-        </div>
-      </div>
+        <!-- Recent Maintenance & Lifecycle Watchlist -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Recent Repairs Table (2 cols) -->
+          <div class="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <i data-lucide="clock" class="w-4 h-4 text-amber-500"></i>
+                <h3 class="text-sm font-bold text-slate-900">Recent Maintenance & Parts Replacements</h3>
+              </div>
+              <button onclick="navigate('repairs')" class="text-xs font-semibold text-brand-600 hover:text-brand-700">View All →</button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-100 text-slate-400 uppercase font-semibold">
+                    <th class="py-2.5 px-3">Ticket</th>
+                    <th class="py-2.5 px-3">Asset</th>
+                    <th class="py-2.5 px-3">Fault / Upgrade</th>
+                    <th class="py-2.5 px-3">Technician / Vendor</th>
+                    <th class="py-2.5 px-3">Cost</th>
+                    <th class="py-2.5 px-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-recent-repairs" class="divide-y divide-slate-100">
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-      <!-- Filter Controls -->
-      <div class="filter-bar">
-        <div class="filter-group" style="flex:1; min-width: 200px;">
-          <input type="text" id="asset-filter-search" class="input-control" placeholder="Search serial, brand, user, dept, remarks..." style="width: 100%;" oninput="debounceAssetSearch()">
+          <!-- Lifecycle Watchlist (1 col) -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <i data-lucide="alert-octagon" class="w-4 h-4 text-rose-500"></i>
+                <h3 class="text-sm font-bold text-slate-900">Lifecycle Watchlist</h3>
+              </div>
+            </div>
+            <div id="dashboard-eol-warnings" class="space-y-3">
+              <!-- Populated via JS -->
+            </div>
+          </div>
         </div>
-        <div class="filter-group">
-          <label>Type:</label>
-          <select id="asset-filter-type" class="select-control" onchange="loadAssets()">
+      </section>
+
+      <!-- =====================================================================
+           VIEW 2: IT ASSETS REGISTRY
+           ===================================================================== -->
+      <section id="view-assets" class="view-panel hidden space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">IT Assets Inventory</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Workstations, laptops, thermal tag printers, label printers, scanners and peripherals</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="exportAssetsCSV()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-slate-500"></i>
+              <span>Export CSV</span>
+            </button>
+            <button onclick="openNewAssetModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Add IT Asset</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <div class="relative flex-1 min-w-[200px]">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="asset-filter-search" oninput="debounceAssetSearch()" placeholder="Search serial, brand, user, department, remarks..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+          </div>
+
+          <select id="asset-filter-type" onchange="loadAssets()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Types</option>
             <option value="Desktop">Desktop</option>
             <option value="Laptop">Laptop</option>
@@ -268,10 +401,8 @@
             <option value="Scanner">Scanner</option>
             <option value="WebCam">WebCam</option>
           </select>
-        </div>
-        <div class="filter-group">
-          <label>Department:</label>
-          <select id="asset-filter-dept" class="select-control" onchange="loadAssets()">
+
+          <select id="asset-filter-dept" onchange="loadAssets()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Departments</option>
             <option value="Orders">Orders</option>
             <option value="Dispatch">Dispatch</option>
@@ -281,237 +412,244 @@
             <option value="Data Analysis">Data Analysis</option>
             <option value="Return">Return</option>
           </select>
-        </div>
-        <div class="filter-group">
-          <label>Status:</label>
-          <select id="asset-filter-status" class="select-control" onchange="loadAssets()">
+
+          <select id="asset-filter-status" onchange="loadAssets()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Statuses</option>
             <option value="Working">Working</option>
             <option value="In Repair">In Repair</option>
             <option value="Not Working">Not Working</option>
             <option value="Retired">Retired</option>
           </select>
-        </div>
-        <div class="filter-group">
-          <label>Antivirus:</label>
-          <select id="asset-filter-key" class="select-control" onchange="loadAssets()">
-            <option value="">All</option>
+
+          <select id="asset-filter-key" onchange="loadAssets()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+            <option value="">All Antivirus</option>
             <option value="mapped">Mapped Key</option>
             <option value="unmapped">No Key Mapped</option>
           </select>
-        </div>
-        <button class="topbar-btn btn-secondary" onclick="resetAssetFilters()">Reset</button>
-      </div>
 
-      <!-- Assets Table -->
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Serial #</th>
-              <th>Type</th>
-              <th>Brand / Model</th>
-              <th>Department</th>
-              <th>Location</th>
-              <th>Assigned User</th>
-              <th>Quick Heal Key</th>
-              <th>Status</th>
-              <th>Lifecycle / Health</th>
-              <th style="text-align:right;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="assets-table-body">
-            <!-- Populated via JS -->
-          </tbody>
-        </table>
-      </div>
-      <div style="margin-top: 14px; font-size: 13px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
-        <span id="assets-count-label">Showing 51 assets</span>
-        <span>Tip: Click any asset row or 👁️ to view complete repair history, parts added, and specs</span>
-      </div>
-    </section>
+          <button onclick="resetAssetFilters()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            Reset
+          </button>
+        </div>
 
-    <!-- =========================================================================
-         VIEW 3: REPAIRS & LIFECYCLE MANAGEMENT
-         ========================================================================= -->
-    <section class="view-container" id="view-repairs">
-      <div class="view-header">
-        <div>
-          <h1>Repair & Lifecycle Maintenance Flow</h1>
-          <p>Track repairs, part replacements, service expenses, and identify assets reaching End of Life</p>
+        <!-- Assets Table -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-3 px-4">Serial #</th>
+                  <th class="py-3 px-4">Type</th>
+                  <th class="py-3 px-4">Brand / Model</th>
+                  <th class="py-3 px-4">Department</th>
+                  <th class="py-3 px-4">Location</th>
+                  <th class="py-3 px-4">Assigned User</th>
+                  <th class="py-3 px-4">Antivirus Key</th>
+                  <th class="py-3 px-4">Working Status</th>
+                  <th class="py-3 px-4">Health & Lifecycle</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="assets-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span id="assets-count-label">Showing 51 assets</span>
+            <span>💡 Tip: Click any row or 👁️ to open full dossier with maintenance timeline and print tag</span>
+          </div>
         </div>
-        <div>
-          <button class="topbar-btn btn-primary tech-action" onclick="openRepairModal()">+ Log New Repair Ticket</button>
-        </div>
-      </div>
+      </section>
 
-      <!-- Filter Bar -->
-      <div class="filter-bar">
-        <div class="filter-group" style="flex:1; min-width: 220px;">
-          <input type="text" id="repair-filter-search" class="input-control" placeholder="Search ticket #, issue, technician, parts..." style="width: 100%;" oninput="debounceRepairSearch()">
+      <!-- =====================================================================
+           VIEW 3: REPAIRS & LIFECYCLE MANAGEMENT
+           ===================================================================== -->
+      <section id="view-repairs" class="view-panel hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Maintenance & Lifecycle Center</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Track component repairs, part replacements, service expenses, and identify assets reaching End of Life</p>
+          </div>
+          <button onclick="openRepairModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Log Repair Ticket</span>
+          </button>
         </div>
-        <div class="filter-group">
-          <label>Status:</label>
-          <select id="repair-filter-status" class="select-control" onchange="loadRepairs()">
+
+        <!-- Filter Bar -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <div class="relative flex-1 min-w-[200px]">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="repair-filter-search" oninput="debounceRepairSearch()" placeholder="Search ticket #, issue, parts, technician..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+          </div>
+
+          <select id="repair-filter-status" onchange="loadRepairs()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Statuses</option>
             <option value="In Progress">In Progress</option>
             <option value="Awaiting Parts">Awaiting Parts</option>
             <option value="Completed">Completed</option>
             <option value="Beyond Repair">Beyond Repair</option>
           </select>
-        </div>
-        <button class="topbar-btn btn-secondary" onclick="loadRepairs()">Refresh</button>
-      </div>
 
-      <!-- Repair Tickets Table -->
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Ticket #</th>
-              <th>Asset Serial</th>
-              <th>Issue & Diagnosis</th>
-              <th>Parts Added / Replaced</th>
-              <th>Technician / Vendor</th>
-              <th>Service Date</th>
-              <th>Cost (₹)</th>
-              <th>Status</th>
-              <th style="text-align:right;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="repairs-table-body">
+          <button onclick="loadRepairs()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            Refresh
+          </button>
+        </div>
+
+        <!-- Repairs Table -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-3 px-4">Ticket #</th>
+                  <th class="py-3 px-4">Asset</th>
+                  <th class="py-3 px-4">Issue Description</th>
+                  <th class="py-3 px-4">Parts Added / Replaced</th>
+                  <th class="py-3 px-4">Technician / Vendor</th>
+                  <th class="py-3 px-4">Date</th>
+                  <th class="py-3 px-4">Cost</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="repairs-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- End of Life (EOL) Intelligence Panel -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="cpu" class="w-5 h-5 text-indigo-600"></i>
+                <span>Automated End-of-Life (EOL) Intelligence Engine</span>
+              </h3>
+              <p class="text-xs text-slate-500 mt-1">Calculates wear thresholds from failure frequency, cumulative part replacement expense, and operational service age.</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">Continuous Audit</span>
+          </div>
+
+          <div id="eol-recommendations-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Populated via JS -->
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </div>
+      </section>
 
-      <!-- End-of-Life (EOL) Intelligence Panel -->
-      <div class="content-card" style="margin-top: 28px;">
-        <div class="card-header-row">
+      <!-- =====================================================================
+           VIEW 4: QUICK HEAL KEYS MANAGEMENT
+           ===================================================================== -->
+      <section id="view-keys" class="view-panel hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h3>🧠 Asset Lifecycle & End-of-Life (EOL) Intelligence</h3>
-            <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">Automated scoring based on recurring part failures, repair cost accumulation, and operational age</p>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Quick Heal License Vault</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">30 bundle licenses, expiration dates, and 1-click mapping to workstations</p>
           </div>
-          <span class="badge badge-health-warning">Automated Audit</span>
+          <div class="flex items-center gap-2">
+            <button onclick="openBulkKeyModal()" class="tech-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">
+              <i data-lucide="list-plus" class="w-3.5 h-3.5 text-purple-600"></i>
+              <span>Bulk Import</span>
+            </button>
+            <button onclick="openKeyModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-500/20 transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Add Key</span>
+            </button>
+          </div>
         </div>
 
-        <div id="eol-recommendations-list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px;">
-          <!-- Populated via JS -->
+        <!-- 4 KPI Counters -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Keys</span>
+            <div id="keys-kpi-total" class="text-2xl font-black text-slate-900 mt-1">30</div>
+            <p class="text-[10px] text-slate-500 mt-0.5">Seeded license pool</p>
+          </div>
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Available</span>
+            <div id="keys-kpi-avail" class="text-2xl font-black text-emerald-600 mt-1">30</div>
+            <p class="text-[10px] text-emerald-600 mt-0.5">Ready to assign</p>
+          </div>
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-600">Assigned</span>
+            <div id="keys-kpi-assigned" class="text-2xl font-black text-indigo-600 mt-1">0</div>
+            <p class="text-[10px] text-indigo-600 mt-0.5">Active on workstations</p>
+          </div>
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600">Expiring (90d)</span>
+            <div id="keys-kpi-expiring" class="text-2xl font-black text-amber-600 mt-1">0</div>
+            <p class="text-[10px] text-amber-600 mt-0.5">Needs renewal</p>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <!-- =========================================================================
-         VIEW 4: QUICK HEAL KEYS MANAGEMENT
-         ========================================================================= -->
-    <section class="view-container" id="view-keys">
-      <div class="view-header">
-        <div>
-          <h1>Quick Heal Antivirus License Management</h1>
-          <p>Track 30 bundle licenses, expiration dates, and 1-click map/unmap to workstations</p>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <button class="topbar-btn btn-secondary tech-action" onclick="openBulkKeyModal()">📋 Bulk Import Keys</button>
-          <button class="topbar-btn btn-primary tech-action" onclick="openKeyModal()">+ Add New Key</button>
-        </div>
-      </div>
+        <!-- Filter Bar -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <div class="relative flex-1 min-w-[200px]">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="key-filter-search" oninput="debounceKeySearch()" placeholder="Search product key, assigned user, asset serial..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+          </div>
 
-      <!-- Quick Heal KPI Cards -->
-      <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
-        <div class="kpi-card card-purple">
-          <div class="kpi-info">
-            <h3>Total Keys</h3>
-            <div class="kpi-value" id="keys-kpi-total">30</div>
-            <div class="kpi-subtext">In license vault</div>
-          </div>
-          <div class="kpi-icon-box">🛡️</div>
-        </div>
-        <div class="kpi-card card-green">
-          <div class="kpi-info">
-            <h3>Available</h3>
-            <div class="kpi-value" id="keys-kpi-avail">30</div>
-            <div class="kpi-subtext">Ready to assign</div>
-          </div>
-          <div class="kpi-icon-box">✨</div>
-        </div>
-        <div class="kpi-card card-blue">
-          <div class="kpi-info">
-            <h3>Assigned</h3>
-            <div class="kpi-value" id="keys-kpi-assigned">0</div>
-            <div class="kpi-subtext">Active on machines</div>
-          </div>
-          <div class="kpi-icon-box">💻</div>
-        </div>
-        <div class="kpi-card card-amber">
-          <div class="kpi-info">
-            <h3>Expiring (90d)</h3>
-            <div class="kpi-value" id="keys-kpi-expiring">0</div>
-            <div class="kpi-subtext">Needs renewal</div>
-          </div>
-          <div class="kpi-icon-box">⏳</div>
-        </div>
-      </div>
-
-      <!-- Filter Bar -->
-      <div class="filter-bar">
-        <div class="filter-group" style="flex:1; min-width: 220px;">
-          <input type="text" id="key-filter-search" class="input-control" placeholder="Search product key, assigned asset, user..." style="width: 100%;" oninput="debounceKeySearch()">
-        </div>
-        <div class="filter-group">
-          <label>Status:</label>
-          <select id="key-filter-status" class="select-control" onchange="loadKeys()">
+          <select id="key-filter-status" onchange="loadKeys()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-purple-500">
             <option value="">All Statuses</option>
             <option value="Available">Available</option>
             <option value="Assigned">Assigned</option>
           </select>
-        </div>
-        <button class="topbar-btn btn-secondary" onclick="loadKeys()">Refresh</button>
-      </div>
 
-      <!-- Keys Table -->
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Product Key</th>
-              <th>Edition</th>
-              <th>Validity Date</th>
-              <th>Remaining Validity</th>
-              <th>Status</th>
-              <th>Mapped IT Asset</th>
-              <th>Assigned User</th>
-              <th style="text-align:right;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="keys-table-body">
-            <!-- Populated via JS -->
-          </tbody>
-        </table>
-      </div>
-    </section>
+          <button onclick="loadKeys()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            Refresh
+          </button>
+        </div>
 
-    <!-- =========================================================================
-         VIEW 5: ACCESSORIES INVENTORY
-         ========================================================================= -->
-    <section class="view-container" id="view-accessories">
-      <div class="view-header">
-        <div>
-          <h1>Accessories & Peripherals Inventory</h1>
-          <p>Mice, keyboards, barcode scanners, thermal printheads, power adapters, and UPS units</p>
+        <!-- Keys Table -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-3 px-4">Product Key</th>
+                  <th class="py-3 px-4">Edition</th>
+                  <th class="py-3 px-4">Validity Date</th>
+                  <th class="py-3 px-4">Validity Remaining</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Mapped Workstation</th>
+                  <th class="py-3 px-4">Assigned User</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="keys-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div>
-          <button class="topbar-btn btn-primary tech-action" onclick="openAccessoryModal()">+ Add Accessory</button>
-        </div>
-      </div>
+      </section>
 
-      <!-- Filter Bar -->
-      <div class="filter-bar">
-        <div class="filter-group" style="flex:1; min-width: 220px;">
-          <input type="text" id="acc-filter-search" class="input-control" placeholder="Search code, accessory name, brand, user..." style="width:100%;" oninput="debounceAccSearch()">
+      <!-- =====================================================================
+           VIEW 5: ACCESSORIES INVENTORY
+           ===================================================================== -->
+      <section id="view-accessories" class="view-panel hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Accessories & Peripherals</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Mice, keyboards, barcode scanners, thermal printheads, adapters and UPS backups</p>
+          </div>
+          <button onclick="openAccessoryModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Add Accessory</span>
+          </button>
         </div>
-        <div class="filter-group">
-          <label>Category:</label>
-          <select id="acc-filter-cat" class="select-control" onchange="loadAccessories()">
+
+        <!-- Filter Bar -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <div class="relative flex-1 min-w-[200px]">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="acc-filter-search" oninput="debounceAccSearch()" placeholder="Search code, item name, brand, location..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+
+          <select id="acc-filter-cat" onchange="loadAccessories()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Categories</option>
             <option value="Mouse">Mouse</option>
             <option value="Keyboard">Keyboard</option>
@@ -521,619 +659,652 @@
             <option value="UPS">UPS</option>
             <option value="Other">Other</option>
           </select>
-        </div>
-        <div class="filter-group">
-          <label>Status:</label>
-          <select id="acc-filter-status" class="select-control" onchange="loadAccessories()">
+
+          <select id="acc-filter-status" onchange="loadAccessories()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Statuses</option>
             <option value="In Stock">In Stock</option>
             <option value="Assigned">Assigned</option>
             <option value="Damaged">Damaged</option>
           </select>
+
+          <button onclick="loadAccessories()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            Refresh
+          </button>
         </div>
-        <button class="topbar-btn btn-secondary" onclick="loadAccessories()">Refresh</button>
-      </div>
 
-      <!-- Accessories Table -->
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Category</th>
-              <th>Brand / Model</th>
-              <th>Stock Qty</th>
-              <th>Location</th>
-              <th>Assigned To</th>
-              <th>Status</th>
-              <th style="text-align:right;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="accessories-table-body">
-            <!-- Populated via JS -->
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <!-- Accessories Table -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-3 px-4">Code</th>
+                  <th class="py-3 px-4">Item Name</th>
+                  <th class="py-3 px-4">Category</th>
+                  <th class="py-3 px-4">Brand / Model</th>
+                  <th class="py-3 px-4">Quantity</th>
+                  <th class="py-3 px-4">Location</th>
+                  <th class="py-3 px-4">Assigned To</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="accessories-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-    <!-- =========================================================================
-         VIEW 6: MASTER SEARCH
-         ========================================================================= -->
-    <section class="view-container" id="view-search">
-      <div class="view-header">
+      <!-- =====================================================================
+           VIEW 6: MASTER INTELLIGENCE SEARCH
+           ===================================================================== -->
+      <section id="view-search" class="view-panel hidden space-y-6">
         <div>
-          <h1>Master Intelligence Search</h1>
-          <p>Instant multi-index query across Assets, Repairs, Parts Added, Antivirus Keys, Accessories, and Staff</p>
+          <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Master Intelligence Search</h2>
+          <p class="text-xs sm:text-sm text-slate-500 font-medium">Instant unified query across Assets, Maintenance tickets, Replaced parts, Antivirus keys, Accessories, and Staff</p>
         </div>
-      </div>
 
-      <div style="background-color:#ffffff; padding:24px; border-radius:var(--radius-lg); border:1px solid var(--border-color); box-shadow:var(--shadow-sm); margin-bottom:24px;">
-        <div style="position:relative;">
-          <input type="text" id="dedicated-search-input" class="input-control" placeholder="Type keyword: 'Lenovo', 'Chandan', 'Citizen', 'Printer', '50007', 'SSD', 'Scanner'..." style="width:100%; font-size:16px; padding:16px 20px;" autofocus oninput="debounceMasterSearch()">
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div class="relative">
+            <i data-lucide="search" class="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="dedicated-search-input" oninput="debounceMasterSearch()" placeholder="Type keyword: 'Lenovo', 'Chandan', 'Citizen', '50007', 'SSD', 'Scanner', 'Orders'..." class="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+          </div>
+          <div class="flex items-center gap-2 mt-3 flex-wrap text-xs text-slate-500">
+            <span class="font-medium">Quick suggestions:</span>
+            <button onclick="quickSearch('Lenovo')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700">Lenovo</button>
+            <button onclick="quickSearch('Chandan Yadav')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700">Chandan Yadav</button>
+            <button onclick="quickSearch('Tag Printer')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700">Tag Printer</button>
+            <button onclick="quickSearch('Citizen')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700">Citizen</button>
+            <button onclick="quickSearch('Zebra')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700">Zebra</button>
+            <button onclick="quickSearch('Not Working')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700">Not Working</button>
+          </div>
         </div>
-        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; font-size:12px; color:var(--text-muted); align-items:center;">
-          <span>Popular searches:</span>
-          <button class="demo-chip" onclick="quickSearch('Lenovo')">Lenovo</button>
-          <button class="demo-chip" onclick="quickSearch('Chandan Yadav')">Chandan Yadav</button>
-          <button class="demo-chip" onclick="quickSearch('Tag Printer')">Tag Printer</button>
-          <button class="demo-chip" onclick="quickSearch('Zebra')">Zebra</button>
-          <button class="demo-chip" onclick="quickSearch('Orders')">Orders Floor</button>
-          <button class="demo-chip" onclick="quickSearch('Not Working')">Not Working</button>
-        </div>
-      </div>
 
-      <div id="master-search-results-container">
-        <!-- Populated via JS -->
-        <div style="text-align:center; padding:60px 20px; color:var(--text-muted);">
-          <div style="font-size:42px; margin-bottom:12px;">🔍</div>
-          <h3>Ready for Master Search</h3>
-          <p>Enter any keyword above to search through all 5 databases simultaneously.</p>
+        <div id="master-search-results-container" class="space-y-4">
+          <!-- Populated via JS -->
+          <div class="text-center py-16 text-slate-400">
+            <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+              <i data-lucide="search" class="w-6 h-6"></i>
+            </div>
+            <h4 class="text-sm font-bold text-slate-700">Master Search Ready</h4>
+            <p class="text-xs text-slate-400 mt-1">Enter any keyword above to search all modules simultaneously.</p>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- =========================================================================
-         VIEW 7: SETTINGS & USER MANAGEMENT (ADMIN ONLY)
-         ========================================================================= -->
-    <section class="view-container" id="view-settings">
-      <div class="view-header">
-        <div>
-          <h1>System Settings & User Role Administration</h1>
-          <p>Manage staff accounts, assign granular permissions (Admin, Technician, Viewer), and download backups</p>
+      <!-- =====================================================================
+           VIEW 7: SETTINGS & USERS (ADMIN ONLY)
+           ===================================================================== -->
+      <section id="view-settings" class="view-panel hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">System Settings & Role Administration</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Manage user accounts, assign roles (Admin, Technician, Viewer), and download backups</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="downloadDatabaseBackup()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">
+              <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-600"></i>
+              <span>Download JSON Backup</span>
+            </button>
+            <button onclick="openUserModal()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+              <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+              <span>Add User</span>
+            </button>
+          </div>
         </div>
-        <div style="display:flex; gap:10px;">
-          <button class="topbar-btn btn-secondary" onclick="downloadDatabaseBackup()">💾 Download JSON Backup</button>
-          <button class="topbar-btn btn-primary" onclick="openUserModal()">+ Add New User</button>
-        </div>
-      </div>
 
-      <!-- Users Table -->
-      <div class="content-card" style="margin-bottom: 28px;">
-        <div class="card-header-row">
-          <h3>👥 System Users & Role Definitions</h3>
-          <span class="badge badge-health-healthy">Role Based Access Control</span>
+        <!-- Users Table -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900">User Accounts & Roles</h3>
+            <span class="text-xs text-slate-400">RBAC Active</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-3 px-4">Username</th>
+                  <th class="py-3 px-4">Full Name</th>
+                  <th class="py-3 px-4">Email</th>
+                  <th class="py-3 px-4">Assigned Role</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Created Date</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="table-responsive">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Full Name</th>
-                <th>Email</th>
-                <th>Assigned Role</th>
-                <th>Account Status</th>
-                <th>Created At</th>
-                <th style="text-align:right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="users-table-body">
-              <!-- Populated via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
 
-      <!-- Audit Logs Table -->
-      <div class="content-card">
-        <div class="card-header-row">
-          <h3>📜 System Audit Trail</h3>
-          <button class="topbar-btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="loadAuditLogs()">Refresh Audit</button>
+        <!-- Audit Trail -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900">System Audit Trail</h3>
+            <button onclick="loadAuditLogs()" class="text-xs font-semibold text-brand-600 hover:text-brand-700">Refresh Audit</button>
+          </div>
+          <div class="overflow-x-auto max-h-80">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold sticky top-0">
+                <tr>
+                  <th class="py-2.5 px-4">Timestamp</th>
+                  <th class="py-2.5 px-4">User</th>
+                  <th class="py-2.5 px-4">Action</th>
+                  <th class="py-2.5 px-4">Entity</th>
+                  <th class="py-2.5 px-4">Details</th>
+                </tr>
+              </thead>
+              <tbody id="audit-logs-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="table-responsive" style="max-height: 380px;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>User</th>
-                <th>Action</th>
-                <th>Entity</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody id="audit-logs-table-body">
-              <!-- Populated via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  </main>
+      </section>
+
+    </main>
+  </div>
 
   <!-- =========================================================================
-       MODALS
+       MODALS & DIALOGS (Tailwind Styled)
        ========================================================================= -->
 
   <!-- 1. ASSET PROFILE DOSSIER MODAL -->
-  <div class="modal-backdrop" id="modal-asset-detail">
-    <div class="modal-content modal-lg">
-      <div class="modal-header">
-        <h2 id="dossier-header-title">Asset Dossier: #50001</h2>
-        <button class="modal-close" onclick="closeModal('modal-asset-detail')">✕</button>
+  <div id="modal-asset-detail" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-4xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+        <h3 id="dossier-header-title" class="text-base font-bold text-slate-900">Asset Profile Dossier</h3>
+        <button onclick="closeModal('modal-asset-detail')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <div class="modal-body" id="dossier-body">
+      <div id="dossier-body" class="flex-1 overflow-y-auto p-6 space-y-6">
         <!-- Populated via JS -->
       </div>
-      <div class="modal-footer">
-        <button class="topbar-btn btn-secondary" onclick="printAssetTag()">🏷️ Print Asset Tag / QR</button>
-        <button class="topbar-btn btn-secondary tech-action" id="dossier-btn-repair">🔧 Log Repair</button>
-        <button class="topbar-btn btn-primary tech-action" id="dossier-btn-edit">✏️ Edit Details</button>
-        <button class="topbar-btn btn-secondary" onclick="closeModal('modal-asset-detail')">Close</button>
+      <div class="px-6 py-3.5 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between flex-wrap gap-2">
+        <button onclick="printAssetTag()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm">
+          <i data-lucide="tag" class="w-3.5 h-3.5 text-brand-600"></i>
+          <span>Print Physical Tag</span>
+        </button>
+        <div class="flex items-center gap-2">
+          <button id="dossier-btn-repair" class="tech-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm">
+            <i data-lucide="wrench" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span>Log Repair</span>
+          </button>
+          <button id="dossier-btn-edit" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-sm">
+            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+            <span>Edit Details</span>
+          </button>
+          <button onclick="closeModal('modal-asset-detail')" class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100">
+            Close
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- 2. ADD / EDIT ASSET MODAL -->
-  <div class="modal-backdrop" id="modal-asset-form">
-    <div class="modal-content modal-lg">
-      <div class="modal-header">
-        <h2 id="asset-form-title">Add New IT Asset</h2>
-        <button class="modal-close" onclick="closeModal('modal-asset-form')">✕</button>
+  <div id="modal-asset-form" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+        <h3 id="asset-form-title" class="text-base font-bold text-slate-900">Add New IT Asset</h3>
+        <button onclick="closeModal('modal-asset-form')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-asset" onsubmit="handleAssetSubmit(event)">
+      <form id="form-asset" onsubmit="handleAssetSubmit(event)" class="flex-1 overflow-y-auto p-6 space-y-4">
         <input type="hidden" id="asset-form-id">
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="asset-serial">Internal Serial Number *</label>
-              <input type="text" id="asset-serial" class="input-control" placeholder="e.g. 50052" required>
-            </div>
-            <div class="form-group">
-              <label for="asset-type">Asset / System Type *</label>
-              <select id="asset-type" class="select-control" required>
-                <option value="Desktop">Desktop</option>
-                <option value="Laptop">Laptop</option>
-                <option value="Normal Printer">Normal Printer</option>
-                <option value="Tag Printer">Tag Printer</option>
-                <option value="Label Printer">Label Printer</option>
-                <option value="Scanner">Scanner</option>
-                <option value="WebCam">WebCam</option>
-                <option value="Server">Server</option>
-                <option value="Network Switch">Network Switch</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="asset-brand">Brand of the Product *</label>
-              <input type="text" id="asset-brand" class="input-control" placeholder="e.g. Lenovo, HP, Citizen, TSC, Zebra, Asus, Dell" required>
-            </div>
-            <div class="form-group">
-              <label for="asset-model">Model Name / Number</label>
-              <input type="text" id="asset-model" class="input-control" placeholder="e.g. ThinkCentre M70q, TE244, DS2208">
-            </div>
-            <div class="form-group">
-              <label for="asset-hw-serial">Manufacturer Hardware Serial</label>
-              <input type="text" id="asset-hw-serial" class="input-control" placeholder="e.g. S/N or Service Tag">
-            </div>
-            <div class="form-group">
-              <label for="asset-purchase-date">Purchase Date</label>
-              <input type="date" id="asset-purchase-date" class="input-control">
-            </div>
-            <div class="form-group">
-              <label for="asset-vendor">Purchased From (Vendor)</label>
-              <input type="text" id="asset-vendor" class="input-control" placeholder="e.g. Compunet Infotech, Amazon Business">
-            </div>
-            <div class="form-group">
-              <label for="asset-cost">Purchase Cost (₹)</label>
-              <input type="number" id="asset-cost" class="input-control" placeholder="0" min="0" step="1">
-            </div>
-            <div class="form-group">
-              <label for="asset-department">Department *</label>
-              <select id="asset-department" class="select-control" required>
-                <option value="Orders">Orders</option>
-                <option value="Dispatch">Dispatch</option>
-                <option value="Listings">Listings</option>
-                <option value="Company">Company</option>
-                <option value="Accounts">Accounts</option>
-                <option value="Data Analysis">Data Analysis</option>
-                <option value="Return">Return</option>
-                <option value="IT">IT Infrastructure</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="asset-location">Where in use? (Location)</label>
-              <input type="text" id="asset-location" class="input-control" placeholder="e.g. Orders Floor 1st Table, Dispatch Bay Desk 2">
-            </div>
-            <div class="form-group">
-              <label for="asset-user">Who is using? (Assigned User) *</label>
-              <input type="text" id="asset-user" class="input-control" placeholder="e.g. Chandan Yadav, Komal Parate, Sachin Das" required>
-            </div>
-            <div class="form-group">
-              <label for="asset-status">Working Status *</label>
-              <select id="asset-status" class="select-control" required>
-                <option value="Working">Working</option>
-                <option value="In Repair">In Repair</option>
-                <option value="Not Working">Not Working</option>
-                <option value="Retired">Retired / Scrapped</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="asset-key-select">Map Quick Heal Antivirus Key</label>
-              <select id="asset-key-select" class="select-control">
-                <option value="">-- No Key Mapped --</option>
-                <!-- Populated via JS -->
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="asset-condition">Condition Rating</label>
-              <select id="asset-condition" class="select-control">
-                <option value="New">Brand New</option>
-                <option value="Good" selected>Good Condition</option>
-                <option value="Fair">Fair / Minor Wear</option>
-                <option value="Poor">Poor / Aging</option>
-                <option value="Critical">Critical</option>
-              </select>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="asset-parts">Parts Added / Upgraded Summary</label>
-              <input type="text" id="asset-parts" class="input-control" placeholder="e.g. Added 8GB DDR4 RAM; Installed 512GB Kingston NVMe SSD; Replaced printhead">
-            </div>
-            <div class="form-group col-span-2">
-              <label for="asset-remarks">Remarks & Operational Purpose</label>
-              <textarea id="asset-remarks" class="input-control" rows="3" placeholder="Describe asset usage (e.g. This printer is using for picklist printing 75*35mm stickers)"></textarea>
-            </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Internal Serial Number *</label>
+            <input type="text" id="asset-serial" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 font-mono font-semibold text-brand-600" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Asset / System Type *</label>
+            <select id="asset-type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              <option value="Desktop">Desktop</option>
+              <option value="Laptop">Laptop</option>
+              <option value="Normal Printer">Normal Printer</option>
+              <option value="Tag Printer">Tag Printer</option>
+              <option value="Label Printer">Label Printer</option>
+              <option value="Scanner">Scanner</option>
+              <option value="WebCam">WebCam</option>
+              <option value="Server">Server</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Brand *</label>
+            <input type="text" id="asset-brand" placeholder="e.g. Lenovo, HP, Citizen, TSC, Zebra, Dell" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Model Name / Series</label>
+            <input type="text" id="asset-model" placeholder="e.g. ThinkCentre M70q, TE244" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Manufacturer Hardware Serial</label>
+            <input type="text" id="asset-hw-serial" placeholder="S/N or Service Tag" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Purchase Date</label>
+            <input type="date" id="asset-purchase-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Purchased From (Vendor)</label>
+            <input type="text" id="asset-vendor" placeholder="e.g. Compunet Infotech" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Purchase Cost (₹)</label>
+            <input type="number" id="asset-cost" placeholder="0" min="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Department *</label>
+            <select id="asset-department" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              <option value="Orders">Orders</option>
+              <option value="Dispatch">Dispatch</option>
+              <option value="Listings">Listings</option>
+              <option value="Company">Company</option>
+              <option value="Accounts">Accounts</option>
+              <option value="Data Analysis">Data Analysis</option>
+              <option value="Return">Return</option>
+              <option value="IT">IT Infrastructure</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Physical Location</label>
+            <input type="text" id="asset-location" placeholder="e.g. Orders Floor 1st Table" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned User *</label>
+            <input type="text" id="asset-user" placeholder="e.g. Chandan Yadav, Komal Parate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Working Status *</label>
+            <select id="asset-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              <option value="Working">Working</option>
+              <option value="In Repair">In Repair</option>
+              <option value="Not Working">Not Working</option>
+              <option value="Retired">Retired / Scrapped</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Map Quick Heal Antivirus Key</label>
+            <select id="asset-key-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 font-mono">
+              <option value="">-- No Key Mapped --</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Parts Added / Upgrades Summary</label>
+            <input type="text" id="asset-parts" placeholder="e.g. Added 8GB DDR4 RAM; Installed 512GB Kingston NVMe SSD" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Operational Purpose & Remarks</label>
+            <textarea id="asset-remarks" rows="2" placeholder="e.g. This printer is using for picklist printing 75*35mm stickers" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500"></textarea>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-asset-form')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary" id="btn-save-asset">Save Asset Details</button>
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal('modal-asset-form')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" id="btn-save-asset" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-md shadow-brand-500/20">Save Asset Details</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- 3. CREATE / EDIT REPAIR TICKET MODAL -->
-  <div class="modal-backdrop" id="modal-repair-form">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="repair-form-title">Log Asset Repair / Part Replacement</h2>
-        <button class="modal-close" onclick="closeModal('modal-repair-form')">✕</button>
+  <!-- 3. LOG REPAIR TICKET MODAL -->
+  <div id="modal-repair-form" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+        <h3 id="repair-form-title" class="text-base font-bold text-slate-900">Log Asset Repair / Part Replacement</h3>
+        <button onclick="closeModal('modal-repair-form')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-repair" onsubmit="handleRepairSubmit(event)">
+      <form id="form-repair" onsubmit="handleRepairSubmit(event)" class="flex-1 overflow-y-auto p-6 space-y-4">
         <input type="hidden" id="repair-form-id">
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group col-span-2">
-              <label for="repair-asset-select">Select IT Asset to Service *</label>
-              <select id="repair-asset-select" class="select-control" required>
-                <!-- Populated via JS -->
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="repair-date">Service Date *</label>
-              <input type="date" id="repair-date" class="input-control" required>
-            </div>
-            <div class="form-group">
-              <label for="repair-type">Repair / Service Type</label>
-              <select id="repair-type" class="select-control">
-                <option value="Component Repair">Component Repair</option>
-                <option value="Part Replacement">Part Replacement</option>
-                <option value="Hardware Upgrade">Hardware Upgrade (SSD/RAM)</option>
-                <option value="Preventive Maintenance">Preventive Maintenance</option>
-              </select>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="repair-issue">Issue / Fault Description *</label>
-              <textarea id="repair-issue" class="input-control" rows="2" placeholder="e.g. Thermal printhead printing blank lines; Desktop failing to boot; Key panel not working" required></textarea>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="repair-parts">New Parts Added / Replaced</label>
-              <input type="text" id="repair-parts" class="input-control" placeholder="e.g. Installed New Thermal Printhead 203 DPI, 1x 256GB SSD">
-            </div>
-            <div class="form-group">
-              <label for="repair-vendor">Repair Vendor / Service Center</label>
-              <input type="text" id="repair-vendor" class="input-control" placeholder="e.g. Lenovo Care, Canon Service, Local Vendor">
-            </div>
-            <div class="form-group">
-              <label for="repair-tech">Technician Name & Contact</label>
-              <input type="text" id="repair-tech" class="input-control" placeholder="e.g. Suresh Kumar (9876543210)">
-            </div>
-            <div class="form-group">
-              <label for="repair-cost">Repair & Parts Cost (₹)</label>
-              <input type="number" id="repair-cost" class="input-control" placeholder="0" min="0" step="1">
-            </div>
-            <div class="form-group">
-              <label for="repair-status">Ticket Status *</label>
-              <select id="repair-status" class="select-control" required>
-                <option value="In Progress">In Progress (At Service Center)</option>
-                <option value="Awaiting Parts">Awaiting Parts</option>
-                <option value="Completed">Completed & Returned to Service</option>
-                <option value="Beyond Repair">Beyond Repair (Decommission / EOL)</option>
-              </select>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="repair-remarks">Technician Remarks & Warranty</label>
-              <input type="text" id="repair-remarks" class="input-control" placeholder="e.g. 6 Months warranty on printhead. Tested OK with 100 sample prints.">
-            </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Select IT Asset to Service *</label>
+            <select id="repair-asset-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              <!-- Populated via JS -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Service Date *</label>
+            <input type="date" id="repair-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Repair / Maintenance Type</label>
+            <select id="repair-type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+              <option value="Component Repair">Component Repair</option>
+              <option value="Part Replacement">Part Replacement</option>
+              <option value="Hardware Upgrade">Hardware Upgrade (SSD/RAM)</option>
+              <option value="Preventive Maintenance">Preventive Maintenance</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Fault / Issue Description *</label>
+            <textarea id="repair-issue" rows="2" placeholder="e.g. Thermal printhead printing blank lines; Desktop failing to power on" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required></textarea>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">New Parts Added / Replaced</label>
+            <input type="text" id="repair-parts" placeholder="e.g. Installed Thermal Printhead 203 DPI, 1x 256GB SSD" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Service Vendor / Care Center</label>
+            <input type="text" id="repair-vendor" placeholder="e.g. Lenovo Authorized Care" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Technician Name & Contact</label>
+            <input type="text" id="repair-tech" placeholder="e.g. Ramesh Verma (9876543210)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Cost of Repair & Parts (₹)</label>
+            <input type="number" id="repair-cost" placeholder="0" min="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Ticket Status *</label>
+            <select id="repair-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              <option value="In Progress">In Progress (At Service Center)</option>
+              <option value="Awaiting Parts">Awaiting Parts</option>
+              <option value="Completed">Completed & Returned to Service</option>
+              <option value="Beyond Repair">Beyond Repair (Decommission / EOL)</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Technician Remarks & Warranty</label>
+            <input type="text" id="repair-remarks" placeholder="e.g. 6 Months warranty on printhead. Tested OK with sample prints." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-repair-form')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary" id="btn-save-repair">Save Repair Ticket</button>
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal('modal-repair-form')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" id="btn-save-repair" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 shadow-md shadow-amber-500/20">Save Repair Ticket</button>
         </div>
       </form>
     </div>
   </div>
 
   <!-- 4. QUICK HEAL KEY MODALS -->
-  <div class="modal-backdrop" id="modal-key-form">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Add Quick Heal License Key</h2>
-        <button class="modal-close" onclick="closeModal('modal-key-form')">✕</button>
+  <div id="modal-key-form" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">Add Quick Heal License Key</h3>
+        <button onclick="closeModal('modal-key-form')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-key" onsubmit="handleKeySubmit(event)">
-        <div class="modal-body">
-          <div class="form-group" style="margin-bottom:14px;">
-            <label for="key-code">Quick Heal Product Key *</label>
-            <input type="text" id="key-code" class="input-control" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" required>
-          </div>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label for="key-edition">Antivirus Edition</label>
-            <input type="text" id="key-edition" class="input-control" value="Total Security">
-          </div>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label for="key-validity">Validity Expiration Date *</label>
-            <input type="date" id="key-validity" class="input-control" value="2029-08-22" required>
-          </div>
-          <div class="form-group">
-            <label for="key-notes">Notes</label>
-            <input type="text" id="key-notes" class="input-control" placeholder="e.g. Purchased in August 2026 bundle">
-          </div>
+      <form id="form-key" onsubmit="handleKeySubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Product Key *</label>
+          <input type="text" id="key-code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-purple-700 uppercase" required>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-key-form')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary">Save Key</button>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Edition</label>
+          <input type="text" id="key-edition" value="Total Security" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Validity Expiration Date *</label>
+          <input type="date" id="key-validity" value="2029-08-22" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Notes</label>
+          <input type="text" id="key-notes" placeholder="e.g. August 2026 Procurement" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-key-form')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20">Save License</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div class="modal-backdrop" id="modal-key-bulk">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Bulk Import Quick Heal Keys</h2>
-        <button class="modal-close" onclick="closeModal('modal-key-bulk')">✕</button>
+  <!-- Bulk Key Import Modal -->
+  <div id="modal-key-bulk" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">Bulk Import Quick Heal Keys</h3>
+        <button onclick="closeModal('modal-key-bulk')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-key-bulk" onsubmit="handleBulkKeySubmit(event)">
-        <div class="modal-body">
-          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Paste multiple product keys below (one key per line or separated by commas):</p>
-          <div class="form-group" style="margin-bottom:14px;">
-            <textarea id="bulk-key-input" class="input-control" rows="8" placeholder="6X88C-7W62R-7720A-16510&#10;0E8C1-2J76B-06023-82R86&#10;899RA-2N880-4516E-1092D" required></textarea>
+      <form id="form-key-bulk" onsubmit="handleBulkKeySubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Paste Product Keys (one per line or comma-separated) *</label>
+          <textarea id="bulk-key-input" rows="6" placeholder="6X88C-7W62R-7720A-16510&#10;0E8C1-2J76B-06023-82R86&#10;899RA-2N880-4516E-1092D" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold" required></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Default Expiration</label>
+            <input type="date" id="bulk-key-validity" value="2029-08-22" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           </div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="bulk-key-validity">Default Expiration Date</label>
-              <input type="date" id="bulk-key-validity" class="input-control" value="2029-08-22">
-            </div>
-            <div class="form-group">
-              <label for="bulk-key-edition">Edition</label>
-              <input type="text" id="bulk-key-edition" class="input-control" value="Total Security">
-            </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Edition</label>
+            <input type="text" id="bulk-key-edition" value="Total Security" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-key-bulk')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary">Import All Keys</button>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-key-bulk')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20">Import All Keys</button>
         </div>
       </form>
     </div>
   </div>
 
   <!-- Map Key Quick Modal -->
-  <div class="modal-backdrop" id="modal-map-key">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Map Antivirus Key to IT Asset</h2>
-        <button class="modal-close" onclick="closeModal('modal-map-key')">✕</button>
+  <div id="modal-map-key" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">Map Key to Workstation</h3>
+        <button onclick="closeModal('modal-map-key')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-map-key" onsubmit="handleMapKeySubmit(event)">
+      <form id="form-map-key" onsubmit="handleMapKeySubmit(event)" class="space-y-4">
         <input type="hidden" id="map-key-id">
-        <div class="modal-body">
-          <div style="background:#f8fafc; padding:12px 16px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:16px;">
-            <span style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:600;">Mapping Key:</span>
-            <div style="font-size:15px; font-weight:700; color:var(--primary); font-family:monospace; margin-top:2px;" id="map-key-display">6X88C-7W62R-7720A-16510</div>
-          </div>
-          <div class="form-group">
-            <label for="map-asset-select">Choose Destination IT Asset *</label>
-            <select id="map-asset-select" class="select-control" required style="width:100%;">
-              <!-- Populated via JS -->
-            </select>
-          </div>
+        <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Assigning License Key:</span>
+          <div id="map-key-display" class="font-mono font-bold text-sm text-purple-900 mt-0.5">6X88C-7W62R-7720A-16510</div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-map-key')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary">Assign Key to Asset</button>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Choose Destination IT Asset *</label>
+          <select id="map-asset-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500" required>
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-map-key')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20">Confirm Assignment</button>
         </div>
       </form>
     </div>
   </div>
 
   <!-- 5. ACCESSORY MODAL -->
-  <div class="modal-backdrop" id="modal-accessory-form">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="acc-form-title">Add Accessory / Component</h2>
-        <button class="modal-close" onclick="closeModal('modal-accessory-form')">✕</button>
+  <div id="modal-accessory-form" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="acc-form-title" class="text-base font-bold text-slate-900">Add Accessory</h3>
+        <button onclick="closeModal('modal-accessory-form')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-accessory" onsubmit="handleAccessorySubmit(event)">
+      <form id="form-accessory" onsubmit="handleAccessorySubmit(event)" class="space-y-4">
         <input type="hidden" id="acc-form-id">
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="acc-code">Code (Optional)</label>
-              <input type="text" id="acc-code" class="input-control" placeholder="e.g. ACC-007">
-            </div>
-            <div class="form-group">
-              <label for="acc-category">Category *</label>
-              <select id="acc-category" class="select-control" required>
-                <option value="Mouse">Mouse</option>
-                <option value="Keyboard">Keyboard</option>
-                <option value="Scanner">Scanner</option>
-                <option value="Monitor">Monitor</option>
-                <option value="Print Head">Print Head</option>
-                <option value="Cable/Adapter">Cable/Adapter</option>
-                <option value="UPS">UPS</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="acc-name">Item Name *</label>
-              <input type="text" id="acc-name" class="input-control" placeholder="e.g. Logitech M90 USB Optical Mouse" required>
-            </div>
-            <div class="form-group">
-              <label for="acc-brand">Brand</label>
-              <input type="text" id="acc-brand" class="input-control" placeholder="e.g. Logitech, Dell, Zebra">
-            </div>
-            <div class="form-group">
-              <label for="acc-qty">Stock Quantity</label>
-              <input type="number" id="acc-qty" class="input-control" value="1" min="1">
-            </div>
-            <div class="form-group">
-              <label for="acc-location">Location</label>
-              <input type="text" id="acc-location" class="input-control" placeholder="e.g. IT Store Room, Dispatch Bay">
-            </div>
-            <div class="form-group">
-              <label for="acc-status">Status</label>
-              <select id="acc-status" class="select-control">
-                <option value="In Stock">In Stock</option>
-                <option value="Assigned">Assigned</option>
-                <option value="Damaged">Damaged</option>
-              </select>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="acc-remarks">Remarks</label>
-              <input type="text" id="acc-remarks" class="input-control" placeholder="Notes or specifications">
-            </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Code</label>
+            <input type="text" id="acc-code" placeholder="e.g. ACC-007" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Category *</label>
+            <select id="acc-category" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+              <option value="Mouse">Mouse</option>
+              <option value="Keyboard">Keyboard</option>
+              <option value="Scanner">Scanner</option>
+              <option value="Print Head">Print Head</option>
+              <option value="Cable/Adapter">Cable/Adapter</option>
+              <option value="UPS">UPS</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-accessory-form')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary">Save Accessory</button>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Item Name *</label>
+          <input type="text" id="acc-name" placeholder="e.g. Logitech M90 USB Mouse" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Brand</label>
+            <input type="text" id="acc-brand" placeholder="e.g. Logitech, Dell" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Stock Quantity</label>
+            <input type="number" id="acc-qty" value="1" min="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Location</label>
+            <input type="text" id="acc-location" placeholder="e.g. IT Store Room" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+            <select id="acc-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+              <option value="In Stock">In Stock</option>
+              <option value="Assigned">Assigned</option>
+              <option value="Damaged">Damaged</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Remarks</label>
+          <input type="text" id="acc-remarks" placeholder="Optional notes" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-accessory-form')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-md shadow-brand-500/20">Save Accessory</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- 6. USER MANAGEMENT MODAL -->
-  <div class="modal-backdrop" id="modal-user-form">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="user-form-title">Add System User</h2>
-        <button class="modal-close" onclick="closeModal('modal-user-form')">✕</button>
+  <!-- 6. USER MODAL -->
+  <div id="modal-user-form" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="user-form-title" class="text-base font-bold text-slate-900">Add System User</h3>
+        <button onclick="closeModal('modal-user-form')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <form id="form-user" onsubmit="handleUserSubmit(event)">
+      <form id="form-user" onsubmit="handleUserSubmit(event)" class="space-y-4">
         <input type="hidden" id="user-form-id">
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="user-username">Username *</label>
-              <input type="text" id="user-username" class="input-control" placeholder="e.g. rajesh.tech" required>
-            </div>
-            <div class="form-group">
-              <label for="user-fullname">Full Name *</label>
-              <input type="text" id="user-fullname" class="input-control" placeholder="e.g. Rajesh Kumar" required>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="user-email">Email Address</label>
-              <input type="email" id="user-email" class="input-control" placeholder="e.g. rajesh@vbexports.co.in">
-            </div>
-            <div class="form-group">
-              <label for="user-role">Assigned Role *</label>
-              <select id="user-role" class="select-control" required>
-                <option value="admin">👑 Administrator (Full Control)</option>
-                <option value="technician" selected>🔧 Technician (Assets, Repairs & Keys)</option>
-                <option value="viewer">👁️ Viewer (Read Only)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="user-status">Account Status</label>
-              <select id="user-status" class="select-control">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive / Suspended</option>
-              </select>
-            </div>
-            <div class="form-group col-span-2">
-              <label for="user-password" id="user-password-label">Password *</label>
-              <input type="password" id="user-password" class="input-control" placeholder="At least 6 characters" required>
-            </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Username *</label>
+          <input type="text" id="user-username" placeholder="e.g. rajesh.tech" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+          <input type="text" id="user-fullname" placeholder="e.g. Rajesh Kumar" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
+          <input type="email" id="user-email" placeholder="e.g. rajesh@vbexports.co.in" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Role *</label>
+            <select id="user-role" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold" required>
+              <option value="admin">👑 Administrator</option>
+              <option value="technician" selected>🔧 Technician</option>
+              <option value="viewer">👁️ Viewer</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+            <select id="user-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="topbar-btn btn-secondary" onclick="closeModal('modal-user-form')">Cancel</button>
-          <button type="submit" class="topbar-btn btn-primary">Save User</button>
+        <div>
+          <label id="user-password-label" class="block text-xs font-semibold text-slate-700 mb-1">Password *</label>
+          <input type="password" id="user-password" placeholder="At least 6 characters" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-user-form')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-md shadow-brand-500/20">Save User</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- 7. MASTER SEARCH POPUP MODAL (CTRL+K) -->
-  <div class="modal-backdrop" id="modal-master-search">
-    <div class="modal-content modal-lg" style="max-height: 85vh;">
-      <div class="modal-header" style="border:none; padding-bottom: 0;">
-        <div style="position:relative; width:100%;">
-          <input type="text" id="popup-search-input" class="input-control" placeholder="Quick search assets, repairs, keys, users (ESC to close)..." style="width:100%; font-size:16px; padding:14px 18px;" oninput="debouncePopupSearch()">
-        </div>
-        <button class="modal-close" onclick="closeModal('modal-master-search')" style="margin-left: 12px;">✕</button>
+  <!-- 7. MASTER COMMAND PALETTE POPUP (CTRL+K) -->
+  <div id="modal-master-search" class="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] ring-1 ring-slate-900/10">
+      <div class="p-4 border-b border-slate-100 flex items-center gap-3">
+        <i data-lucide="search" class="w-5 h-5 text-brand-600"></i>
+        <input type="text" id="popup-search-input" oninput="debouncePopupSearch()" placeholder="Search assets, repairs, keys, users across infrastructure..." class="flex-1 border-0 bg-transparent text-sm text-slate-900 focus:ring-0 focus:outline-none placeholder-slate-400">
+        <button onclick="closeModal('modal-master-search')" class="p-1 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <div class="modal-body" id="popup-search-results" style="max-height: 500px;">
-        <div style="text-align:center; padding:30px; color:var(--text-muted);">
-          Start typing to search across the entire IT infrastructure...
+      <div id="popup-search-results" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div class="text-center py-10 text-xs text-slate-400">
+          Start typing to search all 5 databases simultaneously...
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 8. PRINT ASSET TAG STICKER PREVIEW MODAL -->
-  <div class="modal-backdrop" id="modal-print-tag">
-    <div class="modal-content" style="max-width: 480px;">
-      <div class="modal-header">
-        <h2>Asset Barcode & QR Sticker</h2>
-        <button class="modal-close" onclick="closeModal('modal-print-tag')">✕</button>
+  <!-- 8. PRINT ASSET BARCODE / QR TAG STICKER -->
+  <div id="modal-print-tag" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">Physical Asset Barcode Label</h3>
+        <button onclick="closeModal('modal-print-tag')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
-      <div class="modal-body" style="text-align:center;">
-        <div id="print-sticker-container" style="border: 2px dashed #94a3b8; padding: 24px; border-radius: 12px; background: #ffffff;">
-          <h3 style="color:#0f172a; margin-bottom: 4px;">VB EXPORTS IT ASSET</h3>
-          <div style="font-size:26px; font-weight:800; color:var(--primary); letter-spacing:2px; font-family:monospace;" id="tag-serial">50001</div>
-          <div style="font-size:14px; font-weight:600; color:#334155; margin: 6px 0;" id="tag-type-brand">Normal Printer - HP</div>
-          <div style="font-size:12px; color:#64748b;" id="tag-dept-user">Dept: Orders | User: Chandan Yadav</div>
-          <div style="margin: 16px auto; width: 120px; height: 120px; background: #f1f5f9; display:flex; align-items:center; justify-content:center; border-radius: 8px; border:1px solid #cbd5e1;">
-            <span style="font-size: 48px;">🏷️</span>
+
+      <div id="printable-asset-sticker" class="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center bg-white">
+        <div class="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-1">VB EXPORTS IT INFRASTRUCTURE</div>
+        <div id="tag-serial" class="text-3xl font-black font-mono tracking-widest text-brand-700 my-2">50001</div>
+        <div id="tag-type-brand" class="text-sm font-bold text-slate-800">Normal Printer - HP</div>
+        <div id="tag-dept-user" class="text-xs text-slate-500 mt-1">Dept: Orders • User: Chandan Yadav</div>
+
+        <!-- Simulated Barcode Graphic -->
+        <div class="my-4 flex items-center justify-center">
+          <div class="h-12 w-48 bg-slate-900 flex items-center justify-around px-2 rounded">
+            <div class="h-10 w-1 bg-white"></div>
+            <div class="h-10 w-2 bg-white"></div>
+            <div class="h-10 w-0.5 bg-white"></div>
+            <div class="h-10 w-3 bg-white"></div>
+            <div class="h-10 w-1 bg-white"></div>
+            <div class="h-10 w-2 bg-white"></div>
+            <div class="h-10 w-1.5 bg-white"></div>
+            <div class="h-10 w-0.5 bg-white"></div>
+            <div class="h-10 w-2 bg-white"></div>
           </div>
-          <div style="font-size:11px; color:#94a3b8;">PROPERTY OF VB EXPORTS • DO NOT REMOVE</div>
         </div>
+        <p class="text-[9px] text-slate-400 uppercase font-semibold">Property of VB EXPORTS • Non-Transferable</p>
       </div>
-      <div class="modal-footer">
-        <button class="topbar-btn btn-secondary" onclick="closeModal('modal-print-tag')">Close</button>
-        <button class="topbar-btn btn-primary" onclick="window.print()">🖨️ Print Label</button>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="closeModal('modal-print-tag')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Close</button>
+        <button onclick="window.print()" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 shadow-md">Print Label</button>
       </div>
     </div>
   </div>
 
-  <!-- TOAST CONTAINER -->
-  <div id="toast-container"></div>
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <!-- Core Scripts -->
+  <!-- Core JavaScript -->
   <script src="/js/app.js"></script>
 </body>
 </html>
