@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const xlsx = require('xlsx');
-const { db } = require('../database');
+const { db, purgeOperationalData } = require('../database');
 const { authenticateToken, requireRoles, logAudit } = require('../auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -2437,6 +2437,36 @@ router.get('/audit-logs', requireRoles('admin'), (req, res) => {
       SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100
     `).all();
     res.json({ logs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/clear-inventory-data - Danger Zone: Purge all operational inventory data
+router.post('/admin/clear-inventory-data', requireRoles('admin'), (req, res) => {
+  try {
+    const { confirm } = req.body;
+    if (confirm !== 'PURGE_ALL_DATA') {
+      return res.status(400).json({
+        error: 'Confirmation string required. Please provide { "confirm": "PURGE_ALL_DATA" }'
+      });
+    }
+
+    purgeOperationalData();
+
+    logAudit(
+      req.user.id,
+      req.user.username,
+      'PURGE_ALL_OPERATIONAL_DATA',
+      'system',
+      'all',
+      `All IT Assets, Repairs, Quick Heal Keys, Accessories, and Expenses were purged for fresh real data entry by ${req.user.username}`
+    );
+
+    res.json({
+      success: true,
+      message: 'All operational records (IT Assets, Repairs, Quick Heal Keys, Accessories, and Expenses) have been completely removed. Database is clean for fresh real data entry.'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

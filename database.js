@@ -170,10 +170,16 @@ function seedUsers() {
 
 // Seed data from IT Sheet.xlsx or extracted_data.json
 function seedFromSheet() {
+  const isSeedDone = db.prepare("SELECT value FROM settings WHERE key = 'seed_completed'").get();
+  if (isSeedDone && isSeedDone.value === 'true') {
+    return; // System initialized or deliberately cleared! Never re-seed sample data.
+  }
+
   const assetCount = db.prepare('SELECT COUNT(*) as count FROM assets').get().count;
   const keyCount = db.prepare('SELECT COUNT(*) as count FROM quick_heal_keys').get().count;
 
-  if (assetCount > 0 && keyCount > 0) {
+  if (assetCount > 0 || keyCount > 0) {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('seed_completed', 'true')").run();
     return; // Already seeded
   }
 
@@ -353,6 +359,7 @@ function seedFromSheet() {
   });
 
   transaction();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('seed_completed', 'true')").run();
 }
 
 // Migration: If any accessory has status = 'Assigned' and quantity > 1 (e.g. ACC-001 with 15 units assigned),
@@ -457,6 +464,30 @@ function ensureAdityaAdmin() {
   }
 }
 
+// Purge all operational records: Assets, Repairs, Quick Heal Keys, Accessories, and Expenses
+function purgeOperationalData() {
+  const transaction = db.transaction(() => {
+    // 1. Delete repairs (references assets)
+    db.prepare('DELETE FROM repairs').run();
+    // 2. Delete accessories (references assets)
+    db.prepare('DELETE FROM accessories').run();
+    // 3. Clear quick_heal references from assets, then delete quick_heal_keys
+    db.prepare('UPDATE assets SET quick_heal_key_id = NULL').run();
+    db.prepare('DELETE FROM quick_heal_keys').run();
+    // 4. Delete assets
+    db.prepare('DELETE FROM assets').run();
+
+    // 5. Reset auto-increment sequence counters so new entries start cleanly from 1
+    db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('repairs', 'accessories', 'quick_heal_keys', 'assets')").run();
+
+    // 6. Ensure sample seeding is disabled permanently
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('seed_completed', 'true')").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('data_purged_at', datetime('now'))").run();
+  });
+  transaction();
+  console.log('Database purge completed: All IT assets, repairs, keys, accessories, and expenses cleared.');
+}
+
 // Initialize tables and run seeding
 initSchema();
 seedUsers();
@@ -464,8 +495,14 @@ seedFromSheet();
 patchAssignedQuantities();
 ensureAdityaAdmin();
 
+// Optional environment flag for automated zero-state reset
+if (process.env.PURGE_DATA_ON_STARTUP === 'true') {
+  purgeOperationalData();
+}
+
 module.exports = {
   db,
-  initSchema
+  initSchema,
+  purgeOperationalData
 };
 

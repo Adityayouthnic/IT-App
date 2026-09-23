@@ -3537,3 +3537,36 @@ async function downloadDatabaseBackup() {
     showToast('Failed to generate backup: ' + err.message, 'error');
   }
 }
+
+// Danger Zone: Purge All Inventory Data
+async function confirmPurgeInventory() {
+  const confirmation = prompt(
+    'WARNING: This will permanently delete ALL IT Assets, Repairs, Quick Heal Keys, Accessories, and Expenses.\n\nYour User accounts and password logins will remain safe and active.\n\nType PURGE to confirm and proceed:'
+  );
+
+  if (confirmation !== 'PURGE') {
+    if (confirmation !== null) {
+      showToast('Purge aborted: confirmation phrase did not match.', 'info');
+    }
+    return;
+  }
+
+  try {
+    const res = await apiFetch('/api/admin/clear-inventory-data', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: 'PURGE_ALL_DATA' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('All operational inventory data has been purged successfully!', 'success');
+      // Refresh views
+      loadDashboard();
+      loadAuditLogs();
+    } else {
+      showToast(data.error || 'Purge failed', 'error');
+    }
+  } catch (err) {
+    showToast('Purge error: ' + err.message, 'error');
+  }
+}
+
