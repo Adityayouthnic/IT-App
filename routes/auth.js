@@ -4,8 +4,43 @@ const bcrypt = require('bcryptjs');
 const { db } = require('../database');
 const { generateToken, authenticateToken, logAudit } = require('../auth');
 
+// Rate limiting map for failed login attempts: IP -> { count, resetAt }
+const loginAttempts = new Map();
+const MAX_FAILED_ATTEMPTS = 10;
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+// Background pruning of expired rate limit entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of loginAttempts.entries()) {
+    if (now > data.resetAt) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 10 * 60 * 1000).unref();
+
+function getClientIp(req) {
+  return (req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+}
+
 // POST /api/auth/login
 router.post('/login', (req, res) => {
+  const clientIp = getClientIp(req);
+  const now = Date.now();
+
+  const attemptData = loginAttempts.get(clientIp);
+  if (attemptData) {
+    if (now < attemptData.resetAt && attemptData.count >= MAX_FAILED_ATTEMPTS) {
+      const remainingMinutes = Math.ceil((attemptData.resetAt - now) / 60000);
+      return res.status(429).json({
+        error: `Too many failed login attempts. Security protection active. Please try again in ${remainingMinutes} minute(s).`
+      });
+    }
+    if (now >= attemptData.resetAt) {
+      loginAttempts.delete(clientIp);
+    }
+  }
+
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
@@ -13,7 +48,18 @@ router.post('/login', (req, res) => {
 
   const identifier = (username || '').trim();
   const user = db.prepare('SELECT * FROM users WHERE (username = ? COLLATE NOCASE OR email = ? COLLATE NOCASE)').get(identifier, identifier);
+
+  function recordFailure() {
+    const existing = loginAttempts.get(clientIp);
+    if (!existing || now >= existing.resetAt) {
+      loginAttempts.set(clientIp, { count: 1, resetAt: now + LOCKOUT_WINDOW_MS });
+    } else {
+      existing.count += 1;
+    }
+  }
+
   if (!user) {
+    recordFailure();
     return res.status(401).json({ error: 'Invalid username or password.' });
   }
 
@@ -23,8 +69,12 @@ router.post('/login', (req, res) => {
 
   const isMatch = bcrypt.compareSync(password, user.password_hash);
   if (!isMatch) {
+    recordFailure();
     return res.status(401).json({ error: 'Invalid username or password.' });
   }
+
+  // Clear failed attempts upon successful login
+  loginAttempts.delete(clientIp);
 
   const token = generateToken(user);
 
@@ -85,5 +135,7 @@ router.post('/change-password', authenticateToken, (req, res) => {
 
   res.json({ message: 'Password changed successfully.' });
 });
+
+router._loginAttempts = loginAttempts;
 
 module.exports = router;

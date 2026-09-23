@@ -581,7 +581,185 @@ async function runTests() {
   if (loginHtml.includes('Protected by Enterprise RBAC & JWT Session Security')) {
     throw new Error('Security footer still found in public/login.html!');
   }
-  console.log('✅ Production login verified: Quick access credentials and security footer removed!');
+  // Test 16: Date Calendar Filtering for Expenses and Repairs
+  console.log('\nTest 16: Date Calendar Filtering for Expenses and Repairs');
+  // Create 3 temporary repair records on different dates to test calendar filtering
+  const assetForDateTest = (await (await fetch(`${BASE_URL}/api/assets`, { headers: authHeaders })).json()).assets[0];
+  const dateRep1 = await (await fetch(`${BASE_URL}/api/repairs`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      asset_id: assetForDateTest.id,
+      repair_date: '2026-02-15',
+      repair_type: 'Component Repair',
+      issue_description: 'February Date Test Issue',
+      repair_cost: 1500,
+      status: 'Completed'
+    })
+  })).json();
+
+  const dateRep2 = await (await fetch(`${BASE_URL}/api/repairs`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      asset_id: assetForDateTest.id,
+      repair_date: '2026-05-20',
+      repair_type: 'Part Replacement',
+      issue_description: 'May Date Test Issue',
+      repair_cost: 3500,
+      status: 'Completed'
+    })
+  })).json();
+
+  const dateRep3 = await (await fetch(`${BASE_URL}/api/repairs`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      asset_id: assetForDateTest.id,
+      repair_date: '2026-09-10',
+      repair_type: 'Preventive Maintenance',
+      issue_description: 'September Date Test Issue',
+      repair_cost: 2000,
+      status: 'Completed'
+    })
+  })).json();
+
+  // 16A: Query expenses filtering for May 2026 only
+  const resMayExp = await fetch(`${BASE_URL}/api/expenses?date_from=2026-05-01&date_to=2026-05-31`, { headers: authHeaders });
+  const dataMayExp = await resMayExp.json();
+  const mayMatch = dataMayExp.expenses.find(e => e.id === dateRep2.id);
+  const febMatchInMay = dataMayExp.expenses.find(e => e.id === dateRep1.id);
+  const sepMatchInMay = dataMayExp.expenses.find(e => e.id === dateRep3.id);
+
+  if (!mayMatch) throw new Error('May expense record not returned in May date range query');
+  if (febMatchInMay || sepMatchInMay) throw new Error('Out-of-range records returned in May date range query');
+  console.log(`May Date Range Filter: Correctly isolated 2026-05-20 record (${dataMayExp.expenses.length} result(s)).`);
+
+  // 16B: Test CSV Export with date range
+  const resCsvDate = await fetch(`${BASE_URL}/api/expenses/export/csv?date_from=2026-05-01&date_to=2026-05-31`, { headers: authHeaders });
+  const csvText = await resCsvDate.text();
+  if (!csvText.includes('May Date Test Issue') || csvText.includes('February Date Test Issue')) {
+    throw new Error('CSV Export did not respect date range filtering!');
+  }
+  console.log('Date-filtered CSV Export successfully verified.');
+
+  // 16C: Test Repairs endpoint date filtering
+  const resMayRep = await fetch(`${BASE_URL}/api/repairs?date_from=2026-05-01&date_to=2026-05-31`, { headers: authHeaders });
+  const dataMayRep = await resMayRep.json();
+  const repMatch = dataMayRep.repairs.find(r => r.id === dateRep2.id);
+  if (!repMatch) throw new Error('Repairs endpoint date filter failed for May');
+  console.log('Repairs endpoint date range filtering verified.');
+
+  // Clean up date test tickets
+  await fetch(`${BASE_URL}/api/repairs/${dateRep1.id}`, { method: 'DELETE', headers: authHeaders });
+  await fetch(`${BASE_URL}/api/repairs/${dateRep2.id}`, { method: 'DELETE', headers: authHeaders });
+  await fetch(`${BASE_URL}/api/repairs/${dateRep3.id}`, { method: 'DELETE', headers: authHeaders });
+  console.log('✅ Date Calendar Filtering verified across UI Ledger, CSV Export, and Backend APIs!');
+
+  // Test 17: Zero-Leakage End-to-End Security Hardening
+  console.log('\nTest 17: Zero-Leakage End-to-End Security Hardening');
+
+  // 17A: Unauthenticated GET / must redirect to /login (302)
+  const resUnauthRoot = await fetch(`${BASE_URL}/`, { redirect: 'manual' });
+  console.log('Unauthenticated GET / status:', resUnauthRoot.status, 'Location:', resUnauthRoot.headers.get('location'));
+  if (resUnauthRoot.status !== 302 || resUnauthRoot.headers.get('location') !== '/login') {
+    throw new Error(`Expected 302 redirect to /login for unauthenticated GET /, got ${resUnauthRoot.status}`);
+  }
+  console.log('✅ Unauthenticated access to / properly intercepted and redirected to /login.');
+
+  // 17B: Unauthenticated GET /index.html must redirect to /login (302)
+  const resUnauthIndex = await fetch(`${BASE_URL}/index.html`, { redirect: 'manual' });
+  console.log('Unauthenticated GET /index.html status:', resUnauthIndex.status, 'Location:', resUnauthIndex.headers.get('location'));
+  if (resUnauthIndex.status !== 302 || resUnauthIndex.headers.get('location') !== '/login') {
+    throw new Error(`Expected 302 redirect to /login for unauthenticated GET /index.html, got ${resUnauthIndex.status}`);
+  }
+  console.log('✅ Unauthenticated access to /index.html properly intercepted.');
+
+  // 17C: Unauthenticated GET /js/app.js must redirect to /login (302)
+  const resUnauthJs = await fetch(`${BASE_URL}/js/app.js`, { redirect: 'manual' });
+  if (resUnauthJs.status !== 302 || resUnauthJs.headers.get('location') !== '/login') {
+    throw new Error(`Expected 302 redirect to /login for unauthenticated GET /js/app.js, got ${resUnauthJs.status}`);
+  }
+  console.log('✅ Unauthenticated access to client scripts (/js/app.js) properly blocked.');
+
+  // 17D: Authenticated GET / with cookie must return 200 OK
+  const resAuthRoot = await fetch(`${BASE_URL}/`, {
+    headers: { 'Cookie': `it_app_token=${token}` }
+  });
+  if (resAuthRoot.status !== 200) {
+    throw new Error(`Authenticated GET / failed: status ${resAuthRoot.status}`);
+  }
+  const rootText = await resAuthRoot.text();
+  if (!rootText.includes('IT Asset Hub')) {
+    throw new Error('Authenticated GET / did not serve index.html');
+  }
+  console.log('✅ Authenticated access to / with JWT cookie serves application dashboard.');
+
+  // 17E: Probing sensitive files (.db, .env, .json) directly blocked
+  const resDbProbe = await fetch(`${BASE_URL}/data/it_inventory.db`);
+  if (resDbProbe.status !== 404 && resDbProbe.status !== 403) {
+    throw new Error(`Database file probe was not blocked: status ${resDbProbe.status}`);
+  }
+  const resEnvProbe = await fetch(`${BASE_URL}/.env`);
+  if (resEnvProbe.status !== 404 && resEnvProbe.status !== 403) {
+    throw new Error(`.env file probe was not blocked: status ${resEnvProbe.status}`);
+  }
+  const resJsonProbe = await fetch(`${BASE_URL}/package.json`);
+  if (resJsonProbe.status !== 404 && resJsonProbe.status !== 403) {
+    throw new Error(`package.json probe was not blocked: status ${resJsonProbe.status}`);
+  }
+  console.log('✅ Sensitive file exposure shield verified (.db, .env, .json blocked).');
+
+  // 17F: Path traversal blocked
+  const resTraversal = await fetch(`${BASE_URL}/..%2F..%2Fserver.js`);
+  if (resTraversal.status !== 403 && resTraversal.status !== 404) {
+    throw new Error(`Path traversal was not blocked: status ${resTraversal.status}`);
+  }
+  console.log('✅ Path traversal protection verified (HTTP 403 Forbidden).');
+
+  // 17G: HTTP Security headers
+  const resHeaders = await fetch(`${BASE_URL}/health`);
+  if (resHeaders.headers.get('x-content-type-options') !== 'nosniff') {
+    throw new Error('Missing X-Content-Type-Options: nosniff header');
+  }
+  if (resHeaders.headers.get('x-frame-options') !== 'SAMEORIGIN') {
+    throw new Error('Missing X-Frame-Options: SAMEORIGIN header');
+  }
+  if (resHeaders.headers.get('x-powered-by')) {
+    throw new Error('x-powered-by header was not disabled');
+  }
+  console.log('✅ Security headers verified: nosniff, SAMEORIGIN, no X-Powered-By.');
+
+  // 17H: Login Rate Limiter (Brute-Force Attack Mitigation)
+  console.log('Testing Brute Force Login Rate Limiter...');
+  const authRoute = require('./routes/auth');
+  if (authRoute._loginAttempts) {
+    authRoute._loginAttempts.clear(); // start fresh for test
+  }
+
+  let rateLimited = false;
+  for (let i = 1; i <= 12; i++) {
+    const resBadLogin = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: `wrongpassword_${i}` })
+    });
+    if (resBadLogin.status === 429) {
+      rateLimited = true;
+      const data429 = await resBadLogin.json();
+      console.log(`Brute force attempt #${i} triggered HTTP 429 Too Many Requests: "${data429.error}"`);
+      break;
+    }
+  }
+  if (!rateLimited) {
+    throw new Error('Brute force rate limiter failed to trigger 429 after 11 failed attempts');
+  }
+  console.log('✅ Brute-force protection verified: 429 Too Many Requests enforced.');
+
+  // Reset rate limits so other operations continue normally
+  if (authRoute._loginAttempts) {
+    authRoute._loginAttempts.clear();
+  }
 
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');

@@ -777,6 +777,14 @@ router.get('/repairs', (req, res) => {
       query += ` AND r.asset_id = ?`;
       params.push(asset_id);
     }
+    if (req.query.date_from && req.query.date_from.trim()) {
+      query += ` AND r.repair_date >= ?`;
+      params.push(req.query.date_from.trim());
+    }
+    if (req.query.date_to && req.query.date_to.trim()) {
+      query += ` AND r.repair_date <= ?`;
+      params.push(req.query.date_to.trim());
+    }
     if (search && search.trim()) {
       const term = `%${search.trim().toLowerCase()}%`;
       query += ` AND (

@@ -134,8 +134,12 @@ function resetAssetFilterUI(overrides = {}) {
 function resetRepairFilterUI(overrides = {}) {
   const s = document.getElementById('repair-filter-search');
   const st = document.getElementById('repair-filter-status');
+  const fromEl = document.getElementById('repair-filter-date-from');
+  const toEl = document.getElementById('repair-filter-date-to');
   if (s) s.value = overrides.search || '';
   if (st) st.value = overrides.status || '';
+  if (fromEl) fromEl.value = overrides.date_from || '';
+  if (toEl) toEl.value = overrides.date_to || '';
   if (typeof filterRepairTab === 'function') {
     filterRepairTab(overrides.ticket_status || 'all', false);
   }
@@ -1263,11 +1267,25 @@ function filterRepairTab(tab) {
   loadRepairs();
 }
 
+function resetRepairFilters() {
+  const searchEl = document.getElementById('repair-filter-search');
+  const statusEl = document.getElementById('repair-filter-status');
+  const fromEl = document.getElementById('repair-filter-date-from');
+  const toEl = document.getElementById('repair-filter-date-to');
+  if (searchEl) searchEl.value = '';
+  if (statusEl) statusEl.value = '';
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+  filterRepairTab('all');
+}
+
 async function loadRepairs(filterParams = {}) {
   try {
     const search = filterParams.search !== undefined ? filterParams.search : document.getElementById('repair-filter-search')?.value || '';
     const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('repair-filter-status')?.value || '';
     const ticketStatus = filterParams.ticket_status !== undefined ? filterParams.ticket_status : activeRepairTab;
+    const date_from = filterParams.date_from !== undefined ? filterParams.date_from : document.getElementById('repair-filter-date-from')?.value || '';
+    const date_to = filterParams.date_to !== undefined ? filterParams.date_to : document.getElementById('repair-filter-date-to')?.value || '';
 
     if (filterParams.search && document.getElementById('repair-filter-search')) {
       document.getElementById('repair-filter-search').value = filterParams.search;
@@ -1277,6 +1295,8 @@ async function loadRepairs(filterParams = {}) {
     if (search) params.append('search', search);
     if (status) params.append('status', status);
     if (ticketStatus && ticketStatus !== 'all') params.append('ticket_status', ticketStatus);
+    if (date_from) params.append('date_from', date_from);
+    if (date_to) params.append('date_to', date_to);
 
     const res = await apiFetch(`/api/repairs?${params.toString()}`);
     if (!res.ok) return;
@@ -2713,16 +2733,77 @@ function debounceExpenseSearch() {
   expenseSearchTimeout = setTimeout(() => loadExpenses(), 250);
 }
 
+function applyExpenseDatePreset(preset) {
+  const fromEl = document.getElementById('exp-filter-date-from');
+  const toEl = document.getElementById('exp-filter-date-to');
+  const presetSelect = document.getElementById('exp-filter-date-preset');
+  if (presetSelect && presetSelect.value !== preset) {
+    presetSelect.value = preset;
+  }
+  if (!fromEl || !toEl) return;
+
+  const now = new Date();
+  const formatISO = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  if (preset === 'all') {
+    fromEl.value = '';
+    toEl.value = '';
+  } else if (preset === 'today') {
+    const t = formatISO(now);
+    fromEl.value = t;
+    toEl.value = t;
+  } else if (preset === 'this_week') {
+    const day = now.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    fromEl.value = formatISO(monday);
+    toEl.value = formatISO(now);
+  } else if (preset === 'this_month') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    fromEl.value = formatISO(firstDay);
+    toEl.value = formatISO(now);
+  } else if (preset === 'last_30_days') {
+    const past30 = new Date(now);
+    past30.setDate(now.getDate() - 30);
+    fromEl.value = formatISO(past30);
+    toEl.value = formatISO(now);
+  } else if (preset === 'this_year') {
+    const firstDayYear = new Date(now.getFullYear(), 0, 1);
+    fromEl.value = formatISO(firstDayYear);
+    toEl.value = formatISO(now);
+  }
+
+  loadExpenses();
+}
+
+function onExpenseDateInputChange() {
+  const presetSelect = document.getElementById('exp-filter-date-preset');
+  if (presetSelect) presetSelect.value = 'custom';
+  loadExpenses();
+}
+
 function resetExpensesFilterUI(params = {}) {
   const searchEl = document.getElementById('exp-filter-search');
   const deptEl = document.getElementById('exp-filter-dept');
   const typeEl = document.getElementById('exp-filter-type');
   const statusEl = document.getElementById('exp-filter-status');
+  const datePresetEl = document.getElementById('exp-filter-date-preset');
+  const dateFromEl = document.getElementById('exp-filter-date-from');
+  const dateToEl = document.getElementById('exp-filter-date-to');
 
   if (searchEl) searchEl.value = params.search || params.q || '';
   if (deptEl) deptEl.value = params.department || '';
   if (typeEl) typeEl.value = params.repair_type || '';
   if (statusEl) statusEl.value = params.status || '';
+  if (datePresetEl) datePresetEl.value = 'all';
+  if (dateFromEl) dateFromEl.value = '';
+  if (dateToEl) dateToEl.value = '';
 }
 
 function downloadExpenseReport() {
@@ -2730,12 +2811,16 @@ function downloadExpenseReport() {
   const dept = document.getElementById('exp-filter-dept')?.value || '';
   const type = document.getElementById('exp-filter-type')?.value || '';
   const status = document.getElementById('exp-filter-status')?.value || '';
+  const date_from = document.getElementById('exp-filter-date-from')?.value || '';
+  const date_to = document.getElementById('exp-filter-date-to')?.value || '';
 
   const params = new URLSearchParams();
   if (search) params.append('search', search);
   if (dept) params.append('department', dept);
   if (type) params.append('repair_type', type);
   if (status) params.append('status', status);
+  if (date_from) params.append('date_from', date_from);
+  if (date_to) params.append('date_to', date_to);
 
   window.open(`/api/expenses/export/csv?${params.toString()}`, '_blank');
 }
@@ -2746,12 +2831,16 @@ async function loadExpenses(filterParams = {}) {
     const dept = filterParams.department !== undefined ? filterParams.department : document.getElementById('exp-filter-dept')?.value || '';
     const repair_type = filterParams.repair_type !== undefined ? filterParams.repair_type : document.getElementById('exp-filter-type')?.value || '';
     const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('exp-filter-status')?.value || '';
+    const date_from = filterParams.date_from !== undefined ? filterParams.date_from : document.getElementById('exp-filter-date-from')?.value || '';
+    const date_to = filterParams.date_to !== undefined ? filterParams.date_to : document.getElementById('exp-filter-date-to')?.value || '';
 
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (dept) params.append('department', dept);
     if (repair_type) params.append('repair_type', repair_type);
     if (status) params.append('status', status);
+    if (date_from) params.append('date_from', date_from);
+    if (date_to) params.append('date_to', date_to);
 
     const res = await apiFetch(`/api/expenses?${params.toString()}`);
     if (!res.ok) return;

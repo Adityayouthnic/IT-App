@@ -544,8 +544,22 @@
             <option value="Beyond Repair">Beyond Repair</option>
           </select>
 
-          <button onclick="loadRepairs()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
-            Refresh
+          <!-- Repairs Date Range -->
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">From</span>
+            <input type="date" id="repair-filter-date-from" onchange="loadRepairs()" class="bg-transparent border-0 p-0 text-xs text-slate-700 focus:ring-0 cursor-pointer">
+          </div>
+
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">To</span>
+            <input type="date" id="repair-filter-date-to" onchange="loadRepairs()" class="bg-transparent border-0 p-0 text-xs text-slate-700 focus:ring-0 cursor-pointer">
+          </div>
+
+          <button onclick="resetRepairFilters()" class="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Reset</span>
           </button>
         </div>
 
@@ -866,35 +880,72 @@
         </div>
 
         <!-- Filter Bar -->
-        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
-          <div class="relative flex-1 min-w-[220px]">
-            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="exp-filter-search" oninput="debounceExpenseSearch()" placeholder="Search serial, user, vendor, parts added, ticket #..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500">
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
+          <!-- Top Row: Search & Dropdown Categorization -->
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[240px]">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="exp-filter-search" oninput="debounceExpenseSearch()" placeholder="Search serial, user, vendor, parts added, ticket #..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500">
+            </div>
+
+            <select id="exp-filter-dept" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+              <option value="">All Departments</option>
+            </select>
+
+            <select id="exp-filter-type" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+              <option value="">All Service Types</option>
+              <option value="Component Repair">Component Repair</option>
+              <option value="Part Replacement">Part Replacement</option>
+              <option value="Hardware Upgrade">Hardware Upgrade</option>
+              <option value="Preventive Maintenance">Preventive Maintenance</option>
+            </select>
+
+            <select id="exp-filter-status" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+              <option value="">All Ticket Statuses</option>
+              <option value="Completed">Completed</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Awaiting Parts">Awaiting Parts</option>
+              <option value="Beyond Repair">Beyond Repair</option>
+            </select>
           </div>
 
-          <select id="exp-filter-dept" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
-            <option value="">All Departments</option>
-          </select>
+          <!-- Bottom Row: Date Calendar Range & Quick Presets -->
+          <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex flex-wrap items-center gap-2.5">
+              <span class="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                <i data-lucide="calendar" class="w-4 h-4 text-brand-600"></i>
+                <span>Date Range:</span>
+              </span>
 
-          <select id="exp-filter-type" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
-            <option value="">All Service Types</option>
-            <option value="Component Repair">Component Repair</option>
-            <option value="Part Replacement">Part Replacement</option>
-            <option value="Upgrade">Upgrade</option>
-            <option value="Maintenance">Maintenance</option>
-          </select>
+              <!-- Preset Dropdown -->
+              <select id="exp-filter-date-preset" onchange="applyExpenseDatePreset(this.value)" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-1.5 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500 font-medium">
+                <option value="all">All Dates</option>
+                <option value="today">Today</option>
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="last_30_days">Last 30 Days</option>
+                <option value="this_year">This Year (2026)</option>
+                <option value="custom">Custom Calendar...</option>
+              </select>
 
-          <select id="exp-filter-status" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
-            <option value="">All Ticket Statuses</option>
-            <option value="Completed">Completed</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Awaiting Parts">Awaiting Parts</option>
-            <option value="Beyond Repair">Beyond Repair</option>
-          </select>
+              <!-- From Date Picker -->
+              <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">From</span>
+                <input type="date" id="exp-filter-date-from" onchange="onExpenseDateInputChange()" class="bg-transparent border-0 p-0 text-xs text-slate-700 focus:ring-0 cursor-pointer">
+              </div>
 
-          <button onclick="resetExpensesFilterUI()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
-            Reset Filters
-          </button>
+              <!-- To Date Picker -->
+              <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">To</span>
+                <input type="date" id="exp-filter-date-to" onchange="onExpenseDateInputChange()" class="bg-transparent border-0 p-0 text-xs text-slate-700 focus:ring-0 cursor-pointer">
+              </div>
+            </div>
+
+            <button onclick="resetExpensesFilterUI(); loadExpenses();" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              <span>Reset All Filters</span>
+            </button>
+          </div>
         </div>
 
         <!-- Department & Asset Type Breakdown Rows -->
