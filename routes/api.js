@@ -1071,6 +1071,301 @@ router.delete('/repairs/:id', requireRoles('admin'), (req, res) => {
 });
 
 // ==========================================
+// 3B. IT EXPENSES & UPKEEP LEDGER
+// ==========================================
+
+// GET /api/expenses - Aggregated expenses and upkeep ledger
+router.get('/expenses', (req, res) => {
+  try {
+    const { search, department, repair_type, status, date_from, date_to } = req.query;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    if (department && department.trim()) {
+      whereClause += ' AND LOWER(a.department) = LOWER(?)';
+      params.push(department.trim());
+    }
+
+    if (repair_type && repair_type.trim()) {
+      whereClause += ' AND r.repair_type = ?';
+      params.push(repair_type.trim());
+    }
+
+    if (status && status.trim()) {
+      whereClause += ' AND r.status = ?';
+      params.push(status.trim());
+    }
+
+    if (date_from && date_from.trim()) {
+      whereClause += ' AND r.repair_date >= ?';
+      params.push(date_from.trim());
+    }
+
+    if (date_to && date_to.trim()) {
+      whereClause += ' AND r.repair_date <= ?';
+      params.push(date_to.trim());
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      whereClause += ` AND (
+        LOWER(r.ticket_number) LIKE ? OR
+        LOWER(a.internal_serial_number) LIKE ? OR
+        LOWER(COALESCE(a.assigned_user, '')) LIKE ? OR
+        LOWER(COALESCE(a.department, '')) LIKE ? OR
+        LOWER(COALESCE(a.brand, '')) LIKE ? OR
+        LOWER(COALESCE(a.model_name, '')) LIKE ? OR
+        LOWER(r.issue_description) LIKE ? OR
+        LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
+        LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
+        LOWER(COALESCE(r.technician_name, '')) LIKE ?
+      )`;
+      params.push(term, term, term, term, term, term, term, term, term, term);
+    }
+
+    // 1. Overall Upkeep Financial Summary
+    const summary = db.prepare(`
+      SELECT
+        COUNT(*) as total_tickets,
+        COALESCE(SUM(r.repair_cost), 0) as total_spend,
+        COALESCE(SUM(CASE WHEN r.status = 'Completed' THEN r.repair_cost ELSE 0 END), 0) as closed_spend,
+        COALESCE(SUM(CASE WHEN r.status IN ('In Progress', 'Awaiting Parts') THEN r.repair_cost ELSE 0 END), 0) as open_liability,
+        COALESCE(AVG(r.repair_cost), 0) as average_ticket_cost
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+    `).get(...params);
+
+    // Top Expense Department
+    const topDeptRow = db.prepare(`
+      SELECT a.department, SUM(r.repair_cost) as total
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+      GROUP BY a.department
+      ORDER BY total DESC
+      LIMIT 1
+    `).get(...params);
+    summary.top_department = topDeptRow ? {
+      department: topDeptRow.department,
+      total: topDeptRow.total || 0,
+      formatted: `${topDeptRow.department} (₹${(topDeptRow.total || 0).toLocaleString('en-IN')})`
+    } : null;
+
+    // Highest Spend Asset
+    const topAssetRow = db.prepare(`
+      SELECT a.internal_serial_number, a.brand, a.asset_type, a.assigned_user, SUM(r.repair_cost) as total
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+      GROUP BY a.id
+      ORDER BY total DESC
+      LIMIT 1
+    `).get(...params);
+    summary.highest_spend_asset = topAssetRow ? {
+      serial: topAssetRow.internal_serial_number,
+      brand: topAssetRow.brand || '',
+      asset_type: topAssetRow.asset_type,
+      assigned_user: topAssetRow.assigned_user || 'Unassigned',
+      total: topAssetRow.total || 0,
+      formatted: `#${topAssetRow.internal_serial_number} ${topAssetRow.brand || ''} ${topAssetRow.asset_type} (${topAssetRow.assigned_user || 'Unassigned'}) — ₹${(topAssetRow.total || 0).toLocaleString('en-IN')}`
+    } : null;
+
+    // 2. Department Breakdown
+    const departmentBreakdown = db.prepare(`
+      SELECT
+        COALESCE(a.department, 'General') as department,
+        COUNT(r.id) as ticket_count,
+        COALESCE(SUM(r.repair_cost), 0) as total_cost,
+        COALESCE(SUM(r.repair_cost), 0) as total_spend
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+      GROUP BY a.department
+      ORDER BY total_cost DESC
+    `).all(...params);
+
+    // 3. Asset Type Breakdown
+    const assetTypeBreakdown = db.prepare(`
+      SELECT
+        a.asset_type,
+        COUNT(r.id) as ticket_count,
+        COALESCE(SUM(r.repair_cost), 0) as total_cost,
+        COALESCE(SUM(r.repair_cost), 0) as total_spend
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+      GROUP BY a.asset_type
+      ORDER BY total_cost DESC
+    `).all(...params);
+
+    // 4. Detailed Expense Ledger Rows
+    const ledger = db.prepare(`
+      SELECT
+        r.id,
+        r.ticket_number,
+        r.repair_date,
+        r.due_date,
+        r.completion_date,
+        r.repair_type,
+        r.issue_description,
+        r.parts_added,
+        r.repair_cost,
+        r.repair_vendor,
+        r.technician_name,
+        r.technician_contact,
+        r.status,
+        r.remarks,
+        r.asset_id,
+        a.internal_serial_number,
+        a.asset_type,
+        a.brand,
+        a.brand as asset_brand,
+        a.model_name,
+        a.model_name as asset_model,
+        a.assigned_user,
+        a.department,
+        a.location,
+        a.location as asset_location,
+        a.working_status as asset_status
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+      ORDER BY r.repair_date DESC, r.id DESC
+    `).all(...params);
+
+    res.json({
+      summary,
+      stats: summary,
+      departmentBreakdown,
+      department_breakdown: departmentBreakdown,
+      assetTypeBreakdown,
+      asset_type_breakdown: assetTypeBreakdown,
+      expenses: ledger
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/expenses/export/csv - Download Expense Ledger CSV Report
+router.get('/expenses/export/csv', (req, res) => {
+  try {
+    const { department, repair_type, status, date_from, date_to } = req.query;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    if (department && department.trim()) {
+      whereClause += ' AND LOWER(a.department) = LOWER(?)';
+      params.push(department.trim());
+    }
+    if (repair_type && repair_type.trim()) {
+      whereClause += ' AND r.repair_type = ?';
+      params.push(repair_type.trim());
+    }
+    if (status && status.trim()) {
+      whereClause += ' AND r.status = ?';
+      params.push(status.trim());
+    }
+    if (date_from && date_from.trim()) {
+      whereClause += ' AND r.repair_date >= ?';
+      params.push(date_from.trim());
+    }
+    if (date_to && date_to.trim()) {
+      whereClause += ' AND r.repair_date <= ?';
+      params.push(date_to.trim());
+    }
+
+    const rows = db.prepare(`
+      SELECT
+        r.ticket_number,
+        r.repair_date,
+        COALESCE(r.completion_date, r.due_date, '') as resolution_date,
+        a.internal_serial_number,
+        a.asset_type,
+        COALESCE(a.brand, '') as brand,
+        COALESCE(a.model_name, '') as model,
+        COALESCE(a.assigned_user, 'Unassigned') as assigned_user,
+        COALESCE(a.department, '') as department,
+        COALESCE(a.location, '') as location,
+        r.repair_type,
+        r.issue_description,
+        COALESCE(r.parts_added, '') as parts_added,
+        COALESCE(r.repair_vendor, '') as vendor,
+        COALESCE(r.technician_name, '') as technician,
+        r.repair_cost,
+        r.status,
+        COALESCE(r.remarks, '') as remarks
+      FROM repairs r
+      JOIN assets a ON r.asset_id = a.id
+      ${whereClause}
+      ORDER BY r.repair_date DESC, r.id DESC
+    `).all(...params);
+
+    const headers = [
+      'Ticket #',
+      'Service Date',
+      'Resolution / Due Date',
+      'Internal Serial #',
+      'Asset Type',
+      'Brand',
+      'Model',
+      'In Use By (User)',
+      'Department',
+      'Location',
+      'Repair / Expense Type',
+      'Issue Description',
+      'Parts Replaced / Added',
+      'Vendor / Service Center',
+      'Technician',
+      'Cost (INR)',
+      'Status',
+      'Remarks'
+    ];
+
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    let csvContent = headers.join(',') + '\n';
+    rows.forEach(r => {
+      const line = [
+        escapeCsv(r.ticket_number),
+        escapeCsv(r.repair_date),
+        escapeCsv(r.resolution_date),
+        escapeCsv(r.internal_serial_number),
+        escapeCsv(r.asset_type),
+        escapeCsv(r.brand),
+        escapeCsv(r.model),
+        escapeCsv(r.assigned_user),
+        escapeCsv(r.department),
+        escapeCsv(r.location),
+        escapeCsv(r.repair_type),
+        escapeCsv(r.issue_description),
+        escapeCsv(r.parts_added),
+        escapeCsv(r.vendor),
+        escapeCsv(r.technician),
+        r.repair_cost || 0,
+        escapeCsv(r.status),
+        escapeCsv(r.remarks)
+      ].join(',');
+      csvContent += line + '\n';
+    });
+
+    const filename = `IT_Expenses_Upkeep_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // 4. QUICK HEAL KEYS ENDPOINTS
 // ==========================================
 
@@ -1668,6 +1963,157 @@ router.delete('/accessories/:id', requireRoles('admin'), (req, res) => {
   }
 });
 
+// GET /api/accessories/template/csv - Download Accessories CSV Template
+router.get('/accessories/template/csv', (req, res) => {
+  const headers = [
+    'Accessory Code',
+    'Category',
+    'Item Name',
+    'Brand',
+    'Model',
+    'Serial Number',
+    'Quantity',
+    'Location',
+    'Status',
+    'Remarks'
+  ];
+
+  const sampleRows = [
+    ['ACC-010', 'Mouse', 'Logitech B100 USB Optical Mouse', 'Logitech', 'B100', '', '10', 'IT Store Room', 'In Stock', 'Spare optical mice for workstations'],
+    ['ACC-011', 'Keyboard', 'Dell KB216 Wired Standard Keyboard', 'Dell', 'KB216', '', '5', 'IT Store Room', 'In Stock', 'Spare English layout keyboards'],
+    ['ACC-012', 'Scanner', 'Zebra DS2208 Handheld Barcode Scanner', 'Zebra', 'DS2208', '', '2', 'Dispatch Bay', 'In Stock', 'Handheld 2D scanners ready for dispatch stations'],
+    ['ACC-013', 'Print Head', 'TSC Thermal Printhead 203 DPI', 'TSC', 'TE244', '', '3', 'IT Store Room', 'In Stock', 'Replacement thermal heads for barcode printers']
+  ];
+
+  const escapeCsv = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+  let csv = headers.join(',') + '\n';
+  sampleRows.forEach(row => {
+    csv += row.map(escapeCsv).join(',') + '\n';
+  });
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="accessories_import_template.csv"');
+  res.status(200).send(csv);
+});
+
+// POST /api/accessories/bulk-import - Bulk import accessories from CSV or Excel
+router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please upload a CSV or Excel (.xlsx) file.' });
+    }
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return res.status(400).json({ error: 'Spreadsheet has no sheets.' });
+    }
+
+    const rawRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+    if (!rawRows || rawRows.length === 0) {
+      return res.status(400).json({ error: 'Spreadsheet contains no data rows.' });
+    }
+
+    const validCategories = ['Mouse', 'Keyboard', 'Scanner', 'Print Head', 'Cable/Adapter', 'UPS', 'Other'];
+    let importedCount = 0;
+    let skippedCount = 0;
+    const errors = [];
+
+    // Get initial max code counter
+    const existingCodes = db.prepare('SELECT accessory_code FROM accessories').all().map(r => r.accessory_code);
+    let nextNum = 1;
+    existingCodes.forEach(c => {
+      const match = c.match(/ACC-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num >= nextNum) nextNum = num + 1;
+      }
+    });
+
+    const insertStmt = db.prepare(`
+      INSERT INTO accessories (
+        accessory_code, name, category, brand, model, serial_number,
+        quantity, assigned_user, location, status, remarks
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const updateStockStmt = db.prepare(`
+      UPDATE accessories
+      SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+
+    const transaction = db.transaction(() => {
+      rawRows.forEach((row, idx) => {
+        const rowNum = idx + 2;
+        // Normalize keys
+        const cleanRow = {};
+        for (const k of Object.keys(row)) {
+          cleanRow[k.trim().toLowerCase()] = String(row[k]).trim();
+        }
+
+        const name = cleanRow['name'] || cleanRow['item name'] || cleanRow['accessory name'] || '';
+        if (!name) {
+          skippedCount++;
+          errors.push(`Row ${rowNum}: Name is required.`);
+          return;
+        }
+
+        let category = cleanRow['category'] || 'Other';
+        const matchedCat = validCategories.find(c => c.toLowerCase() === category.toLowerCase());
+        category = matchedCat || 'Other';
+
+        const brand = cleanRow['brand'] || '';
+        const model = cleanRow['model'] || '';
+        const serial = cleanRow['serial number'] || cleanRow['serial_number'] || cleanRow['serial'] || '';
+        const qty = Math.max(1, parseInt(cleanRow['quantity'] || cleanRow['qty'], 10) || 1);
+        const location = cleanRow['location'] || 'IT Store Room';
+        let status = cleanRow['status'] || 'In Stock';
+        if (!['In Stock', 'Assigned', 'Damaged'].includes(status)) status = 'In Stock';
+        const user = cleanRow['assigned to'] || cleanRow['assigned_user'] || cleanRow['user'] || null;
+        const remarks = cleanRow['remarks'] || cleanRow['notes'] || '';
+
+        let code = cleanRow['accessory code'] || cleanRow['accessory_code'] || cleanRow['code'] || '';
+        if (!code) {
+          code = `ACC-${String(nextNum).padStart(3, '0')}`;
+          nextNum++;
+        }
+
+        // Check if code already exists
+        const existing = db.prepare('SELECT id, status FROM accessories WHERE accessory_code = ?').get(code);
+        if (existing) {
+          if (existing.status === 'In Stock' && status === 'In Stock') {
+            // Merge quantity into existing in-stock batch
+            updateStockStmt.run(qty, existing.id);
+            importedCount++;
+            return;
+          } else {
+            // Generate a fresh unique code
+            code = `ACC-${String(nextNum).padStart(3, '0')}`;
+            nextNum++;
+          }
+        }
+
+        insertStmt.run(code, name, category, brand, model, serial, qty, user, location, status, remarks);
+        importedCount++;
+      });
+    });
+
+    transaction();
+
+    logAudit(req.user.id, req.user.username, 'BULK_IMPORT_ACCESSORIES', 'accessory', 'BULK', `Bulk imported ${importedCount} accessories (${skippedCount} skipped)`);
+
+    res.json({
+      message: `Bulk import completed: ${importedCount} accessories imported, ${skippedCount} skipped.`,
+      imported_count: importedCount,
+      skipped_count: skippedCount,
+      errors: errors.slice(0, 10)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==========================================
 // 6. MASTER SEARCH ENDPOINT
 // ==========================================
@@ -1946,6 +2392,31 @@ router.delete('/users/:id', requireRoles('admin'), (req, res) => {
     logAudit(req.user.id, req.user.username, 'DELETE_USER', 'user', targetUserId, `Deleted user ${existing.username}`);
 
     res.json({ message: 'User deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/users/:id/reset-password - Quick password reset by Admin
+router.post('/users/:id/reset-password', requireRoles('admin'), (req, res) => {
+  try {
+    const new_password = req.body.new_password || req.body.password;
+    if (!new_password || new_password.trim().length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    const existing = db.prepare('SELECT id, username FROM users WHERE id = ?').get(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync(new_password.trim(), salt);
+
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, req.params.id);
+    logAudit(req.user.id, req.user.username, 'RESET_PASSWORD', 'user', req.params.id, `Reset password for user @${existing.username}`);
+
+    res.json({ message: `Password for @${existing.username} successfully updated.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

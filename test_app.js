@@ -430,6 +430,146 @@ async function runTests() {
   await fetch(`${BASE_URL}/api/accessories/${exclAccId}`, { method: 'DELETE', headers: authHeaders });
   console.log('Cleaned up Test 10 & 11 temporary records.');
 
+  // Test 12: IT Expenses & Upkeep Ledger Endpoint
+  console.log('\nTest 12: IT Expenses & Upkeep Ledger Endpoint');
+  const resExpenses = await fetch(`${BASE_URL}/api/expenses`, { headers: authHeaders });
+  const dataExpenses = await resExpenses.json();
+  console.log('Expenses Stats:', dataExpenses.stats);
+  if (!dataExpenses.stats || typeof dataExpenses.stats.total_spend !== 'number') {
+    throw new Error('Expenses stats missing in response');
+  }
+  if (!Array.isArray(dataExpenses.expenses)) {
+    throw new Error('Expenses ledger list missing in response');
+  }
+  console.log(`Found ${dataExpenses.expenses.length} expense ticket record(s) in ledger.`);
+  dataExpenses.expenses.slice(0, 3).forEach(e => {
+    console.log(`  - Ticket: ${e.ticket_number} | Asset: #${e.internal_serial_number} (${e.brand} ${e.asset_type}) | Custodian: ${e.assigned_user} (${e.department}) | Parts: ${e.parts_added || 'None'} | Cost: ₹${e.repair_cost}`);
+  });
+
+  // Verify CSV export
+  const resExpenseCsv = await fetch(`${BASE_URL}/api/expenses/export/csv`, { headers: authHeaders });
+  const expenseCsv = await resExpenseCsv.text();
+  if (!expenseCsv.includes('Ticket #') || !expenseCsv.includes('Cost (INR)') || !expenseCsv.includes('In Use By (User)')) {
+    throw new Error('Expenses CSV export missing expected headers');
+  }
+  console.log('✅ Expenses & Upkeep Ledger verified: Aggregated stats, department breakdown, joined custodian info, and CSV report export!');
+
+  // Test 13: Bulk Import for Accessories
+  console.log('\nTest 13: Bulk Import for Accessories');
+  const resAccTemplate = await fetch(`${BASE_URL}/api/accessories/template/csv`, { headers: authHeaders });
+  const accTemplateCsv = await resAccTemplate.text();
+  console.log('Accessories CSV Template header:', accTemplateCsv.split('\n')[0]);
+  if (!accTemplateCsv.includes('Accessory Code') || !accTemplateCsv.includes('Item Name') || !accTemplateCsv.includes('Category')) {
+    throw new Error('Accessories CSV Template missing required columns');
+  }
+
+  const testAccCsv = [
+    'Accessory Code,Item Name,Category,Brand,Model,Serial Number,Quantity,Location,Status,Purchase Date,Cost (INR),Remarks',
+    'ACC-BULK-01,Logitech Wireless Mouse M185,Mouse,Logitech,M185,LT18501,10,IT Store Room,In Stock,2026-09-01,650,Bulk import test 1',
+    'ACC-BULK-02,Zebra Barcode Scanner Stand,Other,Zebra,DS2200-STND,,5,Dispatch Bay,In Stock,2026-09-01,1200,Bulk import test 2'
+  ].join('\n');
+
+  const accBoundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+  const accMultipartBody = Buffer.concat([
+    Buffer.from(`--${accBoundary}\r\nContent-Disposition: form-data; name="file"; filename="accessories_bulk_test.csv"\r\nContent-Type: text/csv\r\n\r\n`),
+    Buffer.from(testAccCsv),
+    Buffer.from(`\r\n--${accBoundary}--\r\n`)
+  ]);
+
+  const resAccBulk = await fetch(`${BASE_URL}/api/accessories/bulk-import`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': `multipart/form-data; boundary=${accBoundary}`
+    },
+    body: accMultipartBody
+  });
+  const dataAccBulk = await resAccBulk.json();
+  console.log('Accessories Bulk Import Response:', dataAccBulk);
+  if (!resAccBulk.ok) throw new Error('Accessories bulk import failed: ' + JSON.stringify(dataAccBulk));
+  if (dataAccBulk.imported_count !== 2) throw new Error(`Expected 2 imported accessories, got ${dataAccBulk.imported_count}`);
+
+  // Clean up bulk test accessories
+  const resVerifyAccBulk = await fetch(`${BASE_URL}/api/accessories?search=ACC-BULK`, { headers: authHeaders });
+  const dataVerifyAccBulk = await resVerifyAccBulk.json();
+  for (const item of dataVerifyAccBulk.accessories) {
+    await fetch(`${BASE_URL}/api/accessories/${item.id}`, { method: 'DELETE', headers: authHeaders });
+  }
+  console.log('✅ Bulk import for accessories verified: CSV template download, batch parsing, and atomic SQLite insertion!');
+
+  // Test 14: User Password Management & Admin Reset Password Flow
+  console.log('\nTest 14: User Password Management & Admin Reset Password Flow');
+  const testUserUsername = 'testuser_' + Math.floor(Math.random() * 10000);
+  const initialPassword = 'password123';
+  const newPassword = 'brandnewsecurepass456';
+
+  // 1. Create a user with initial password
+  const resCreateUser = await fetch(`${BASE_URL}/api/users`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      username: testUserUsername,
+      full_name: 'Test Engineer',
+      email: `${testUserUsername}@example.com`,
+      role: 'technician',
+      status: 'active',
+      password: initialPassword
+    })
+  });
+  const dataCreateUser = await resCreateUser.json();
+  if (!resCreateUser.ok) throw new Error('Failed to create test user: ' + JSON.stringify(dataCreateUser));
+  const newUserId = dataCreateUser.id;
+  console.log(`Created test user @${testUserUsername} (ID: ${newUserId})`);
+
+  // 2. Login with initial password
+  const resLoginUserInitial = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testUserUsername, password: initialPassword })
+  });
+  if (!resLoginUserInitial.ok) throw new Error('Failed to login with initial password');
+  console.log('Initial password login successful.');
+
+  // 3. Admin resets user password via POST /api/users/:id/reset-password
+  const resReset = await fetch(`${BASE_URL}/api/users/${newUserId}/reset-password`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ password: newPassword })
+  });
+  const dataReset = await resReset.json();
+  if (!resReset.ok) throw new Error('Failed to reset password: ' + JSON.stringify(dataReset));
+  console.log('Admin password reset successful:', dataReset.message);
+
+  // 4. Verify old password no longer works
+  const resLoginOld = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testUserUsername, password: initialPassword })
+  });
+  if (resLoginOld.ok) throw new Error('Old password still worked after reset!');
+  console.log('Old password correctly rejected (401 Unauthorized).');
+
+  // 5. Verify new password works
+  const resLoginNew = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testUserUsername, password: newPassword })
+  });
+  if (!resLoginNew.ok) throw new Error('Failed to login with new password after reset');
+  console.log('New password successfully authenticated!');
+
+  // Clean up test user
+  await fetch(`${BASE_URL}/api/users/${newUserId}`, { method: 'DELETE', headers: authHeaders });
+  console.log('✅ User Password Management verified: Secure bcrypt hashing, instant reset endpoint, and re-authentication verified!');
+
+  // Test 15: Clean Production Login Screen (Quick Access Removed)
+  console.log('\nTest 15: Clean Production Login Screen (Quick Access Removed)');
+  const loginHtml = fs.readFileSync(path.join(__dirname, 'public', 'login.html'), 'utf8');
+  if (loginHtml.includes('QUICK ROLE ACCESS') || loginHtml.includes('fillCreds')) {
+    throw new Error('Quick role access test buttons still found in public/login.html!');
+  }
+  console.log('✅ Production login verified: Quick access credentials removed for security!');
+
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');

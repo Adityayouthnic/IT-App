@@ -235,6 +235,10 @@ function navigate(viewName, params = {}, updateHash = true) {
       resetAccessoryFilterUI(params);
       loadAccessories(params);
       break;
+    case 'expenses':
+      resetExpensesFilterUI(params);
+      loadExpenses(params);
+      break;
     case 'search':
       resetSearchUI(params);
       if (params.q) {
@@ -404,7 +408,12 @@ async function loadDashboard() {
     document.getElementById('sidebar-key-count').textContent = data.keys.available || 0;
     document.getElementById('kpi-keys-sub').textContent = `${data.keys.available || 0} available / ${data.keys.assigned || 0} assigned`;
 
-    document.getElementById('kpi-repair-cost').textContent = `₹${(data.repairs.total_cost || 0).toLocaleString('en-IN')}`;
+    const totalRepairCost = data.repairs.total_cost || 0;
+    document.getElementById('kpi-repair-cost').textContent = `₹${totalRepairCost.toLocaleString('en-IN')}`;
+    const expBadge = document.getElementById('sidebar-expense-total');
+    if (expBadge) {
+      expBadge.textContent = totalRepairCost >= 1000 ? `₹${(totalRepairCost / 1000).toFixed(1)}k` : `₹${totalRepairCost}`;
+    }
 
     // Security Alert Banner for Unprotected Laptops / Desktops
     const secBanner = document.getElementById('sec-alert-banner');
@@ -2520,6 +2529,442 @@ async function executeBulkImport() {
 }
 
 // ==========================================
+// 8C. BULK ACCESSORIES INVENTORY IMPORT
+// ==========================================
+
+let selectedBulkAccFile = null;
+
+function openBulkImportAccessoriesModal() {
+  selectedBulkAccFile = null;
+  const fileInput = document.getElementById('bulk-import-acc-file');
+  if (fileInput) fileInput.value = '';
+
+  const label = document.getElementById('bulk-acc-file-label');
+  if (label) label.textContent = 'Click to browse file or drag and drop here';
+
+  const previewContainer = document.getElementById('bulk-acc-preview-container');
+  if (previewContainer) previewContainer.classList.add('hidden');
+
+  const resultsLog = document.getElementById('bulk-acc-results-log');
+  if (resultsLog) {
+    resultsLog.innerHTML = '';
+    resultsLog.classList.add('hidden');
+  }
+
+  const btn = document.getElementById('btn-execute-bulk-acc-import');
+  if (btn) btn.disabled = true;
+
+  openModal('modal-bulk-import-accessories');
+}
+
+function downloadAccessoryTemplate() {
+  window.open('/api/accessories/template/csv', '_blank');
+}
+
+function handleBulkAccessoryFileSelect(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  selectedBulkAccFile = file;
+
+  const label = document.getElementById('bulk-acc-file-label');
+  if (label) {
+    label.innerHTML = `<span class="text-emerald-600 font-bold">${escapeHtml(file.name)}</span> (${(file.size / 1024).toFixed(1)} KB)`;
+  }
+
+  const btn = document.getElementById('btn-execute-bulk-acc-import');
+  if (btn) btn.disabled = false;
+
+  // If CSV, preview client side
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length > 1) {
+        const previewRows = lines.slice(1, 11).map(l => {
+          return l.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        });
+
+        const countEl = document.getElementById('bulk-acc-preview-count');
+        if (countEl) countEl.textContent = lines.length - 1;
+
+        const tbody = document.getElementById('bulk-acc-preview-tbody');
+        if (tbody) {
+          tbody.innerHTML = previewRows.map(cols => `
+            <tr class="hover:bg-slate-50">
+              <td class="py-1.5 px-3 font-mono font-bold text-emerald-600">${escapeHtml(cols[0] || 'AUTO')}</td>
+              <td class="py-1.5 px-3 font-semibold text-slate-800">${escapeHtml(cols[1] || '')}</td>
+              <td class="py-1.5 px-3"><span class="px-1.5 py-0.5 rounded text-[9px] bg-slate-100 font-medium">${escapeHtml(cols[2] || '')}</span></td>
+              <td class="py-1.5 px-3 text-slate-600">${escapeHtml(cols[3] || '')} ${escapeHtml(cols[4] || '')}</td>
+              <td class="py-1.5 px-3 font-bold text-slate-900">${escapeHtml(cols[5] || '1')}</td>
+              <td class="py-1.5 px-3 text-slate-500">${escapeHtml(cols[6] || 'Store Room')}</td>
+              <td class="py-1.5 px-3 text-emerald-700 font-medium">${escapeHtml(cols[7] || 'In Stock')}</td>
+            </tr>
+          `).join('');
+        }
+
+        const previewContainer = document.getElementById('bulk-acc-preview-container');
+        if (previewContainer) previewContainer.classList.remove('hidden');
+      }
+    };
+    reader.readAsText(file);
+  } else {
+    // Excel file
+    const countEl = document.getElementById('bulk-acc-preview-count');
+    if (countEl) countEl.textContent = 'Excel Spreadsheet';
+    const previewContainer = document.getElementById('bulk-acc-preview-container');
+    if (previewContainer) previewContainer.classList.remove('hidden');
+    const tbody = document.getElementById('bulk-acc-preview-tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-500 font-sans">Excel workbook file attached. Ready for atomic server batch insertion.</td></tr>`;
+    }
+  }
+}
+
+async function executeBulkAccessoryImport() {
+  if (!selectedBulkAccFile) {
+    showToast('Please select a CSV or Excel file first', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-execute-bulk-acc-import');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="inline-flex items-center gap-1.5"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Importing...</span></span>`;
+  lucide.createIcons();
+
+  const formData = new FormData();
+  formData.append('file', selectedBulkAccFile);
+
+  const token = localStorage.getItem('it_app_token');
+
+  try {
+    const res = await fetch('/api/accessories/bulk-import', {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+
+    const data = await res.json();
+    const resultsLog = document.getElementById('bulk-acc-results-log');
+
+    if (res.ok) {
+      showToast(data.message || `Successfully imported ${data.imported_count} accessories!`, 'success');
+
+      if (resultsLog) {
+        resultsLog.classList.remove('hidden');
+        resultsLog.innerHTML = `
+          <div class="text-emerald-700 font-bold flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+            <span>Import Completed Successfully</span>
+          </div>
+          <div class="text-slate-700 mt-1 font-medium">
+            ✅ Added <strong>${data.imported_count}</strong> new items, updated <strong>${data.updated_count || 0}</strong> existing stock records.
+          </div>
+          ${data.skipped_count > 0 ? `
+            <div class="text-amber-700 mt-1">
+              ⚠️ Skipped ${data.skipped_count} row(s) due to duplicates or validation errors.
+            </div>
+          ` : ''}
+        `;
+        lucide.createIcons();
+      }
+
+      loadAccessories();
+
+      setTimeout(() => {
+        closeModal('modal-bulk-import-accessories');
+      }, 1500);
+    } else {
+      showToast(data.error || 'Bulk accessory import failed', 'error');
+      if (resultsLog) {
+        resultsLog.classList.remove('hidden');
+        resultsLog.innerHTML = `
+          <div class="text-rose-700 font-bold flex items-center gap-1.5">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600"></i>
+            <span>Import Errors: ${escapeHtml(data.error || 'Validation failure')}</span>
+          </div>
+          ${data.details && Array.isArray(data.details) ? `
+            <ul class="list-disc pl-4 mt-1 text-[11px] text-rose-600 space-y-0.5">
+              ${data.details.slice(0, 10).map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            </ul>
+          ` : ''}
+        `;
+        lucide.createIcons();
+      }
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Import Accessories';
+  }
+}
+
+// ==========================================
+// 8D. IT EXPENSES & UPKEEP LEDGER
+// ==========================================
+
+let expenseSearchTimeout = null;
+
+function debounceExpenseSearch() {
+  clearTimeout(expenseSearchTimeout);
+  expenseSearchTimeout = setTimeout(() => loadExpenses(), 250);
+}
+
+function resetExpensesFilterUI(params = {}) {
+  const searchEl = document.getElementById('exp-filter-search');
+  const deptEl = document.getElementById('exp-filter-dept');
+  const typeEl = document.getElementById('exp-filter-type');
+  const statusEl = document.getElementById('exp-filter-status');
+
+  if (searchEl) searchEl.value = params.search || params.q || '';
+  if (deptEl) deptEl.value = params.department || '';
+  if (typeEl) typeEl.value = params.repair_type || '';
+  if (statusEl) statusEl.value = params.status || '';
+}
+
+function downloadExpenseReport() {
+  const search = document.getElementById('exp-filter-search')?.value || '';
+  const dept = document.getElementById('exp-filter-dept')?.value || '';
+  const type = document.getElementById('exp-filter-type')?.value || '';
+  const status = document.getElementById('exp-filter-status')?.value || '';
+
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (dept) params.append('department', dept);
+  if (type) params.append('repair_type', type);
+  if (status) params.append('status', status);
+
+  window.open(`/api/expenses/export/csv?${params.toString()}`, '_blank');
+}
+
+async function loadExpenses(filterParams = {}) {
+  try {
+    const search = filterParams.search !== undefined ? filterParams.search : document.getElementById('exp-filter-search')?.value || '';
+    const dept = filterParams.department !== undefined ? filterParams.department : document.getElementById('exp-filter-dept')?.value || '';
+    const repair_type = filterParams.repair_type !== undefined ? filterParams.repair_type : document.getElementById('exp-filter-type')?.value || '';
+    const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('exp-filter-status')?.value || '';
+
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (dept) params.append('department', dept);
+    if (repair_type) params.append('repair_type', repair_type);
+    if (status) params.append('status', status);
+
+    const res = await apiFetch(`/api/expenses?${params.toString()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // 1. Update KPI Cards
+    const totalSpend = data.stats.total_spend || 0;
+    const closedSpend = data.stats.closed_spend || 0;
+    const openLiability = data.stats.open_liability || 0;
+    const avgCost = Math.round(data.stats.average_ticket_cost || 0);
+
+    const totalSpendEl = document.getElementById('exp-total-spend');
+    const openLiabEl = document.getElementById('exp-open-liability');
+    const avgCostEl = document.getElementById('exp-avg-cost');
+    const topDeptEl = document.getElementById('exp-top-dept');
+    const topAssetEl = document.getElementById('exp-top-asset');
+
+    if (totalSpendEl) totalSpendEl.textContent = `₹${totalSpend.toLocaleString('en-IN')}`;
+    if (openLiabEl) openLiabEl.textContent = `₹${openLiability.toLocaleString('en-IN')}`;
+    if (avgCostEl) avgCostEl.textContent = `₹${avgCost.toLocaleString('en-IN')}`;
+
+    if (topDeptEl) {
+      if (data.stats.top_department) {
+        topDeptEl.textContent = `${data.stats.top_department.department} (₹${data.stats.top_department.total.toLocaleString('en-IN')})`;
+      } else {
+        topDeptEl.textContent = '—';
+      }
+    }
+
+    if (topAssetEl) {
+      if (data.stats.highest_spend_asset) {
+        topAssetEl.textContent = `Highest: #${data.stats.highest_spend_asset.serial} (${data.stats.highest_spend_asset.brand || 'Asset'}) - ₹${data.stats.highest_spend_asset.total.toLocaleString('en-IN')}`;
+      } else {
+        topAssetEl.textContent = 'Highest asset: —';
+      }
+    }
+
+    // 2. Populate Department Dropdown Filter if needed
+    const deptSelect = document.getElementById('exp-filter-dept');
+    if (deptSelect && deptSelect.options.length <= 1) {
+      const depts = new Set();
+      data.department_breakdown.forEach(d => {
+        if (d.department) depts.add(d.department);
+      });
+      depts.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        deptSelect.appendChild(opt);
+      });
+      if (dept) deptSelect.value = dept;
+    }
+
+    // 3. Render Department Spend Breakdown Progress Bars
+    const deptBreakdownEl = document.getElementById('exp-dept-breakdown');
+    if (deptBreakdownEl) {
+      deptBreakdownEl.innerHTML = '';
+      if (!data.department_breakdown || data.department_breakdown.length === 0) {
+        deptBreakdownEl.innerHTML = `<div class="text-xs text-slate-400 py-4 text-center">No departmental spend recorded yet.</div>`;
+      } else {
+        const maxSpend = data.department_breakdown[0]?.total_spend || 1;
+        data.department_breakdown.forEach(item => {
+          const pct = Math.round((item.total_spend / maxSpend) * 100);
+          const row = document.createElement('div');
+          row.className = 'cursor-pointer hover:bg-slate-50 p-2 rounded-xl transition-colors';
+          row.onclick = () => {
+            const filterDept = document.getElementById('exp-filter-dept');
+            if (filterDept) filterDept.value = item.department;
+            loadExpenses({ department: item.department });
+          };
+          row.innerHTML = `
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="building" class="w-3.5 h-3.5 text-slate-400"></i>
+                <span>${escapeHtml(item.department)}</span>
+              </span>
+              <span class="text-emerald-700 font-bold font-mono">₹${item.total_spend.toLocaleString('en-IN')} <span class="text-[10px] text-slate-400 font-normal">(${item.ticket_count} tickets)</span></span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" style="width: ${pct}%"></div>
+            </div>
+          `;
+          deptBreakdownEl.appendChild(row);
+        });
+      }
+    }
+
+    // 4. Render Equipment Category Spend Breakdown
+    const typeBreakdownEl = document.getElementById('exp-type-breakdown');
+    if (typeBreakdownEl) {
+      typeBreakdownEl.innerHTML = '';
+      if (!data.asset_type_breakdown || data.asset_type_breakdown.length === 0) {
+        typeBreakdownEl.innerHTML = `<div class="text-xs text-slate-400 py-4 text-center">No equipment category spend recorded yet.</div>`;
+      } else {
+        const maxTypeSpend = data.asset_type_breakdown[0]?.total_spend || 1;
+        data.asset_type_breakdown.forEach(item => {
+          const pct = Math.round((item.total_spend / maxTypeSpend) * 100);
+          const row = document.createElement('div');
+          row.className = 'p-2 rounded-xl bg-slate-50 border border-slate-100 transition-colors';
+          row.innerHTML = `
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="cpu" class="w-3.5 h-3.5 text-indigo-500"></i>
+                <span>${escapeHtml(item.asset_type)}</span>
+              </span>
+              <span class="text-indigo-700 font-bold font-mono">₹${item.total_spend.toLocaleString('en-IN')} <span class="text-[10px] text-slate-400 font-normal">(${item.ticket_count} repairs)</span></span>
+            </div>
+            <div class="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-indigo-500 to-sky-500 rounded-full" style="width: ${pct}%"></div>
+            </div>
+          `;
+          typeBreakdownEl.appendChild(row);
+        });
+      }
+    }
+
+    // 5. Render Ledger Table Rows
+    const tbody = document.getElementById('expenses-table-body');
+    const countBadge = document.getElementById('exp-ledger-count');
+    if (countBadge) {
+      countBadge.textContent = `${data.expenses.length} records (₹${totalSpend.toLocaleString('en-IN')})`;
+    }
+
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (data.expenses.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="py-12 text-center text-slate-400">No expense records found matching current criteria.</td></tr>`;
+      lucide.createIcons();
+      return;
+    }
+
+    data.expenses.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition-colors';
+
+      let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">In Progress</span>`;
+      if (item.status === 'Completed') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>`;
+      } else if (item.status === 'Awaiting Parts') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">Awaiting Parts</span>`;
+      } else if (item.status === 'Beyond Repair') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Beyond Repair</span>`;
+      }
+
+      tr.innerHTML = `
+        <td class="py-3 px-4">
+          <div class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(item.ticket_number)}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+            <i data-lucide="calendar" class="w-3 h-3 text-slate-400"></i>
+            <span>${escapeHtml(item.repair_date || '—')}</span>
+          </div>
+        </td>
+        <td class="py-3 px-4">
+          <div class="font-bold text-slate-900 flex items-center gap-1.5">
+            <span>${escapeHtml(item.brand || '')} ${escapeHtml(item.model_name || '')}</span>
+            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">${escapeHtml(item.asset_type)}</span>
+          </div>
+          <div class="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1">
+            <span class="text-brand-600 font-bold">#${escapeHtml(item.internal_serial_number)}</span>
+            ${item.serial_number ? `<span class="text-slate-400">(${escapeHtml(item.serial_number)})</span>` : ''}
+          </div>
+        </td>
+        <td class="py-3 px-4">
+          <div class="font-semibold text-slate-900">${escapeHtml(item.assigned_user || 'Unassigned')}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <span class="px-1.5 py-0.2 rounded font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${escapeHtml(item.department || 'General')}</span>
+            <span class="text-slate-400">• ${escapeHtml(item.location || 'Head Office')}</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 max-w-xs">
+          <div class="flex items-center gap-1.5 mb-0.5">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(item.repair_type)}</span>
+          </div>
+          <div class="text-xs text-slate-700 truncate" title="${escapeHtml(item.issue_description)}">${escapeHtml(item.issue_description)}</div>
+          ${item.parts_added ? `
+            <div class="text-[11px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+              <i data-lucide="check" class="w-3 h-3 text-emerald-600 flex-shrink-0"></i>
+              <span class="truncate" title="${escapeHtml(item.parts_added)}">Replaced: ${escapeHtml(item.parts_added)}</span>
+            </div>
+          ` : ''}
+        </td>
+        <td class="py-3 px-4">
+          <div class="font-semibold text-slate-800">${escapeHtml(item.repair_vendor || 'In-House Support')}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(item.technician_name || 'Standard Tech')} ${item.technician_contact ? `<span class="text-[10px] text-slate-400">(${escapeHtml(item.technician_contact)})</span>` : ''}</div>
+        </td>
+        <td class="py-3 px-4 text-right">
+          <div class="text-sm font-black text-slate-900 font-mono">₹${(item.repair_cost || 0).toLocaleString('en-IN')}</div>
+        </td>
+        <td class="py-3 px-4">
+          ${statusBadge}
+        </td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button onclick="viewAssetDetail(${item.asset_id})" title="View Asset Dossier" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+            <button onclick="openEditRepairModal(${item.id})" title="View / Edit Ticket" class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+              <i data-lucide="wrench" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    lucide.createIcons();
+  } catch (err) {
+    console.error('loadExpenses error:', err);
+  }
+}
+
+// ==========================================
 // 9. MASTER INTELLIGENCE SEARCH
 // ==========================================
 
@@ -2745,11 +3190,14 @@ async function loadUsers() {
         <td class="py-3 px-4 text-slate-500">${new Date(u.created_at).toLocaleDateString()}</td>
         <td class="py-3 px-4 text-right">
           <div class="flex items-center justify-end gap-1">
-            <button onclick="openEditUserModal(${u.id})" class="p-1.5 text-slate-400 hover:text-brand-600">
+            <button onclick="openResetPasswordModal(${u.id}, '${escapeHtml(u.username)}')" title="Reset Password" class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+              <i data-lucide="key" class="w-4 h-4"></i>
+            </button>
+            <button onclick="openEditUserModal(${u.id})" title="Edit User" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
               <i data-lucide="pencil" class="w-4 h-4"></i>
             </button>
             ${!isSelf ? `
-              <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')" class="p-1.5 text-slate-400 hover:text-rose-600">
+              <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')" title="Delete User" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             ` : ''}
@@ -2770,9 +3218,14 @@ function openUserModal() {
   document.getElementById('user-form-id').value = '';
   document.getElementById('user-form-title').textContent = 'Add System User';
   document.getElementById('user-username').readOnly = false;
-  document.getElementById('user-password').required = true;
+  const passInput = document.getElementById('user-password');
+  passInput.required = true;
+  passInput.type = 'password';
+  const eye = document.getElementById('user-password-eye');
+  if (eye) eye.setAttribute('data-lucide', 'eye');
   document.getElementById('user-password-label').textContent = 'Password *';
   openModal('modal-user-form');
+  lucide.createIcons();
 }
 
 async function openEditUserModal(userId) {
@@ -2792,10 +3245,16 @@ async function openEditUserModal(userId) {
     document.getElementById('user-role').value = user.role;
     document.getElementById('user-status').value = user.status;
 
-    document.getElementById('user-password').required = false;
+    const passInput = document.getElementById('user-password');
+    passInput.required = false;
+    passInput.type = 'password';
+    passInput.value = '';
+    const eye = document.getElementById('user-password-eye');
+    if (eye) eye.setAttribute('data-lucide', 'eye');
     document.getElementById('user-password-label').textContent = 'New Password (Leave blank to keep current)';
 
     openModal('modal-user-form');
+    lucide.createIcons();
   } catch (err) {
     console.error(err);
   }
@@ -2837,6 +3296,75 @@ async function handleUserSubmit(e) {
     }
   } catch (err) {
     showToast(err.message, 'error');
+  }
+}
+
+function togglePasswordVisibility(inputId, iconId) {
+  const input = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (icon) icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    input.type = 'password';
+    if (icon) icon.setAttribute('data-lucide', 'eye');
+  }
+  lucide.createIcons();
+}
+
+function openResetPasswordModal(userId, username) {
+  document.getElementById('reset-password-user-id').value = userId;
+  const displayEl = document.getElementById('reset-password-user-display');
+  if (displayEl) displayEl.textContent = `Set new login password for @${username}`;
+  const input = document.getElementById('reset-new-password');
+  input.value = '';
+  input.type = 'password';
+  const eye = document.getElementById('reset-password-eye');
+  if (eye) eye.setAttribute('data-lucide', 'eye');
+  openModal('modal-reset-password');
+  setTimeout(() => {
+    input.focus();
+    lucide.createIcons();
+  }, 100);
+}
+
+async function submitResetPassword(e) {
+  e.preventDefault();
+  const userId = document.getElementById('reset-password-user-id').value;
+  const newPassword = document.getElementById('reset-new-password').value;
+
+  if (!newPassword || newPassword.length < 6) {
+    showToast('Password must be at least 6 characters long', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit-reset-password');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="inline-flex items-center gap-1.5"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Updating...</span></span>`;
+    lucide.createIcons();
+  }
+
+  try {
+    const res = await apiFetch(`/api/users/${userId}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password: newPassword })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Password successfully updated!', 'success');
+      closeModal('modal-reset-password');
+    } else {
+      showToast(data.error || 'Failed to update password', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Update Password';
+    }
   }
 }
 

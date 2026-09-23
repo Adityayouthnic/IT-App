@@ -105,6 +105,14 @@
             </div>
             <span id="sidebar-acc-count" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">6</span>
           </a>
+
+          <a data-view="expenses" onclick="navigate('expenses')" class="nav-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer text-slate-400 hover:text-white hover:bg-slate-900 transition-all duration-150">
+            <div class="flex items-center gap-3">
+              <i data-lucide="coins" class="w-4 h-4 text-cyan-400"></i>
+              <span>Expenses & Upkeep</span>
+            </div>
+            <span id="sidebar-expense-total" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">₹3.6k</span>
+          </a>
         </nav>
       </div>
 
@@ -298,16 +306,16 @@
             <p id="kpi-keys-sub" class="text-[10px] text-purple-600 font-medium mt-1">30 available keys</p>
           </div>
 
-          <!-- Total Repair Cost -->
-          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+          <!-- Total Repair Cost / Upkeep -->
+          <div onclick="navigate('expenses')" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-cyan-300 transition-all group">
             <div class="flex items-center justify-between text-slate-500 mb-2">
               <span class="text-[11px] font-bold uppercase tracking-wider">Total Upkeep</span>
-              <div class="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
+              <div class="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <i data-lucide="coins" class="w-4 h-4"></i>
               </div>
             </div>
-            <div id="kpi-repair-cost" class="text-2xl font-black text-slate-900">₹3,600</div>
-            <p class="text-[10px] text-slate-500 font-medium mt-1">Cumulative parts cost</p>
+            <div id="kpi-repair-cost" class="text-2xl font-black text-cyan-700">₹3,600</div>
+            <p class="text-[10px] text-cyan-600 font-medium mt-1">View expense ledger &rarr;</p>
           </div>
         </div>
 
@@ -681,10 +689,16 @@
             <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Accessories & Peripherals</h2>
             <p class="text-xs sm:text-sm text-slate-500 font-medium">Mice, keyboards, barcode scanners, thermal printheads, adapters and UPS backups</p>
           </div>
-          <button onclick="openAccessoryModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            <span>Add Accessory</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="openBulkImportAccessoriesModal()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">
+              <i data-lucide="file-up" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>Bulk Import</span>
+            </button>
+            <button onclick="openAccessoryModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Add Accessory</span>
+            </button>
+          </div>
         </div>
 
         <!-- Accessories Stock Summary KPI Cards -->
@@ -779,7 +793,169 @@
       </section>
 
       <!-- =====================================================================
-           VIEW 6: MASTER INTELLIGENCE SEARCH
+           VIEW 6: IT EXPENSES & UPKEEP LEDGER
+           ===================================================================== -->
+      <section id="view-expenses" class="view-panel hidden space-y-6">
+        <!-- Title & Action Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">IT Expenses & Upkeep Ledger</h2>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Granular financial records of all repairs, parts added, serviced equipment, and assigned custodians</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="downloadExpenseReport()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-slate-500"></i>
+              <span>Export CSV</span>
+            </button>
+            <button onclick="openRepairModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Log Maintenance Ticket</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 KPI Metrics + Highlights Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <!-- Total Realized Spend -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Total Upkeep Spend</span>
+              <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="badge-indian-rupee" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="exp-total-spend" class="text-2xl font-black text-slate-900">₹0</div>
+            <p class="text-[10px] text-emerald-600 font-medium mt-0.5">Total across completed repairs</p>
+          </div>
+
+          <!-- Open Pending Liability -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Open Ticket Liability</span>
+              <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="exp-open-liability" class="text-2xl font-black text-amber-600">₹0</div>
+            <p class="text-[10px] text-amber-600 font-medium mt-0.5">In-progress repair estimates</p>
+          </div>
+
+          <!-- Average Cost per Service -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Average Ticket Cost</span>
+              <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="exp-avg-cost" class="text-2xl font-black text-indigo-600">₹0</div>
+            <p class="text-[10px] text-indigo-500 font-medium mt-0.5">Average maintenance ticket spend</p>
+          </div>
+
+          <!-- Top Cost Department -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Top Spend Dept</span>
+              <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                <i data-lucide="building-2" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="exp-top-dept" class="text-lg font-black text-purple-700 truncate">—</div>
+            <p id="exp-top-asset" class="text-[10px] text-slate-500 truncate mt-0.5">Highest asset: —</p>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+          <div class="relative flex-1 min-w-[220px]">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="exp-filter-search" oninput="debounceExpenseSearch()" placeholder="Search serial, user, vendor, parts added, ticket #..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500">
+          </div>
+
+          <select id="exp-filter-dept" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+            <option value="">All Departments</option>
+          </select>
+
+          <select id="exp-filter-type" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+            <option value="">All Service Types</option>
+            <option value="Component Repair">Component Repair</option>
+            <option value="Part Replacement">Part Replacement</option>
+            <option value="Upgrade">Upgrade</option>
+            <option value="Maintenance">Maintenance</option>
+          </select>
+
+          <select id="exp-filter-status" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
+            <option value="">All Ticket Statuses</option>
+            <option value="Completed">Completed</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Awaiting Parts">Awaiting Parts</option>
+            <option value="Beyond Repair">Beyond Repair</option>
+          </select>
+
+          <button onclick="resetExpensesFilterUI()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+            Reset Filters
+          </button>
+        </div>
+
+        <!-- Department & Asset Type Breakdown Rows -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Department Spend Breakdown -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center justify-between">
+              <span>Department Spend Allocation</span>
+              <i data-lucide="pie-chart" class="w-4 h-4 text-slate-400"></i>
+            </h3>
+            <div id="exp-dept-breakdown" class="space-y-3">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Asset Type Spend Breakdown -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center justify-between">
+              <span>Equipment Category Cost</span>
+              <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+            </h3>
+            <div id="exp-type-breakdown" class="space-y-3">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Upkeep Ledger Table -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Maintenance & Upkeep Ledger</h3>
+              <p class="text-[11px] text-slate-500">Every repair, replaced component, vendor service charge, and device custodian</p>
+            </div>
+            <span id="exp-ledger-count" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">0 records</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-3 px-4">Ticket & Date</th>
+                  <th class="py-3 px-4">IT Asset Equipment</th>
+                  <th class="py-3 px-4">Custodian / User</th>
+                  <th class="py-3 px-4">Service & Replaced Parts</th>
+                  <th class="py-3 px-4">Vendor / Technician</th>
+                  <th class="py-3 px-4 text-right">Expense Cost</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="expenses-table-body" class="divide-y divide-slate-100">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 7: MASTER INTELLIGENCE SEARCH
            ===================================================================== -->
       <section id="view-search" class="view-panel hidden space-y-6">
         <div>
@@ -1441,6 +1617,92 @@
     </div>
   </div>
 
+  <!-- Bulk Import Accessories Modal -->
+  <div id="modal-bulk-import-accessories" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Bulk Import Accessories & Peripherals</h3>
+            <p class="text-xs text-slate-500">Upload CSV or Excel (.xlsx) spreadsheet to import accessories in batch</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-bulk-import-accessories')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 flex-1 overflow-y-auto">
+        <!-- Step 1: Download Template -->
+        <div class="p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>Step 1: Download Standard Accessories Template</span>
+            </div>
+            <p class="text-[11px] text-emerald-700/90 mt-0.5">Pre-configured CSV template with validated categories (Mouse, Keyboard, Scanner, UPS, Print Head, etc.).</p>
+          </div>
+          <button onclick="downloadAccessoryTemplate()" type="button" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm flex-shrink-0">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Download CSV Template</span>
+          </button>
+        </div>
+
+        <!-- Step 2: File Selector / Dropzone -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-800">Step 2: Upload CSV or Excel (.xlsx) File</label>
+          <div id="dropzone-bulk-import-acc" onclick="document.getElementById('bulk-import-acc-file').click()" class="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center bg-slate-50 hover:bg-emerald-50/20 transition-all cursor-pointer">
+            <input type="file" id="bulk-import-acc-file" accept=".csv, .xlsx, .xls" class="hidden" onchange="handleBulkAccessoryFileSelect(event)">
+            <div class="w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-2 text-slate-500">
+              <i data-lucide="upload-cloud" class="w-6 h-6 text-emerald-600"></i>
+            </div>
+            <div id="bulk-acc-file-label" class="text-xs font-bold text-slate-800">Click to browse file or drag and drop here</div>
+            <p class="text-[10px] text-slate-500 mt-1">Supports CSV, XLSX, XLS (up to 15MB)</p>
+          </div>
+        </div>
+
+        <!-- Preview Area -->
+        <div id="bulk-acc-preview-container" class="hidden space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800">Detected Rows (<span id="bulk-acc-preview-count">0</span>)</span>
+            <span class="text-[11px] text-emerald-600 font-semibold" id="bulk-acc-file-status">Ready to import</span>
+          </div>
+          <div class="max-h-48 overflow-x-auto overflow-y-auto border border-slate-200 rounded-xl bg-white">
+            <table class="w-full text-left text-[11px]">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-2 px-3">Code</th>
+                  <th class="py-2 px-3">Item Name</th>
+                  <th class="py-2 px-3">Category</th>
+                  <th class="py-2 px-3">Brand/Model</th>
+                  <th class="py-2 px-3">Qty</th>
+                  <th class="py-2 px-3">Location</th>
+                  <th class="py-2 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody id="bulk-acc-preview-tbody" class="divide-y divide-slate-100 font-mono text-[10px]">
+                <!-- Rows previewed via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Results Log -->
+        <div id="bulk-acc-results-log" class="hidden p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/60">
+        <button type="button" onclick="closeModal('modal-bulk-import-accessories')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+        <button type="button" id="btn-execute-bulk-acc-import" onclick="executeBulkAccessoryImport()" disabled class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+          Import Accessories
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Assign Accessory to Personnel Modal -->
   <div id="modal-assign-accessory" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
     <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
@@ -1611,11 +1873,53 @@
         </div>
         <div>
           <label id="user-password-label" class="block text-xs font-semibold text-slate-700 mb-1">Password *</label>
-          <input type="password" id="user-password" placeholder="At least 6 characters" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+          <div class="relative">
+            <input type="password" id="user-password" placeholder="At least 6 characters" class="w-full px-3 py-2 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs" required>
+            <button type="button" onclick="togglePasswordVisibility('user-password', 'user-password-eye')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
+              <i id="user-password-eye" data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
         <div class="flex items-center justify-end gap-2 pt-2">
           <button type="button" onclick="closeModal('modal-user-form')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
           <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-md shadow-brand-500/20">Save User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dedicated Reset User Password Modal (Admin) -->
+  <div id="modal-reset-password" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <i data-lucide="key" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Change User Password</h3>
+            <p id="reset-password-user-display" class="text-xs text-slate-500 font-medium">Reset password for user</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-reset-password')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="form-reset-password" onsubmit="submitResetPassword(event)" class="space-y-4">
+        <input type="hidden" id="reset-password-user-id">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">New Password *</label>
+          <div class="relative">
+            <input type="password" id="reset-new-password" placeholder="At least 6 characters" class="w-full px-3 py-2 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs" required minlength="6">
+            <button type="button" onclick="togglePasswordVisibility('reset-new-password', 'reset-password-eye')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
+              <i id="reset-password-eye" data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">This immediately updates the user's encrypted credentials.</p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-reset-password')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" id="btn-submit-reset-password" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 shadow-md shadow-amber-500/20">Update Password</button>
         </div>
       </form>
     </div>

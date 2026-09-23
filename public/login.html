@@ -96,25 +96,6 @@
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
       </form>
-
-      <!-- Quick Fill Credentials -->
-      <div class="mt-8 pt-6 border-t border-slate-800">
-        <p class="text-xs text-center font-semibold text-slate-400 uppercase tracking-wider mb-3">⚡ Quick Role Access</p>
-        <div class="grid grid-cols-3 gap-2">
-          <button type="button" onclick="fillCreds('admin', 'admin123')" class="px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-200 text-center transition-all hover:border-slate-600 hover:text-white flex flex-col items-center gap-1">
-            <span class="text-rose-400 text-base">👑</span>
-            <span>Admin</span>
-          </button>
-          <button type="button" onclick="fillCreds('technician', 'tech123')" class="px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-200 text-center transition-all hover:border-slate-600 hover:text-white flex flex-col items-center gap-1">
-            <span class="text-sky-400 text-base">🔧</span>
-            <span>Technician</span>
-          </button>
-          <button type="button" onclick="fillCreds('viewer', 'view123')" class="px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-200 text-center transition-all hover:border-slate-600 hover:text-white flex flex-col items-center gap-1">
-            <span class="text-emerald-400 text-base">👁️</span>
-            <span>Viewer</span>
-          </button>
-        </div>
-      </div>
     </div>
 
     <!-- Security Footer -->
@@ -138,12 +119,6 @@
         icon.setAttribute('data-lucide', 'eye');
       }
       lucide.createIcons();
-    }
-
-    function fillCreds(u, p) {
-      document.getElementById('username').value = u;
-      document.getElementById('password').value = p;
-      document.getElementById('login-error').classList.add('hidden');
     }
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
