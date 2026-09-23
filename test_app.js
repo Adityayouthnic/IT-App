@@ -21,17 +21,27 @@ async function runTests() {
   console.log('Health status:', dataHealth);
   if (dataHealth.status !== 'ok') throw new Error('Health check failed');
 
-  // Test 2: Admin Login
-  console.log('\nTest 2: Admin Login');
+  // Test 2: Admin Login (Aditya Shah / Aditya@123)
+  console.log('\nTest 2: Admin Login (Aditya Shah / Aditya@123)');
   const resLogin = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    body: JSON.stringify({ username: 'admin', password: 'Aditya@123' })
   });
   const dataLogin = await resLogin.json();
-  console.log('Login Response:', { user: dataLogin.user?.username, role: dataLogin.user?.role, hasToken: !!dataLogin.token });
+  console.log('Login Response (by username):', { user: dataLogin.user?.username, full_name: dataLogin.user?.full_name, role: dataLogin.user?.role, hasToken: !!dataLogin.token });
   if (!dataLogin.token) throw new Error('Login failed: ' + JSON.stringify(dataLogin));
   token = dataLogin.token;
+
+  // Test 2B: Login using Email address (orders@vbexports.co.in)
+  const resLoginEmail = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'orders@vbexports.co.in', password: 'Aditya@123' })
+  });
+  const dataLoginEmail = await resLoginEmail.json();
+  console.log('Login Response (by email orders@vbexports.co.in):', { user: dataLoginEmail.user?.username, hasToken: !!dataLoginEmail.token });
+  if (!dataLoginEmail.token) throw new Error('Email login failed: ' + JSON.stringify(dataLoginEmail));
 
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -562,13 +572,16 @@ async function runTests() {
   await fetch(`${BASE_URL}/api/users/${newUserId}`, { method: 'DELETE', headers: authHeaders });
   console.log('✅ User Password Management verified: Secure bcrypt hashing, instant reset endpoint, and re-authentication verified!');
 
-  // Test 15: Clean Production Login Screen (Quick Access Removed)
-  console.log('\nTest 15: Clean Production Login Screen (Quick Access Removed)');
+  // Test 15: Clean Production Login Screen (Quick Access & Footer Removed)
+  console.log('\nTest 15: Clean Production Login Screen (Quick Access & Footer Removed)');
   const loginHtml = fs.readFileSync(path.join(__dirname, 'public', 'login.html'), 'utf8');
   if (loginHtml.includes('QUICK ROLE ACCESS') || loginHtml.includes('fillCreds')) {
     throw new Error('Quick role access test buttons still found in public/login.html!');
   }
-  console.log('✅ Production login verified: Quick access credentials removed for security!');
+  if (loginHtml.includes('Protected by Enterprise RBAC & JWT Session Security')) {
+    throw new Error('Security footer still found in public/login.html!');
+  }
+  console.log('✅ Production login verified: Quick access credentials and security footer removed!');
 
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');

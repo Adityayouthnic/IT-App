@@ -11,7 +11,8 @@ router.post('/login', (req, res) => {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username.trim());
+  const identifier = (username || '').trim();
+  const user = db.prepare('SELECT * FROM users WHERE (username = ? COLLATE NOCASE OR email = ? COLLATE NOCASE)').get(identifier, identifier);
   if (!user) {
     return res.status(401).json({ error: 'Invalid username or password.' });
   }

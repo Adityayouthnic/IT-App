@@ -408,11 +408,61 @@ function patchAssignedQuantities() {
   }
 }
 
+function ensureAdityaAdmin() {
+  try {
+    const salt = bcrypt.genSaltSync(10);
+    const passHash = bcrypt.hashSync('Aditya@123', salt);
+
+    // Update or insert 'admin'
+    const adminUser = db.prepare("SELECT id FROM users WHERE username = 'admin' COLLATE NOCASE").get();
+    if (adminUser) {
+      db.prepare(`
+        UPDATE users
+        SET full_name = 'Aditya Shah',
+            email = 'orders@vbexports.co.in',
+            password_hash = ?,
+            role = 'admin',
+            status = 'active',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(passHash, adminUser.id);
+      console.log('Synchronized admin user: Aditya Shah (orders@vbexports.co.in) with password Aditya@123');
+    } else {
+      db.prepare(`
+        INSERT INTO users (username, password_hash, full_name, email, role, status)
+        VALUES ('admin', ?, 'Aditya Shah', 'orders@vbexports.co.in', 'admin', 'active')
+      `).run(passHash);
+      console.log('Created admin user: Aditya Shah (orders@vbexports.co.in) with password Aditya@123');
+    }
+
+    // Also ensure 'aditya' username alias exists with the same credentials
+    const adityaUser = db.prepare("SELECT id FROM users WHERE username = 'aditya' COLLATE NOCASE").get();
+    if (!adityaUser) {
+      db.prepare(`
+        INSERT OR IGNORE INTO users (username, password_hash, full_name, email, role, status)
+        VALUES ('aditya', ?, 'Aditya Shah', 'orders@vbexports.co.in', 'admin', 'active')
+      `).run(passHash);
+    } else {
+      db.prepare(`
+        UPDATE users
+        SET password_hash = ?,
+            role = 'admin',
+            status = 'active',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(passHash, adityaUser.id);
+    }
+  } catch (err) {
+    console.warn('ensureAdityaAdmin error:', err.message);
+  }
+}
+
 // Initialize tables and run seeding
 initSchema();
 seedUsers();
 seedFromSheet();
 patchAssignedQuantities();
+ensureAdityaAdmin();
 
 module.exports = {
   db,
