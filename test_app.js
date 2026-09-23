@@ -761,6 +761,33 @@ async function runTests() {
     authRoute._loginAttempts.clear();
   }
 
+  // Test 18: Favicon Brand Asset Availability (Public & Matching Logo)
+  console.log('\nTest 18: Favicon Brand Asset Availability (Public & Matching Logo)');
+  const resFavIco = await fetch(`${BASE_URL}/favicon.ico`);
+  if (resFavIco.status !== 200) {
+    throw new Error(`Failed to fetch /favicon.ico: status ${resFavIco.status}`);
+  }
+  const resFavSvg = await fetch(`${BASE_URL}/favicon.svg`);
+  if (resFavSvg.status !== 200) {
+    throw new Error(`Failed to fetch /favicon.svg: status ${resFavSvg.status}`);
+  }
+  const svgText = await resFavSvg.text();
+  if (!svgText.includes('brand-grad') || !svgText.includes('rect')) {
+    throw new Error('favicon.svg does not contain brand gradient or CPU icon');
+  }
+
+  const resAppleIcon = await fetch(`${BASE_URL}/apple-touch-icon.png`);
+  if (resAppleIcon.status !== 200) {
+    throw new Error(`Failed to fetch /apple-touch-icon.png: status ${resAppleIcon.status}`);
+  }
+
+  const indexHtmlContent = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  const loginHtmlContent = fs.readFileSync(path.join(__dirname, 'public', 'login.html'), 'utf8');
+  if (!indexHtmlContent.includes('rel="icon"') || !loginHtmlContent.includes('rel="icon"')) {
+    throw new Error('Favicon link tags missing from index.html or login.html');
+  }
+  console.log('✅ Favicon verified: /favicon.ico, /favicon.svg, and /apple-touch-icon.png serve 200 OK publicly!');
+
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');

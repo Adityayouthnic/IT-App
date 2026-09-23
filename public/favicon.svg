@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="brand-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4338ca"/>
+      <stop offset="40%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Squircle -->
+  <rect width="56" height="56" x="4" y="4" rx="14" fill="url(#brand-grad)"/>
+  <rect width="56" height="56" x="4" y="4" rx="14" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1"/>
+  <!-- Lucide CPU Icon -->
+  <g transform="translate(14, 14) scale(1.5)" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="16" height="16" x="4" y="4" rx="2.5"/>
+    <rect width="6" height="6" x="9" y="9" rx="1" fill="#ffffff" fill-opacity="0.2"/>
+    <path d="M15 2v2"/>
+    <path d="M15 20v2"/>
+    <path d="M2 15h2"/>
+    <path d="M2 9h2"/>
+    <path d="M20 15h2"/>
+    <path d="M20 9h2"/>
+    <path d="M9 2v2"/>
+    <path d="M9 20v2"/>
+  </g>
+</svg>

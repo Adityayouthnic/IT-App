@@ -106,8 +106,13 @@ app.use('/api', require('./routes/api'));
 // 7. Strict Server-Side Authentication Gatekeeper for Frontend Application
 // Unauthenticated visitors CANNOT access index.html, styles, or client scripts
 app.use((req, res, next) => {
-  // Allow access to login resources (already handled above)
-  if (req.path === '/login' || req.path === '/login.html') {
+  // Allow public access to login page and branding/favicon assets
+  if (
+    req.path === '/login' ||
+    req.path === '/login.html' ||
+    req.path.startsWith('/favicon') ||
+    req.path.startsWith('/apple-touch-icon')
+  ) {
     return next();
   }
 
