@@ -399,20 +399,49 @@ async function loadDashboard() {
     const data = await res.json();
 
     // KPI Numbers
-    document.getElementById('kpi-total-assets').textContent = data.assets.total || 0;
-    document.getElementById('sidebar-asset-count').textContent = data.assets.total || 0;
+    const totalAssets = data.assets?.total || 0;
+    const workingAssets = data.assets?.working || 0;
+    const repairAssets = data.assets?.in_repair || 0;
+    const openTickets = data.repairs?.open_tickets || 0;
+    const eolAssets = (data.assets?.not_working || 0) + (data.assets?.retired || 0);
+    const totalKeys = data.keys?.total || 0;
+    const availKeys = data.keys?.available || 0;
+    const assignedKeys = data.keys?.assigned || 0;
+    const totalAcc = data.accessories?.total || 0;
+    const totalRepairCost = data.repairs?.total_cost || 0;
 
-    document.getElementById('kpi-working-assets').textContent = data.assets.working || 0;
-    document.getElementById('kpi-repair-assets').textContent = data.assets.in_repair || 0;
-    document.getElementById('sidebar-repair-count').textContent = data.repairs.open_tickets || 0;
+    document.getElementById('kpi-total-assets').textContent = totalAssets;
+    document.getElementById('sidebar-asset-count').textContent = totalAssets;
 
-    document.getElementById('kpi-eol-assets').textContent = (data.assets.not_working || 0) + (data.assets.retired || 0);
+    document.getElementById('kpi-working-assets').textContent = workingAssets;
+    const workingPct = totalAssets > 0 ? Math.round((workingAssets / totalAssets) * 100) : 100;
+    const workingSubEl = document.querySelector('#kpi-working-assets + p');
+    if (workingSubEl) {
+      workingSubEl.textContent = totalAssets > 0 ? `${workingPct}% fleet healthy` : '100% fleet healthy';
+    }
 
-    document.getElementById('kpi-total-keys').textContent = data.keys.total || 0;
-    document.getElementById('sidebar-key-count').textContent = data.keys.available || 0;
-    document.getElementById('kpi-keys-sub').textContent = `${data.keys.available || 0} available / ${data.keys.assigned || 0} assigned`;
+    document.getElementById('kpi-repair-assets').textContent = repairAssets;
+    const repairSubEl = document.querySelector('#kpi-repair-assets + p');
+    if (repairSubEl) {
+      repairSubEl.textContent = `${openTickets} active ticket${openTickets === 1 ? '' : 's'}`;
+    }
+    document.getElementById('sidebar-repair-count').textContent = openTickets;
 
-    const totalRepairCost = data.repairs.total_cost || 0;
+    document.getElementById('kpi-eol-assets').textContent = eolAssets;
+    const eolSubEl = document.querySelector('#kpi-eol-assets + p');
+    if (eolSubEl) {
+      eolSubEl.textContent = eolAssets > 0 ? `${eolAssets} requires review` : 'No defective units';
+    }
+
+    document.getElementById('kpi-total-keys').textContent = totalKeys;
+    document.getElementById('sidebar-key-count').textContent = availKeys;
+    document.getElementById('kpi-keys-sub').textContent = `${availKeys} available / ${assignedKeys} assigned`;
+
+    const accBadge = document.getElementById('sidebar-acc-count');
+    if (accBadge) {
+      accBadge.textContent = totalAcc;
+    }
+
     document.getElementById('kpi-repair-cost').textContent = `₹${totalRepairCost.toLocaleString('en-IN')}`;
     const expBadge = document.getElementById('sidebar-expense-total');
     if (expBadge) {
@@ -435,41 +464,52 @@ async function loadDashboard() {
     // Render Department Breakdown
     const deptContainer = document.getElementById('dept-breakdown-container');
     deptContainer.innerHTML = '';
-    const maxDept = data.deptBreakdown[0]?.count || 1;
-
-    data.deptBreakdown.forEach(item => {
-      const pct = Math.round((item.count / maxDept) * 100);
-      const row = document.createElement('div');
-      row.className = 'cursor-pointer hover:bg-slate-50 p-2 rounded-xl transition-colors';
-      row.onclick = () => navigate('assets', { department: item.department });
-      row.innerHTML = `
-        <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-          <span>${escapeHtml(item.department)}</span>
-          <span class="text-brand-600 font-bold">${item.count} units</span>
-        </div>
-        <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-          <div class="h-full bg-gradient-to-r from-brand-600 to-indigo-500 rounded-full" style="width: ${pct}%"></div>
-        </div>
-      `;
-      deptContainer.appendChild(row);
-    });
+    const deptCountHeader = deptContainer?.previousElementSibling?.querySelector('span');
+    if (deptCountHeader) {
+      deptCountHeader.textContent = `${(data.deptBreakdown || []).length} Departments`;
+    }
+    if (!data.deptBreakdown || data.deptBreakdown.length === 0) {
+      deptContainer.innerHTML = `<div class="py-6 text-center text-slate-400 text-xs">No assets recorded in departments yet.</div>`;
+    } else {
+      const maxDept = data.deptBreakdown[0]?.count || 1;
+      data.deptBreakdown.forEach(item => {
+        const pct = Math.round((item.count / maxDept) * 100);
+        const row = document.createElement('div');
+        row.className = 'cursor-pointer hover:bg-slate-50 p-2 rounded-xl transition-colors';
+        row.onclick = () => navigate('assets', { department: item.department });
+        row.innerHTML = `
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
+            <span>${escapeHtml(item.department)}</span>
+            <span class="text-brand-600 font-bold">${item.count} units</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-brand-600 to-indigo-500 rounded-full" style="width: ${pct}%"></div>
+          </div>
+        `;
+        deptContainer.appendChild(row);
+      });
+    }
 
     // Render System Types Breakdown
     const typeContainer = document.getElementById('type-breakdown-container');
     typeContainer.innerHTML = '';
-    data.typeBreakdown.forEach(item => {
-      const tag = document.createElement('div');
-      tag.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 cursor-pointer text-xs font-semibold text-slate-700 transition-colors';
-      tag.onclick = () => navigate('assets', { type: item.asset_type });
-      tag.innerHTML = `
-        <div class="flex items-center gap-2">
-          <i data-lucide="monitor" class="w-3.5 h-3.5 text-indigo-500"></i>
-          <span>${escapeHtml(item.asset_type)}</span>
-        </div>
-        <span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold">${item.count}</span>
-      `;
-      typeContainer.appendChild(tag);
-    });
+    if (!data.typeBreakdown || data.typeBreakdown.length === 0) {
+      typeContainer.innerHTML = `<div class="py-6 text-center text-slate-400 text-xs">No hardware types recorded yet.</div>`;
+    } else {
+      data.typeBreakdown.forEach(item => {
+        const tag = document.createElement('div');
+        tag.className = 'flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 cursor-pointer text-xs font-semibold text-slate-700 transition-colors';
+        tag.onclick = () => navigate('assets', { type: item.asset_type });
+        tag.innerHTML = `
+          <div class="flex items-center gap-2">
+            <i data-lucide="monitor" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span>${escapeHtml(item.asset_type)}</span>
+          </div>
+          <span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[11px] font-bold">${item.count}</span>
+        `;
+        typeContainer.appendChild(tag);
+      });
+    }
 
     // Render Recent Repairs
     const repairsTbody = document.getElementById('dashboard-recent-repairs');
