@@ -267,6 +267,31 @@ function setupGlobalEvents() {
       document.querySelectorAll('.fixed.inset-0.z-50:not(.hidden)').forEach(m => closeModal(m.id));
     }
   });
+
+  // Bulk import drag-and-drop listeners
+  const dropzone = document.getElementById('dropzone-bulk-import');
+  if (dropzone) {
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('border-brand-500', 'bg-brand-50/30');
+      });
+    });
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('border-brand-500', 'bg-brand-50/30');
+      });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        handleBulkFileSelect({ target: { files: dt.files } });
+      }
+    });
+  }
 }
 
 function escapeHtml(text) {
@@ -304,6 +329,19 @@ async function loadDashboard() {
     document.getElementById('kpi-keys-sub').textContent = `${data.keys.available || 0} available / ${data.keys.assigned || 0} assigned`;
 
     document.getElementById('kpi-repair-cost').textContent = `₹${(data.repairs.total_cost || 0).toLocaleString('en-IN')}`;
+
+    // Security Alert Banner for Unprotected Laptops / Desktops
+    const secBanner = document.getElementById('sec-alert-banner');
+    const secCountEl = document.getElementById('sec-alert-count');
+    if (secBanner && secCountEl) {
+      const unprot = data.unprotectedWorkstations || 0;
+      secCountEl.textContent = unprot;
+      if (unprot > 0) {
+        secBanner.classList.remove('hidden');
+      } else {
+        secBanner.classList.add('hidden');
+      }
+    }
 
     // Render Department Breakdown
     const deptContainer = document.getElementById('dept-breakdown-container');
@@ -427,6 +465,7 @@ async function loadAssets(filterParams = {}) {
     if (filterParams.type && document.getElementById('asset-filter-type')) document.getElementById('asset-filter-type').value = filterParams.type;
     if (filterParams.department && document.getElementById('asset-filter-dept')) document.getElementById('asset-filter-dept').value = filterParams.department;
     if (filterParams.status && document.getElementById('asset-filter-status')) document.getElementById('asset-filter-status').value = filterParams.status;
+    if (filterParams.quick_heal && document.getElementById('asset-filter-key')) document.getElementById('asset-filter-key').value = filterParams.quick_heal;
 
     const params = new URLSearchParams();
     if (search) params.append('search', search);
@@ -439,6 +478,7 @@ async function loadAssets(filterParams = {}) {
     if (!res.ok) return;
     const data = await res.json();
     cachedAssets = data.assets;
+    window._allAssetsList = data.assets;
 
     const tbody = document.getElementById('assets-table-body');
     tbody.innerHTML = '';
@@ -464,12 +504,19 @@ async function loadAssets(filterParams = {}) {
         statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Retired</span>`;
       }
 
-      // Quick Heal pill
-      let keyBadge = `<span class="text-slate-400 text-[11px]">—</span>`;
+      // Quick Heal pill (Laptops & Desktops strictly prioritized)
+      const isWorkstation = ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase());
+      let keyBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] text-slate-400 bg-slate-50 border border-slate-200" title="Antivirus not required for ${escapeHtml(a.asset_type)}">Not Required</span>`;
+
       if (a.quick_heal_key_str) {
-        keyBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="${escapeHtml(a.quick_heal_key_str)}">
+        keyBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="License: ${escapeHtml(a.quick_heal_key_str)}">
           <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
           <span>Mapped</span>
+        </span>`;
+      } else if (isWorkstation) {
+        keyBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-300 animate-pulse shadow-sm" title="HIGH PRIORITY SECURITY RISK: This ${escapeHtml(a.asset_type)} requires an antivirus key!">
+          <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-rose-600"></i>
+          <span>⚠️ Unprotected</span>
         </span>`;
       }
 
@@ -493,7 +540,10 @@ async function loadAssets(filterParams = {}) {
         </td>
         <td class="py-3 px-4 text-slate-600 font-medium">${escapeHtml(a.department || '—')}</td>
         <td class="py-3 px-4 text-slate-500 text-[11px]">${escapeHtml(a.location || '—')}</td>
-        <td class="py-3 px-4 font-semibold text-slate-800">${escapeHtml(a.assigned_user || 'Unassigned')}</td>
+        <td class="py-3 px-4 font-semibold text-slate-800">
+          <div>${escapeHtml(a.assigned_user || 'Unassigned')}</div>
+          ${a.matched_in_remarks ? `<div class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title="Matched in internal remarks"><i data-lucide="file-text" class="w-2.5 h-2.5 text-amber-600"></i><span>Note: "${escapeHtml(a.matched_remark_snippet || '...')}"</span></div>` : ''}
+        </td>
         <td class="py-3 px-4">${keyBadge}</td>
         <td class="py-3 px-4">${statusBadge}</td>
         <td class="py-3 px-4">${healthBadge}</td>
@@ -852,20 +902,189 @@ function exportAssetsCSV() {
   window.open('/api/export/csv', '_blank');
 }
 
+function openMapKeyModalForAsset(assetId) {
+  openEditAssetModal(assetId);
+}
+
+// Ensure assets are loaded for dropdowns / comboboxes
+async function ensureAssetsCached() {
+  if (!cachedAssets || cachedAssets.length === 0) {
+    try {
+      const res = await apiFetch('/api/assets');
+      if (res.ok) {
+        const data = await res.json();
+        cachedAssets = data.assets || [];
+        window._allAssetsList = data.assets || [];
+      }
+    } catch (e) {
+      console.error('Failed to pre-cache assets:', e);
+    }
+  }
+}
+
+// Searchable Combobox Component
+function initSearchableCombobox({
+  containerId,
+  inputId,
+  dropdownId,
+  hiddenInputId,
+  clearBtnId,
+  previewContainerId,
+  previewTextId,
+  filterFn
+}) {
+  const container = document.getElementById(containerId);
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hiddenInput = document.getElementById(hiddenInputId);
+  const clearBtn = document.getElementById(clearBtnId);
+  const previewContainer = document.getElementById(previewContainerId);
+  const previewText = document.getElementById(previewTextId);
+
+  if (!container || !input || !dropdown || !hiddenInput) {
+    return { setValue: () => {}, selectAsset: () => {} };
+  }
+
+  function getAvailableAssets() {
+    const list = (cachedAssets && cachedAssets.length > 0) ? cachedAssets : (window._allAssetsList || []);
+    if (!filterFn) return list;
+    return list.filter(filterFn);
+  }
+
+  function renderOptions(query = '') {
+    const q = query.trim().toLowerCase();
+    const assets = getAvailableAssets().filter(a => {
+      if (!q) return true;
+      const haystack = `${a.internal_serial_number} ${a.asset_type} ${a.brand || ''} ${a.model_name || ''} ${a.assigned_user || ''} ${a.department || ''} ${a.serial_number || ''}`.toLowerCase();
+      return haystack.includes(q);
+    });
+
+    if (assets.length === 0) {
+      dropdown.innerHTML = `<div class="p-3 text-center text-xs text-slate-400">No matching assets found</div>`;
+      dropdown.classList.remove('hidden');
+      return;
+    }
+
+    dropdown.innerHTML = assets.slice(0, 60).map(a => `
+      <div data-id="${a.id}" class="combobox-opt p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between transition-colors">
+        <div>
+          <span class="font-mono font-bold text-brand-600">#${escapeHtml(a.internal_serial_number)}</span>
+          <span class="font-bold text-slate-800 ml-1">${escapeHtml(a.brand || '')} ${escapeHtml(a.asset_type)}</span>
+          <div class="text-[10px] text-slate-500 mt-0.5">User: <strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(a.department || '—')}</div>
+        </div>
+        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${a.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${escapeHtml(a.working_status)}</span>
+      </div>
+    `).join('');
+
+    dropdown.classList.remove('hidden');
+
+    dropdown.querySelectorAll('.combobox-opt').forEach(opt => {
+      opt.onclick = () => {
+        const id = opt.getAttribute('data-id');
+        const asset = getAvailableAssets().find(a => a.id === Number(id));
+        selectAsset(asset);
+      };
+    });
+  }
+
+  function selectAsset(asset) {
+    if (!asset) {
+      hiddenInput.value = '';
+      input.value = '';
+      if (previewContainer) previewContainer.classList.add('hidden');
+      if (clearBtn) clearBtn.classList.add('hidden');
+      dropdown.classList.add('hidden');
+      return;
+    }
+
+    hiddenInput.value = asset.id;
+    input.value = `#${asset.internal_serial_number} - ${asset.brand || ''} ${asset.asset_type} (${asset.assigned_user || 'Unassigned'})`;
+    if (previewContainer && previewText) {
+      previewText.innerHTML = `Selected: <strong>#${escapeHtml(asset.internal_serial_number)}</strong> (${escapeHtml(asset.brand || '')} ${escapeHtml(asset.asset_type)}) — User: <strong>${escapeHtml(asset.assigned_user || 'Unassigned')}</strong> [${escapeHtml(asset.department || '')}]`;
+      previewContainer.classList.remove('hidden');
+    }
+    if (clearBtn) clearBtn.classList.remove('hidden');
+    dropdown.classList.add('hidden');
+  }
+
+  input.onfocus = () => {
+    renderOptions(input.value);
+  };
+
+  input.oninput = () => {
+    if (clearBtn) {
+      if (input.value) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+    }
+    renderOptions(input.value);
+  };
+
+  if (clearBtn) {
+    clearBtn.onclick = (e) => {
+      e.stopPropagation();
+      selectAsset(null);
+      input.focus();
+    };
+  }
+
+  // Click outside listener
+  const outsideClick = (e) => {
+    if (!container.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  };
+  document.removeEventListener('click', container._outsideListener || (() => {}));
+  container._outsideListener = outsideClick;
+  document.addEventListener('click', outsideClick);
+
+  return {
+    selectAsset,
+    setValue: (assetId) => {
+      if (!assetId) {
+        selectAsset(null);
+        return;
+      }
+      const asset = getAvailableAssets().find(a => a.id === Number(assetId) || a.internal_serial_number === String(assetId));
+      if (asset) {
+        selectAsset(asset);
+      } else {
+        hiddenInput.value = assetId;
+      }
+    }
+  };
+}
+
 // ==========================================
 // 6. VIEW: REPAIRS & LIFECYCLE MANAGEMENT
 // ==========================================
 
 let repairSearchTimeout = null;
+let activeRepairTab = 'all';
+
 function debounceRepairSearch() {
   clearTimeout(repairSearchTimeout);
   repairSearchTimeout = setTimeout(() => loadRepairs(), 250);
+}
+
+function filterRepairTab(tab) {
+  activeRepairTab = tab;
+  ['all', 'open', 'closed'].forEach(t => {
+    const el = document.getElementById(`tab-repairs-${t}`);
+    if (!el) return;
+    if (t === tab) {
+      el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white shadow-sm flex items-center gap-1.5';
+    } else {
+      el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5';
+    }
+  });
+  loadRepairs();
 }
 
 async function loadRepairs(filterParams = {}) {
   try {
     const search = filterParams.search !== undefined ? filterParams.search : document.getElementById('repair-filter-search')?.value || '';
     const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('repair-filter-status')?.value || '';
+    const ticketStatus = filterParams.ticket_status !== undefined ? filterParams.ticket_status : activeRepairTab;
 
     if (filterParams.search && document.getElementById('repair-filter-search')) {
       document.getElementById('repair-filter-search').value = filterParams.search;
@@ -874,43 +1093,74 @@ async function loadRepairs(filterParams = {}) {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (status) params.append('status', status);
+    if (ticketStatus && ticketStatus !== 'all') params.append('ticket_status', ticketStatus);
 
     const res = await apiFetch(`/api/repairs?${params.toString()}`);
     if (!res.ok) return;
     const data = await res.json();
+    window._cachedRepairs = data.repairs || [];
+
+    // Update Tab Counters
+    if (data.counts) {
+      const totalEl = document.getElementById('repairs-total-counter');
+      const openEl = document.getElementById('repairs-open-counter');
+      const closedEl = document.getElementById('repairs-closed-counter');
+      if (totalEl) totalEl.textContent = data.counts.total ?? 0;
+      if (openEl) openEl.textContent = data.counts.open_count ?? 0;
+      if (closedEl) closedEl.textContent = data.counts.closed_count ?? 0;
+    }
 
     const tbody = document.getElementById('repairs-table-body');
     tbody.innerHTML = '';
 
     if (data.repairs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-slate-400">No maintenance tickets logged.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="py-12 text-center text-slate-400">No maintenance tickets found for this filter.</td></tr>`;
       return;
     }
+
+    const todayStr = new Date().toISOString().split('T')[0];
 
     data.repairs.forEach(r => {
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-slate-50/80 transition-colors';
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
+      const isOpen = (r.status !== 'Completed' && r.status !== 'Beyond Repair');
 
       let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(r.status)}</span>`;
       if (r.status === 'Completed') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>`;
       else if (r.status === 'Beyond Repair') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Beyond Repair</span>`;
 
+      let dueDateDisplay = '<span class="text-slate-400 text-xs">—</span>';
+      if (r.due_date) {
+        const isOverdue = isOpen && (r.due_date < todayStr);
+        if (isOverdue) {
+          dueDateDisplay = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Ticket is overdue!"><i data-lucide="clock" class="w-3 h-3 text-rose-600"></i>Overdue (${escapeHtml(r.due_date)})</span>`;
+        } else {
+          dueDateDisplay = `<span class="font-mono text-slate-700 text-xs font-semibold">${escapeHtml(r.due_date)}</span>`;
+        }
+      }
+
       tr.innerHTML = `
         <td class="py-3 px-4 font-mono font-bold text-brand-600">${escapeHtml(r.ticket_number)}</td>
         <td class="py-3 px-4">
           <span onclick="viewAssetDetail(${r.asset_id})" class="cursor-pointer font-mono font-bold text-slate-900 hover:text-brand-600 hover:underline">#${escapeHtml(r.internal_serial_number)}</span>
-          <div class="text-[10px] text-slate-400">${escapeHtml(r.brand)} ${escapeHtml(r.asset_type)}</div>
+          <div class="text-[10px] text-slate-400">${escapeHtml(r.brand || '')} ${escapeHtml(r.asset_type)}</div>
         </td>
         <td class="py-3 px-4 font-medium text-slate-800 max-w-xs">${escapeHtml(r.issue_description)}</td>
         <td class="py-3 px-4 font-semibold text-sky-600">${escapeHtml(r.parts_added || '— None —')}</td>
         <td class="py-3 px-4 text-slate-500">${escapeHtml(r.repair_vendor || r.technician_name || 'In-House')}</td>
         <td class="py-3 px-4 text-slate-500">${escapeHtml(r.repair_date)}</td>
+        <td class="py-3 px-4">${dueDateDisplay}</td>
         <td class="py-3 px-4 font-bold text-slate-900">₹${(r.repair_cost || 0).toLocaleString('en-IN')}</td>
         <td class="py-3 px-4">${statusBadge}</td>
         <td class="py-3 px-4 text-right">
           <div class="flex items-center justify-end gap-1">
+            ${!isViewer && isOpen ? `
+              <button onclick="openCloseTicketModal(${r.id})" title="Resolve & Close Ticket" class="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
             ${!isViewer ? `
               <button onclick="openEditRepairModal(${r.id})" title="Update Ticket" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors">
                 <i data-lucide="pencil" class="w-4 h-4"></i>
@@ -989,33 +1239,31 @@ async function loadEolAnalysis() {
 }
 
 // Open Repair Ticket Form
+let repairCombobox = null;
 async function openRepairModal(preselectedAssetId = null) {
   document.getElementById('form-repair').reset();
   document.getElementById('repair-form-id').value = '';
   document.getElementById('repair-form-title').textContent = 'Log Asset Repair / Part Replacement';
   document.getElementById('repair-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('repair-due-date').value = '';
 
-  const select = document.getElementById('repair-asset-select');
-  select.innerHTML = '<option value="">-- Choose IT Asset --</option>';
+  await ensureAssetsCached();
 
-  try {
-    const res = await apiFetch('/api/assets');
-    if (res.ok) {
-      const data = await res.json();
-      data.assets.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.id;
-        opt.textContent = `#${a.internal_serial_number} - ${a.brand || ''} ${a.asset_type} (${a.assigned_user || 'Unassigned'})`;
-        if (preselectedAssetId && (a.id === Number(preselectedAssetId) || a.internal_serial_number === String(preselectedAssetId))) {
-          opt.selected = true;
-        }
-        select.appendChild(opt);
-      });
-    }
-    openModal('modal-repair-form');
-  } catch (err) {
-    console.error(err);
+  if (!repairCombobox) {
+    repairCombobox = initSearchableCombobox({
+      containerId: 'combobox-repair-asset',
+      inputId: 'combobox-repair-asset-input',
+      dropdownId: 'combobox-repair-asset-dropdown',
+      hiddenInputId: 'repair-asset-select',
+      clearBtnId: 'combobox-repair-asset-clear',
+      previewContainerId: 'repair-selected-asset-preview',
+      previewTextId: 'repair-selected-asset-text',
+      filterFn: () => true
+    });
   }
+
+  repairCombobox.setValue(preselectedAssetId);
+  openModal('modal-repair-form');
 }
 
 // Edit Repair Ticket
@@ -1027,11 +1275,11 @@ async function openEditRepairModal(repairId) {
     const repair = repairs.find(r => r.id === repairId);
     if (!repair) return;
 
-    document.getElementById('repair-form-title').textContent = `Update Ticket ${repair.ticket_number}`;
     await openRepairModal(repair.asset_id);
-
+    document.getElementById('repair-form-title').textContent = `Update Ticket ${repair.ticket_number}`;
     document.getElementById('repair-form-id').value = repair.id;
     document.getElementById('repair-date').value = repair.repair_date || '';
+    document.getElementById('repair-due-date').value = repair.due_date || '';
     document.getElementById('repair-type').value = repair.repair_type || 'Component Repair';
     document.getElementById('repair-issue').value = repair.issue_description || '';
     document.getElementById('repair-parts').value = repair.parts_added || '';
@@ -1049,13 +1297,20 @@ async function openEditRepairModal(repairId) {
 async function handleRepairSubmit(e) {
   e.preventDefault();
   const id = document.getElementById('repair-form-id').value;
+  const assetId = document.getElementById('repair-asset-select').value;
+  if (!assetId) {
+    showToast('Please select an IT asset to service', 'error');
+    return;
+  }
+
   const btn = document.getElementById('btn-save-repair');
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
   const payload = {
-    asset_id: document.getElementById('repair-asset-select').value,
+    asset_id: assetId,
     repair_date: document.getElementById('repair-date').value,
+    due_date: document.getElementById('repair-due-date').value || null,
     repair_type: document.getElementById('repair-type').value,
     issue_description: document.getElementById('repair-issue').value.trim(),
     parts_added: document.getElementById('repair-parts').value.trim(),
@@ -1109,6 +1364,75 @@ async function deleteRepair(repairId, ticketNo) {
     }
   } catch (err) {
     showToast(err.message, 'error');
+  }
+}
+
+// 1-Click Resolve & Close Ticket Modal
+async function openCloseTicketModal(repairId) {
+  try {
+    const repair = (window._cachedRepairs || []).find(r => r.id === repairId);
+    if (!repair) {
+      const res = await apiFetch('/api/repairs');
+      if (!res.ok) return;
+      const data = await res.json();
+      window._cachedRepairs = data.repairs || [];
+    }
+    const target = (window._cachedRepairs || []).find(r => r.id === repairId);
+    if (!target) return;
+
+    document.getElementById('close-repair-id').value = target.id;
+    document.getElementById('close-repair-asset-serial').textContent = '#' + target.internal_serial_number;
+    document.getElementById('close-repair-ticket-num').textContent = target.ticket_number;
+    document.getElementById('close-repair-asset-name').textContent = `${target.brand || ''} ${target.asset_type || ''} (${target.assigned_user || 'Unassigned'})`;
+    document.getElementById('close-repair-asset-issue').textContent = 'Issue: ' + (target.issue_description || 'N/A');
+
+    document.getElementById('close-repair-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('close-repair-cost').value = target.repair_cost || 0;
+    document.getElementById('close-repair-parts').value = target.parts_added || '';
+    document.getElementById('close-repair-asset-status').value = 'Working';
+    document.getElementById('close-repair-remarks').value = '';
+
+    openModal('modal-close-repair');
+  } catch (err) {
+    console.error('Error opening close ticket modal:', err);
+  }
+}
+
+async function submitCloseTicket(e) {
+  e.preventDefault();
+  const repairId = document.getElementById('close-repair-id').value;
+  const btn = document.getElementById('btn-submit-close-repair');
+  btn.disabled = true;
+  btn.textContent = 'Resolving...';
+
+  const payload = {
+    completion_date: document.getElementById('close-repair-date').value,
+    final_repair_cost: Number(document.getElementById('close-repair-cost').value) || 0,
+    parts_added: document.getElementById('close-repair-parts').value.trim(),
+    post_repair_asset_status: document.getElementById('close-repair-asset-status').value,
+    resolution_notes: document.getElementById('close-repair-remarks').value.trim()
+  };
+
+  try {
+    const res = await apiFetch(`/api/repairs/${repairId}/close`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Ticket resolved and asset returned to operational fleet!', 'success');
+      closeModal('modal-close-repair');
+      loadRepairs();
+      loadAssets();
+      loadDashboard();
+    } else {
+      showToast(data.error || 'Failed to close ticket', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirm & Close Ticket';
   }
 }
 
@@ -1290,34 +1614,39 @@ async function handleBulkKeySubmit(e) {
   }
 }
 
+let mapKeyCombobox = null;
 async function openMapKeyModal(keyId, keyCode) {
   document.getElementById('map-key-id').value = keyId;
   document.getElementById('map-key-display').textContent = keyCode;
 
-  const select = document.getElementById('map-asset-select');
-  select.innerHTML = '<option value="">-- Choose IT Asset to Map --</option>';
+  await ensureAssetsCached();
 
-  try {
-    const res = await apiFetch('/api/assets');
-    if (res.ok) {
-      const data = await res.json();
-      data.assets.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.id;
-        opt.textContent = `#${a.internal_serial_number} - ${a.brand || ''} ${a.asset_type} (${a.assigned_user || 'Unassigned'})`;
-        select.appendChild(opt);
-      });
-    }
-    openModal('modal-map-key');
-  } catch (err) {
-    console.error(err);
+  if (!mapKeyCombobox) {
+    mapKeyCombobox = initSearchableCombobox({
+      containerId: 'combobox-map-asset',
+      inputId: 'combobox-map-asset-input',
+      dropdownId: 'combobox-map-asset-dropdown',
+      hiddenInputId: 'map-asset-select',
+      clearBtnId: 'combobox-map-asset-clear',
+      previewContainerId: 'map-selected-asset-preview',
+      previewTextId: 'map-selected-asset-text',
+      // Quick Heal keys are required ONLY for Laptops and Desktops!
+      filterFn: (a) => ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase())
+    });
   }
+
+  mapKeyCombobox.setValue(null);
+  openModal('modal-map-key');
 }
 
 async function handleMapKeySubmit(e) {
   e.preventDefault();
   const keyId = document.getElementById('map-key-id').value;
   const assetId = document.getElementById('map-asset-select').value;
+  if (!assetId) {
+    showToast('Please select a destination workstation (Laptop or Desktop)', 'error');
+    return;
+  }
 
   try {
     const res = await apiFetch(`/api/keys/${keyId}/map`, {
@@ -1330,6 +1659,7 @@ async function handleMapKeySubmit(e) {
       closeModal('modal-map-key');
       loadKeys();
       loadAssets();
+      loadDashboard();
     } else {
       showToast(data.error || 'Failed to map key', 'error');
     }
@@ -1397,8 +1727,19 @@ async function loadAccessories(filterParams = {}) {
     const res = await apiFetch(`/api/accessories?${params.toString()}`);
     if (!res.ok) return;
     const data = await res.json();
+    window._cachedAccessories = data.accessories || [];
 
     document.getElementById('sidebar-acc-count').textContent = data.accessories.length;
+
+    // Update 3 Stock KPI Cards
+    if (data.stats) {
+      const metricTotal = document.getElementById('acc-metric-total');
+      const metricAvail = document.getElementById('acc-metric-available');
+      const metricAssigned = document.getElementById('acc-metric-assigned');
+      if (metricTotal) metricTotal.textContent = `${data.stats.total_units} Units`;
+      if (metricAvail) metricAvail.textContent = `${data.stats.in_stock_units} Units`;
+      if (metricAssigned) metricAssigned.textContent = `${data.stats.assigned_units} Units`;
+    }
 
     const tbody = document.getElementById('accessories-table-body');
     tbody.innerHTML = '';
@@ -1429,13 +1770,23 @@ async function loadAccessories(filterParams = {}) {
         <td class="py-3 px-4">${statusBadge}</td>
         <td class="py-3 px-4 text-right">
           <div class="flex items-center justify-end gap-1">
+            ${!isViewer && item.status === 'In Stock' ? `
+              <button onclick="openAssignAccessoryModal(${item.id})" title="Issue to Staff" class="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+            ${!isViewer && item.status === 'Assigned' ? `
+              <button onclick="returnAccessoryToStock(${item.id})" title="Return to Stock" class="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
             ${!isViewer ? `
-              <button onclick="openEditAccessoryModal(${item.id})" class="p-1.5 text-slate-400 hover:text-brand-600">
+              <button onclick="openEditAccessoryModal(${item.id})" title="Edit Item" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors">
                 <i data-lucide="pencil" class="w-4 h-4"></i>
               </button>
             ` : ''}
             ${isAdmin ? `
-              <button onclick="deleteAccessory(${item.id})" class="p-1.5 text-slate-400 hover:text-rose-600">
+              <button onclick="deleteAccessory(${item.id})" title="Delete Item" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             ` : ''}
@@ -1460,22 +1811,26 @@ function openAccessoryModal() {
 
 async function openEditAccessoryModal(accId) {
   try {
-    const res = await apiFetch('/api/accessories');
-    if (!res.ok) return;
-    const { accessories } = await res.json();
-    const item = accessories.find(a => a.id === accId);
-    if (!item) return;
+    const item = (window._cachedAccessories || []).find(a => a.id === accId);
+    if (!item) {
+      const res = await apiFetch('/api/accessories');
+      if (!res.ok) return;
+      const data = await res.json();
+      window._cachedAccessories = data.accessories || [];
+    }
+    const current = (window._cachedAccessories || []).find(a => a.id === accId);
+    if (!current) return;
 
-    document.getElementById('acc-form-title').textContent = `Edit Accessory ${item.accessory_code}`;
-    document.getElementById('acc-form-id').value = item.id;
-    document.getElementById('acc-code').value = item.accessory_code;
-    document.getElementById('acc-category').value = item.category;
-    document.getElementById('acc-name').value = item.name;
-    document.getElementById('acc-brand').value = item.brand || '';
-    document.getElementById('acc-qty').value = item.quantity;
-    document.getElementById('acc-location').value = item.location || '';
-    document.getElementById('acc-status').value = item.status;
-    document.getElementById('acc-remarks').value = item.remarks || '';
+    document.getElementById('acc-form-title').textContent = `Edit Accessory ${current.accessory_code}`;
+    document.getElementById('acc-form-id').value = current.id;
+    document.getElementById('acc-code').value = current.accessory_code;
+    document.getElementById('acc-category').value = current.category;
+    document.getElementById('acc-name').value = current.name;
+    document.getElementById('acc-brand').value = current.brand || '';
+    document.getElementById('acc-qty').value = current.quantity;
+    document.getElementById('acc-location').value = current.location || '';
+    document.getElementById('acc-status').value = current.status;
+    document.getElementById('acc-remarks').value = current.remarks || '';
 
     openModal('modal-accessory-form');
   } catch (err) {
@@ -1510,6 +1865,7 @@ async function handleAccessorySubmit(e) {
       showToast(data.message || 'Accessory saved', 'success');
       closeModal('modal-accessory-form');
       loadAccessories();
+      loadDashboard();
     } else {
       showToast(data.error || 'Failed to save accessory', 'error');
     }
@@ -1526,11 +1882,251 @@ async function deleteAccessory(id) {
     if (res.ok) {
       showToast(data.message, 'success');
       loadAccessories();
+      loadDashboard();
     } else {
       showToast(data.error, 'error');
     }
   } catch (err) {
     showToast(err.message, 'error');
+  }
+}
+
+// Issue Accessory to Staff Modal Handlers
+function openAssignAccessoryModal(accId) {
+  const item = (window._cachedAccessories || []).find(a => a.id === accId);
+  if (!item) return;
+
+  document.getElementById('assign-acc-id').value = item.id;
+  document.getElementById('assign-acc-item-title').textContent = `${item.name} (${item.accessory_code})`;
+  document.getElementById('assign-acc-item-info').textContent = `Brand: ${item.brand || 'Standard'} • Available Quantity: ${item.quantity}`;
+  document.getElementById('assign-acc-user').value = '';
+  document.getElementById('assign-acc-location').value = item.location || '';
+  document.getElementById('assign-acc-remarks').value = '';
+
+  openModal('modal-assign-accessory');
+}
+
+async function submitAssignAccessory(e) {
+  e.preventDefault();
+  const accId = document.getElementById('assign-acc-id').value;
+  const payload = {
+    assigned_user: document.getElementById('assign-acc-user').value.trim(),
+    location: document.getElementById('assign-acc-location').value.trim(),
+    remarks: document.getElementById('assign-acc-remarks').value.trim()
+  };
+
+  try {
+    const res = await apiFetch(`/api/accessories/${accId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Accessory successfully assigned!', 'success');
+      closeModal('modal-assign-accessory');
+      loadAccessories();
+      loadDashboard();
+    } else {
+      showToast(data.error || 'Failed to assign accessory', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function returnAccessoryToStock(accId) {
+  if (!confirm('Return this accessory item back to Available stock in store room?')) return;
+
+  try {
+    const res = await apiFetch(`/api/accessories/${accId}/return`, {
+      method: 'POST',
+      body: JSON.stringify({ location: 'Store Room' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Accessory returned to stock', 'success');
+      loadAccessories();
+      loadDashboard();
+    } else {
+      showToast(data.error || 'Failed to return accessory', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ==========================================
+// 8B. BULK ASSET INVENTORY IMPORT
+// ==========================================
+
+let selectedBulkFile = null;
+
+function openBulkImportModal() {
+  selectedBulkFile = null;
+  const fileInput = document.getElementById('bulk-import-file');
+  if (fileInput) fileInput.value = '';
+
+  const label = document.getElementById('bulk-file-label');
+  if (label) label.textContent = 'Click to browse file or drag and drop here';
+
+  const previewContainer = document.getElementById('bulk-preview-container');
+  if (previewContainer) previewContainer.classList.add('hidden');
+
+  const resultsLog = document.getElementById('bulk-results-log');
+  if (resultsLog) {
+    resultsLog.innerHTML = '';
+    resultsLog.classList.add('hidden');
+  }
+
+  const btn = document.getElementById('btn-execute-bulk-import');
+  if (btn) btn.disabled = true;
+
+  openModal('modal-bulk-import');
+}
+
+function downloadAssetTemplate() {
+  window.open('/api/assets/template/csv', '_blank');
+}
+
+function handleBulkFileSelect(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  selectedBulkFile = file;
+
+  const label = document.getElementById('bulk-file-label');
+  if (label) {
+    label.innerHTML = `<span class="text-brand-600 font-bold">${escapeHtml(file.name)}</span> (${(file.size / 1024).toFixed(1)} KB)`;
+  }
+
+  const btn = document.getElementById('btn-execute-bulk-import');
+  if (btn) btn.disabled = false;
+
+  // If CSV, preview top rows client side
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length > 1) {
+        const previewRows = lines.slice(1, 11).map(l => {
+          return l.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        });
+
+        const countEl = document.getElementById('bulk-preview-count');
+        if (countEl) countEl.textContent = lines.length - 1;
+
+        const tbody = document.getElementById('bulk-preview-tbody');
+        if (tbody) {
+          tbody.innerHTML = previewRows.map(cols => `
+            <tr class="hover:bg-slate-50">
+              <td class="py-1.5 px-3 font-mono font-bold text-brand-600">#${escapeHtml(cols[0] || '')}</td>
+              <td class="py-1.5 px-3">${escapeHtml(cols[1] || '')}</td>
+              <td class="py-1.5 px-3">${escapeHtml(cols[2] || '')}</td>
+              <td class="py-1.5 px-3">${escapeHtml(cols[3] || '')}</td>
+              <td class="py-1.5 px-3">${escapeHtml(cols[7] || '')}</td>
+              <td class="py-1.5 px-3 font-semibold text-slate-800">${escapeHtml(cols[9] || '')}</td>
+              <td class="py-1.5 px-3">${escapeHtml(cols[10] || 'Working')}</td>
+            </tr>
+          `).join('');
+        }
+
+        const previewContainer = document.getElementById('bulk-preview-container');
+        if (previewContainer) previewContainer.classList.remove('hidden');
+      }
+    };
+    reader.readAsText(file);
+  } else {
+    // Excel file
+    const countEl = document.getElementById('bulk-preview-count');
+    if (countEl) countEl.textContent = 'Excel Spreadsheet';
+    const previewContainer = document.getElementById('bulk-preview-container');
+    if (previewContainer) previewContainer.classList.remove('hidden');
+    const tbody = document.getElementById('bulk-preview-tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-500 font-sans">Excel workbook file attached. Ready for atomic server batch insertion.</td></tr>`;
+    }
+  }
+}
+
+async function executeBulkImport() {
+  if (!selectedBulkFile) {
+    showToast('Please select a CSV or Excel file first', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-execute-bulk-import');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="inline-flex items-center gap-1.5"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Importing...</span></span>`;
+  lucide.createIcons();
+
+  const formData = new FormData();
+  formData.append('file', selectedBulkFile);
+
+  const token = localStorage.getItem('it_app_token');
+
+  try {
+    const res = await fetch('/api/assets/bulk-import', {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+
+    const data = await res.json();
+    const resultsLog = document.getElementById('bulk-results-log');
+
+    if (res.ok) {
+      showToast(data.message || `Successfully imported ${data.imported_count} assets!`, 'success');
+
+      if (resultsLog) {
+        resultsLog.classList.remove('hidden');
+        resultsLog.innerHTML = `
+          <div class="text-emerald-700 font-bold flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+            <span>Import Completed Successfully</span>
+          </div>
+          <div class="text-slate-700 mt-1 font-medium">
+            ✅ Added <strong>${data.imported_count}</strong> new IT asset records to the inventory.
+          </div>
+          ${data.skipped_count > 0 ? `
+            <div class="text-amber-700 mt-1">
+              ⚠️ Skipped ${data.skipped_count} row(s) due to duplicates or validation errors.
+            </div>
+          ` : ''}
+        `;
+        lucide.createIcons();
+      }
+
+      loadAssets();
+      loadDashboard();
+
+      setTimeout(() => {
+        closeModal('modal-bulk-import');
+      }, 1500);
+    } else {
+      showToast(data.error || 'Bulk import failed', 'error');
+      if (resultsLog) {
+        resultsLog.classList.remove('hidden');
+        resultsLog.innerHTML = `
+          <div class="text-rose-700 font-bold flex items-center gap-1.5">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600"></i>
+            <span>Import Errors: ${escapeHtml(data.error || 'Validation failure')}</span>
+          </div>
+          ${data.details && Array.isArray(data.details) ? `
+            <ul class="list-disc pl-4 mt-1 text-[11px] text-rose-600 space-y-0.5">
+              ${data.details.slice(0, 10).map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            </ul>
+          ` : ''}
+        `;
+        lucide.createIcons();
+      }
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Import Assets';
   }
 }
 

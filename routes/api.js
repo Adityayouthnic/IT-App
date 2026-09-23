@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const xlsx = require('xlsx');
 const { db } = require('../database');
 const { authenticateToken, requireRoles, logAudit } = require('../auth');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // All API routes require authentication
 router.use(authenticateToken);
@@ -24,6 +28,13 @@ router.get('/dashboard/stats', (req, res) => {
       FROM assets
     `).get();
 
+    // Priority Security: Unprotected Laptops and Desktops (require Quick Heal keys)
+    const unprotectedWorkstations = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM assets
+      WHERE asset_type IN ('Laptop', 'Desktop') AND quick_heal_key_id IS NULL
+    `).get().count;
+
     // Quick Heal Key counts
     const keyStats = db.prepare(`
       SELECT
@@ -39,16 +50,19 @@ router.get('/dashboard/stats', (req, res) => {
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN status IN ('In Progress', 'Awaiting Parts', 'Diagnosing') THEN 1 ELSE 0 END) as open_tickets,
+        SUM(CASE WHEN status IN ('Completed', 'Beyond Repair', 'Closed') THEN 1 ELSE 0 END) as closed_tickets,
         COALESCE(SUM(repair_cost), 0) as total_cost
       FROM repairs
     `).get();
 
-    // Accessories counts
+    // Accessories counts (Units and assignment tracking)
     const accStats = db.prepare(`
       SELECT
         COUNT(*) as total,
         COALESCE(SUM(quantity), 0) as total_units,
-        SUM(CASE WHEN status = 'In Stock' THEN quantity ELSE 0 END) as in_stock_units
+        COALESCE(SUM(CASE WHEN status = 'In Stock' THEN quantity ELSE 0 END), 0) as in_stock_units,
+        COALESCE(SUM(CASE WHEN status = 'Assigned' THEN quantity ELSE 0 END), 0) as assigned_units,
+        COALESCE(SUM(CASE WHEN status IN ('Damaged', 'Scrapped') THEN quantity ELSE 0 END), 0) as damaged_units
       FROM accessories
     `).get();
 
@@ -101,6 +115,7 @@ router.get('/dashboard/stats', (req, res) => {
 
     res.json({
       assets: assetStats,
+      unprotectedWorkstations,
       keys: keyStats,
       repairs: repairStats,
       accessories: accStats,
@@ -184,21 +199,27 @@ router.get('/assets', (req, res) => {
     `;
     const params = [];
 
-    if (search && search.trim()) {
-      const term = `%${search.trim()}%`;
-      query += ` AND (
-        a.internal_serial_number LIKE ? OR
-        a.asset_type LIKE ? OR
-        a.brand LIKE ? OR
-        a.model_name LIKE ? OR
-        a.department LIKE ? OR
-        a.location LIKE ? OR
-        a.assigned_user LIKE ? OR
-        a.remarks LIKE ? OR
-        a.parts_added_summary LIKE ? OR
-        k.product_key LIKE ?
-      )`;
-      params.push(term, term, term, term, term, term, term, term, term, term);
+    const searchTokens = (search && search.trim()) ? search.trim().toLowerCase().split(/\s+/).filter(Boolean) : [];
+
+    if (searchTokens.length > 0) {
+      // Require each token to match in at least one searchable column (AND condition across tokens)
+      searchTokens.forEach(tok => {
+        const term = `%${tok}%`;
+        query += ` AND (
+          LOWER(a.internal_serial_number) LIKE ? OR
+          LOWER(a.asset_type) LIKE ? OR
+          LOWER(a.brand) LIKE ? OR
+          LOWER(COALESCE(a.model_name, '')) LIKE ? OR
+          LOWER(COALESCE(a.serial_number, '')) LIKE ? OR
+          LOWER(COALESCE(a.department, '')) LIKE ? OR
+          LOWER(COALESCE(a.location, '')) LIKE ? OR
+          LOWER(COALESCE(a.assigned_user, '')) LIKE ? OR
+          LOWER(COALESCE(k.product_key, '')) LIKE ? OR
+          LOWER(COALESCE(a.remarks, '')) LIKE ? OR
+          LOWER(COALESCE(a.parts_added_summary, '')) LIKE ?
+        )`;
+        params.push(term, term, term, term, term, term, term, term, term, term, term);
+      });
     }
 
     if (type) {
@@ -221,16 +242,57 @@ router.get('/assets', (req, res) => {
       query += ` AND a.quick_heal_key_id IS NOT NULL`;
     } else if (quick_heal === 'unmapped') {
       query += ` AND a.quick_heal_key_id IS NULL`;
+    } else if (quick_heal === 'unprotected' || quick_heal === 'unprotected_workstations') {
+      query += ` AND a.asset_type IN ('Laptop', 'Desktop') AND a.quick_heal_key_id IS NULL`;
     }
 
-    query += ` ORDER BY CAST(a.internal_serial_number AS INTEGER) ASC, a.id ASC`;
+    // Relevance ordering: visible columns prioritized first
+    if (searchTokens.length > 0) {
+      const fullSearch = `%${search.trim().toLowerCase()}%`;
+      query += ` ORDER BY
+        CASE
+          WHEN LOWER(a.assigned_user) LIKE ? THEN 0
+          WHEN LOWER(a.internal_serial_number) LIKE ? THEN 1
+          WHEN LOWER(a.brand) LIKE ? OR LOWER(COALESCE(a.model_name, '')) LIKE ? THEN 2
+          WHEN LOWER(COALESCE(a.department, '')) LIKE ? THEN 3
+          ELSE 4
+        END ASC,
+        CAST(a.internal_serial_number AS INTEGER) ASC, a.id ASC`;
+      params.push(fullSearch, fullSearch, fullSearch, fullSearch, fullSearch);
+    } else {
+      query += ` ORDER BY CAST(a.internal_serial_number AS INTEGER) ASC, a.id ASC`;
+    }
 
     const assets = db.prepare(query).all(...params);
 
-    // Enrich with lifecycle info
+    // Enrich with lifecycle info and remarks match indicators
     const enriched = assets.map(asset => {
       const lifecycle = computeAssetLifecycle(asset, asset.repair_count, asset.total_repair_cost);
-      return { ...asset, ...lifecycle };
+
+      let matchedInRemarks = false;
+      let remarksSnippet = '';
+      if (searchTokens.length > 0) {
+        const primaryMatches = searchTokens.some(tok => {
+          const user = (asset.assigned_user || '').toLowerCase();
+          const serial = (asset.internal_serial_number || '').toLowerCase();
+          const brand = (asset.brand || '').toLowerCase();
+          const type = (asset.asset_type || '').toLowerCase();
+          const dept = (asset.department || '').toLowerCase();
+          const key = (asset.quick_heal_key_str || '').toLowerCase();
+          return user.includes(tok) || serial.includes(tok) || brand.includes(tok) || type.includes(tok) || dept.includes(tok) || key.includes(tok);
+        });
+        if (!primaryMatches && asset.remarks) {
+          matchedInRemarks = true;
+          remarksSnippet = asset.remarks;
+        }
+      }
+
+      return {
+        ...asset,
+        ...lifecycle,
+        matched_in_remarks: matchedInRemarks,
+        remarks_snippet: remarksSnippet
+      };
     });
 
     res.json({ assets: enriched, total: enriched.length });
@@ -450,9 +512,11 @@ router.put('/assets/:id', requireRoles('admin', 'technician'), (req, res) => {
       `).run(assetId, assigned_user || existing.assigned_user || '', newKeyId);
     }
 
+    const finalSerial = internal_serial_number ? String(internal_serial_number).trim() : existing.internal_serial_number;
+
     db.prepare(`
       UPDATE assets SET
-        internal_serial_number = COALESCE(?, internal_serial_number),
+        internal_serial_number = ?,
         asset_type = COALESCE(?, asset_type),
         brand = COALESCE(?, brand),
         model_name = COALESCE(?, model_name),
@@ -472,29 +536,29 @@ router.put('/assets/:id', requireRoles('admin', 'technician'), (req, res) => {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
-      internal_serial_number,
-      asset_type,
-      brand,
-      model_name,
-      serial_number,
+      finalSerial,
+      asset_type ? asset_type.trim() : existing.asset_type,
+      brand !== undefined ? brand.trim() : existing.brand,
+      model_name !== undefined ? model_name.trim() : existing.model_name,
+      serial_number !== undefined ? serial_number.trim() : existing.serial_number,
       purchase_date || null,
-      purchase_vendor,
+      purchase_vendor !== undefined ? purchase_vendor.trim() : existing.purchase_vendor,
       purchase_cost !== undefined ? Number(purchase_cost) : existing.purchase_cost,
-      department,
-      location,
-      assigned_user,
+      department !== undefined ? department.trim() : existing.department,
+      location !== undefined ? location.trim() : existing.location,
+      assigned_user !== undefined ? assigned_user.trim() : existing.assigned_user,
       newKeyId,
-      working_status,
-      condition_rating,
+      working_status || existing.working_status,
+      condition_rating || existing.condition_rating,
       is_repaired !== undefined ? (is_repaired ? 1 : 0) : existing.is_repaired,
-      parts_added_summary,
-      remarks,
+      parts_added_summary !== undefined ? parts_added_summary.trim() : existing.parts_added_summary,
+      remarks !== undefined ? remarks.trim() : existing.remarks,
       assetId
     );
 
-    logAudit(req.user.id, req.user.username, 'UPDATE_ASSET', 'asset', assetId, `Updated asset ${internal_serial_number || existing.internal_serial_number}`);
+    logAudit(req.user.id, req.user.username, 'UPDATE_ASSET', 'asset', assetId, `Updated asset ${finalSerial}`);
 
-    res.json({ message: 'Asset updated successfully' });
+    res.json({ message: 'Asset updated successfully', asset: { ...existing, internal_serial_number: finalSerial } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -521,6 +585,131 @@ router.delete('/assets/:id', requireRoles('admin'), (req, res) => {
     logAudit(req.user.id, req.user.username, 'DELETE_ASSET', 'asset', req.params.id, `Deleted asset ${asset.internal_serial_number}`);
 
     res.json({ message: 'Asset deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/assets/template/csv - Download Sample CSV Template for Bulk Import
+router.get('/assets/template/csv', (req, res) => {
+  const templateContent = [
+    'Internal Serial Number,Asset Type,Brand,Model Name,Manufacturer Serial,Purchase Date,Purchase Vendor,Purchase Cost,Department,Location,Assigned User,Working Status,Condition Rating,Parts Added,Remarks',
+    '50060,Laptop,Lenovo,ThinkPad T14,PF-99901,2026-01-15,Lenovo Store,65000,Accounts,Head Office Floor 2,Rohan Gupta,Working,Good,,Standard office laptop',
+    '50061,Desktop,Dell,OptiPlex 3080,DL-44821,2025-11-20,Dell Direct,48000,Orders,Orders Floor Desk 4,Priya Patel,Working,Good,Upgraded 16GB RAM,For order processing',
+    '50062,Tag Printer,TSC,TE244,TSC-8812,2025-08-10,TSC Vendor,14500,Dispatch,Dispatch Bay,FREE,Working,Good,,Picklist label printing'
+  ].join('\r\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="it_assets_bulk_import_template.csv"');
+  res.send(templateContent);
+});
+
+// POST /api/assets/bulk-import - Bulk import assets via CSV/Excel or JSON
+router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), (req, res) => {
+  try {
+    let rows = [];
+
+    if (req.file) {
+      // Parse CSV or Excel from uploaded buffer
+      const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = wb.SheetNames[0];
+      rows = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+    } else if (req.body.assets && Array.isArray(req.body.assets)) {
+      rows = req.body.assets;
+    } else {
+      return res.status(400).json({ error: 'Please upload a CSV or Excel file, or provide asset rows in the request.' });
+    }
+
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({ error: 'No data found in uploaded file.' });
+    }
+
+    const results = {
+      total: rows.length,
+      imported: 0,
+      skipped: 0,
+      errors: []
+    };
+
+    const insertAsset = db.prepare(`
+      INSERT INTO assets (
+        internal_serial_number, asset_type, brand, model_name, serial_number,
+        purchase_date, purchase_vendor, purchase_cost, department, location,
+        assigned_user, working_status, condition_rating, parts_added_summary, remarks
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const checkSerial = db.prepare('SELECT id FROM assets WHERE internal_serial_number = ?');
+    const existingInBatch = new Set();
+
+    const transaction = db.transaction(() => {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rawSerial = row['Internal Serial Number'] || row['internal_serial_number'] || row['Serial Number'] || row['serial'];
+        const serial = rawSerial ? String(rawSerial).trim() : '';
+
+        if (!serial) {
+          results.skipped++;
+          results.errors.push(`Row ${i + 1}: Missing Internal Serial Number.`);
+          continue;
+        }
+
+        if (existingInBatch.has(serial) || checkSerial.get(serial)) {
+          results.skipped++;
+          results.errors.push(`Row ${i + 1}: Serial Number '${serial}' already exists.`);
+          continue;
+        }
+
+        existingInBatch.add(serial);
+
+        const assetType = String(row['Asset Type'] || row['asset_type'] || row['Type of System'] || 'Other').trim();
+        const brand = String(row['Brand'] || row['brand'] || row['Brand of the product'] || '').trim();
+        const model = String(row['Model Name'] || row['model_name'] || row['Model'] || '').trim();
+        const hwSerial = String(row['Manufacturer Serial'] || row['serial_number'] || '').trim();
+        let purchaseDate = String(row['Purchase Date'] || row['purchase_date'] || '').trim();
+        if (purchaseDate === 'None' || !purchaseDate) purchaseDate = null;
+        const vendor = String(row['Purchase Vendor'] || row['purchase_vendor'] || row['Vendor'] || '').trim();
+        const cost = Number(row['Purchase Cost'] || row['purchase_cost'] || row['Cost'] || 0) || 0;
+        const dept = String(row['Department'] || row['department'] || 'General').trim();
+        const location = String(row['Location'] || row['location'] || '').trim();
+        const user = String(row['Assigned User'] || row['assigned_user'] || row['User Name'] || 'Unassigned').trim();
+        const status = String(row['Working Status'] || row['working_status'] || 'Working').trim();
+        const condition = String(row['Condition Rating'] || row['condition_rating'] || 'Good').trim();
+        const parts = String(row['Parts Added'] || row['parts_added_summary'] || '').trim();
+        const remarks = String(row['Remarks'] || row['remarks'] || '').trim();
+
+        insertAsset.run(
+          serial,
+          assetType || 'Other',
+          brand,
+          model,
+          hwSerial,
+          purchaseDate,
+          vendor,
+          cost,
+          dept,
+          location,
+          user,
+          status,
+          condition,
+          parts,
+          remarks
+        );
+
+        results.imported++;
+      }
+    });
+
+    transaction();
+
+    logAudit(req.user.id, req.user.username, 'BULK_IMPORT_ASSETS', 'asset', 'batch', `Bulk imported ${results.imported} assets, skipped ${results.skipped}`);
+
+    res.json({
+      message: `Bulk import completed: ${results.imported} assets imported, ${results.skipped} skipped.`,
+      imported_count: results.imported,
+      skipped_count: results.skipped,
+      results
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -581,10 +770,10 @@ router.get('/export/csv', (req, res) => {
 // 3. REPAIRS & LIFECYCLE ENDPOINTS
 // ==========================================
 
-// GET /api/repairs - List repair tickets
+// GET /api/repairs - List repair tickets with due date and open/closed filters
 router.get('/repairs', (req, res) => {
   try {
-    const { status, asset_id, search } = req.query;
+    const { status, ticket_status, asset_id, search } = req.query;
     let query = `
       SELECT r.*, a.internal_serial_number, a.brand, a.asset_type, a.assigned_user, a.department
       FROM repairs r
@@ -593,32 +782,46 @@ router.get('/repairs', (req, res) => {
     `;
     const params = [];
 
-    if (status) {
+    if (ticket_status === 'open') {
+      query += ` AND r.status IN ('In Progress', 'Awaiting Parts', 'Diagnosing')`;
+    } else if (ticket_status === 'closed') {
+      query += ` AND r.status IN ('Completed', 'Beyond Repair', 'Closed')`;
+    } else if (status) {
       query += ` AND r.status = ?`;
       params.push(status);
     }
+
     if (asset_id) {
       query += ` AND r.asset_id = ?`;
       params.push(asset_id);
     }
     if (search && search.trim()) {
-      const term = `%${search.trim()}%`;
+      const term = `%${search.trim().toLowerCase()}%`;
       query += ` AND (
-        r.ticket_number LIKE ? OR
-        r.issue_description LIKE ? OR
-        r.repair_vendor LIKE ? OR
-        r.technician_name LIKE ? OR
-        r.parts_added LIKE ? OR
-        r.remarks LIKE ? OR
-        a.internal_serial_number LIKE ? OR
-        a.assigned_user LIKE ?
+        LOWER(r.ticket_number) LIKE ? OR
+        LOWER(r.issue_description) LIKE ? OR
+        LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
+        LOWER(COALESCE(r.technician_name, '')) LIKE ? OR
+        LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
+        LOWER(COALESCE(r.remarks, '')) LIKE ? OR
+        LOWER(a.internal_serial_number) LIKE ? OR
+        LOWER(COALESCE(a.assigned_user, '')) LIKE ?
       )`;
       params.push(term, term, term, term, term, term, term, term);
     }
 
     query += ` ORDER BY r.created_at DESC`;
     const repairs = db.prepare(query).all(...params);
-    res.json({ repairs });
+
+    const counts = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        COALESCE(SUM(CASE WHEN status IN ('In Progress', 'Awaiting Parts', 'Diagnosing') THEN 1 ELSE 0 END), 0) as open_count,
+        COALESCE(SUM(CASE WHEN status IN ('Completed', 'Beyond Repair', 'Closed') THEN 1 ELSE 0 END), 0) as closed_count
+      FROM repairs
+    `).get();
+
+    res.json({ repairs, counts });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -631,6 +834,7 @@ router.post('/repairs', requireRoles('admin', 'technician'), (req, res) => {
       asset_id,
       issue_description,
       repair_date,
+      due_date,
       repair_vendor,
       technician_name,
       technician_contact,
@@ -666,10 +870,10 @@ router.post('/repairs', requireRoles('admin', 'technician'), (req, res) => {
 
     const insert = db.prepare(`
       INSERT INTO repairs (
-        ticket_number, asset_id, issue_description, repair_date, repair_vendor,
+        ticket_number, asset_id, issue_description, repair_date, due_date, repair_vendor,
         technician_name, technician_contact, repair_type, parts_added,
         repair_cost, status, remarks, warranty_months
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = insert.run(
@@ -677,6 +881,7 @@ router.post('/repairs', requireRoles('admin', 'technician'), (req, res) => {
       asset_id,
       issue_description.trim(),
       repair_date,
+      due_date || null,
       repair_vendor ? repair_vendor.trim() : '',
       technician_name ? technician_name.trim() : '',
       technician_contact ? technician_contact.trim() : '',
@@ -692,7 +897,6 @@ router.post('/repairs', requireRoles('admin', 'technician'), (req, res) => {
     if (status !== 'Completed' && status !== 'Beyond Repair') {
       db.prepare(`UPDATE assets SET working_status = 'In Repair', is_repaired = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(asset_id);
     } else if (status === 'Completed') {
-      // Append parts to parts_added_summary
       let updatedParts = asset.parts_added_summary || '';
       if (parts_added && parts_added.trim()) {
         updatedParts = updatedParts ? `${updatedParts}; ${parts_added.trim()}` : parts_added.trim();
@@ -724,6 +928,7 @@ router.put('/repairs/:id', requireRoles('admin', 'technician'), (req, res) => {
     const {
       issue_description,
       repair_date,
+      due_date,
       repair_vendor,
       technician_name,
       technician_contact,
@@ -738,12 +943,13 @@ router.put('/repairs/:id', requireRoles('admin', 'technician'), (req, res) => {
     } = req.body;
 
     const newStatus = status || existing.status;
-    const newCompletionDate = (newStatus === 'Completed' && !completion_date) ? new Date().toISOString().split('T')[0] : completion_date;
+    const newCompletionDate = (newStatus === 'Completed' && !completion_date) ? new Date().toISOString().split('T')[0] : (completion_date !== undefined ? completion_date : existing.completion_date);
 
     db.prepare(`
       UPDATE repairs SET
         issue_description = COALESCE(?, issue_description),
         repair_date = COALESCE(?, repair_date),
+        due_date = ?,
         repair_vendor = COALESCE(?, repair_vendor),
         technician_name = COALESCE(?, technician_name),
         technician_contact = COALESCE(?, technician_contact),
@@ -759,6 +965,7 @@ router.put('/repairs/:id', requireRoles('admin', 'technician'), (req, res) => {
     `).run(
       issue_description,
       repair_date,
+      due_date !== undefined ? due_date : existing.due_date,
       repair_vendor,
       technician_name,
       technician_contact,
@@ -796,6 +1003,70 @@ router.put('/repairs/:id', requireRoles('admin', 'technician'), (req, res) => {
     logAudit(req.user.id, req.user.username, 'UPDATE_REPAIR', 'repair', repairId, `Updated repair ticket ${existing.ticket_number}`);
 
     res.json({ message: 'Repair ticket updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/repairs/:id/close - Close and resolve a repair ticket
+router.post('/repairs/:id/close', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const repairId = req.params.id;
+    const existing = db.prepare('SELECT * FROM repairs WHERE id = ?').get(repairId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    const {
+      completion_date,
+      repair_cost,
+      parts_added,
+      remarks,
+      asset_working_status = 'Working'
+    } = req.body;
+
+    const finalDate = completion_date || new Date().toISOString().split('T')[0];
+    const finalCost = repair_cost !== undefined ? Number(repair_cost) : existing.repair_cost;
+    const finalParts = parts_added !== undefined ? parts_added.trim() : (existing.parts_added || '');
+    const finalRemarks = remarks !== undefined ? remarks.trim() : (existing.remarks || '');
+
+    const transaction = db.transaction(() => {
+      // 1. Update repair ticket to Completed
+      db.prepare(`
+        UPDATE repairs SET
+          status = 'Completed',
+          completion_date = ?,
+          repair_cost = ?,
+          parts_added = ?,
+          remarks = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(finalDate, finalCost, finalParts, finalRemarks, repairId);
+
+      // 2. Restore asset status and append parts summary
+      const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(existing.asset_id);
+      if (asset) {
+        let updatedParts = asset.parts_added_summary || '';
+        if (finalParts && !updatedParts.includes(finalParts)) {
+          updatedParts = updatedParts ? `${updatedParts}; ${finalParts}` : finalParts;
+        }
+
+        db.prepare(`
+          UPDATE assets SET
+            working_status = ?,
+            is_repaired = 1,
+            parts_added_summary = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(asset_working_status, updatedParts, existing.asset_id);
+      }
+    });
+
+    transaction();
+
+    logAudit(req.user.id, req.user.username, 'CLOSE_REPAIR', 'repair', repairId, `Resolved and closed ticket ${existing.ticket_number}`);
+
+    res.json({ message: `Ticket ${existing.ticket_number} successfully resolved and closed. Asset restored to ${asset_working_status}.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1103,28 +1374,40 @@ router.get('/accessories', (req, res) => {
       params.push(status);
     }
     if (search && search.trim()) {
-      const term = `%${search.trim()}%`;
+      const term = `%${search.trim().toLowerCase()}%`;
       query += ` AND (
-        acc.accessory_code LIKE ? OR
-        acc.name LIKE ? OR
-        acc.brand LIKE ? OR
-        acc.model LIKE ? OR
-        acc.assigned_user LIKE ? OR
-        acc.location LIKE ? OR
-        acc.remarks LIKE ?
+        LOWER(acc.accessory_code) LIKE ? OR
+        LOWER(acc.name) LIKE ? OR
+        LOWER(acc.brand) LIKE ? OR
+        LOWER(acc.model) LIKE ? OR
+        LOWER(COALESCE(acc.assigned_user, '')) LIKE ? OR
+        LOWER(COALESCE(acc.location, '')) LIKE ? OR
+        LOWER(COALESCE(acc.remarks, '')) LIKE ?
       )`;
       params.push(term, term, term, term, term, term, term);
     }
 
     query += ` ORDER BY acc.id ASC`;
     const accessories = db.prepare(query).all(...params);
-    res.json({ accessories });
+
+    // Compute live inventory summary statistics
+    const stats = db.prepare(`
+      SELECT
+        COUNT(*) as total_records,
+        COALESCE(SUM(quantity), 0) as total_units,
+        COALESCE(SUM(CASE WHEN status = 'In Stock' THEN quantity ELSE 0 END), 0) as in_stock_units,
+        COALESCE(SUM(CASE WHEN status = 'Assigned' THEN quantity ELSE 0 END), 0) as assigned_units,
+        COALESCE(SUM(CASE WHEN status IN ('Damaged', 'Scrapped') THEN quantity ELSE 0 END), 0) as damaged_units
+      FROM accessories
+    `).get();
+
+    res.json({ accessories, stats });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/accessories
+// POST /api/accessories - Add new accessory
 router.post('/accessories', requireRoles('admin', 'technician'), (req, res) => {
   try {
     const { accessory_code, name, category, brand, model, serial_number, quantity, assigned_user, assigned_asset_id, location, status, purchase_date, cost, remarks } = req.body;
@@ -1228,6 +1511,75 @@ router.put('/accessories/:id', requireRoles('admin', 'technician'), (req, res) =
   }
 });
 
+// POST /api/accessories/:id/assign - Assign accessory to a person or asset
+router.post('/accessories/:id/assign', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const accId = req.params.id;
+    const existing = db.prepare('SELECT * FROM accessories WHERE id = ?').get(accId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Accessory not found.' });
+    }
+
+    const { assigned_user, assigned_asset_id, location, remarks } = req.body;
+    if (!assigned_user || !assigned_user.trim()) {
+      return res.status(400).json({ error: 'Person/User name is required for assignment.' });
+    }
+
+    db.prepare(`
+      UPDATE accessories SET
+        status = 'Assigned',
+        assigned_user = ?,
+        assigned_asset_id = ?,
+        location = COALESCE(?, location),
+        remarks = COALESCE(?, remarks),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      assigned_user.trim(),
+      assigned_asset_id || null,
+      location ? location.trim() : null,
+      remarks ? remarks.trim() : null,
+      accId
+    );
+
+    logAudit(req.user.id, req.user.username, 'ASSIGN_ACCESSORY', 'accessory', accId, `Assigned accessory ${existing.accessory_code} to ${assigned_user}`);
+
+    res.json({ message: `Accessory successfully assigned to ${assigned_user.trim()}.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/accessories/:id/return - Return accessory back to stock
+router.post('/accessories/:id/return', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const accId = req.params.id;
+    const existing = db.prepare('SELECT * FROM accessories WHERE id = ?').get(accId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Accessory not found.' });
+    }
+
+    const { location = 'IT Store Room', remarks } = req.body;
+
+    db.prepare(`
+      UPDATE accessories SET
+        status = 'In Stock',
+        assigned_user = '',
+        assigned_asset_id = NULL,
+        location = ?,
+        remarks = COALESCE(?, remarks),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(location.trim(), remarks ? remarks.trim() : null, accId);
+
+    logAudit(req.user.id, req.user.username, 'RETURN_ACCESSORY', 'accessory', accId, `Returned accessory ${existing.accessory_code} to stock`);
+
+    res.json({ message: `Accessory ${existing.accessory_code} returned to ${location}.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/accessories/:id (Admin only)
 router.delete('/accessories/:id', requireRoles('admin'), (req, res) => {
   try {
@@ -1253,6 +1605,7 @@ router.get('/search', (req, res) => {
     const q = (req.query.q || '').trim();
     if (!q) {
       return res.json({
+        query: '',
         totalResults: 0,
         assets: [],
         repairs: [],
@@ -1262,80 +1615,150 @@ router.get('/search', (req, res) => {
       });
     }
 
-    const term = `%${q}%`;
+    const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
 
-    // 1. Search Assets
-    const assets = db.prepare(`
+    // 1. Assets Tokenized Search
+    let assetQuery = `
       SELECT a.*, k.product_key as quick_heal_key_str
       FROM assets a
       LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
-      WHERE a.internal_serial_number LIKE ?
-         OR a.asset_type LIKE ?
-         OR a.brand LIKE ?
-         OR a.model_name LIKE ?
-         OR a.department LIKE ?
-         OR a.location LIKE ?
-         OR a.assigned_user LIKE ?
-         OR a.remarks LIKE ?
-         OR a.parts_added_summary LIKE ?
-         OR a.working_status LIKE ?
-         OR k.product_key LIKE ?
-      LIMIT 20
-    `).all(term, term, term, term, term, term, term, term, term, term, term);
+      WHERE 1=1
+    `;
+    const assetParams = [];
+    tokens.forEach(tok => {
+      const term = `%${tok}%`;
+      assetQuery += ` AND (
+        LOWER(a.internal_serial_number) LIKE ? OR
+        LOWER(a.asset_type) LIKE ? OR
+        LOWER(a.brand) LIKE ? OR
+        LOWER(COALESCE(a.model_name, '')) LIKE ? OR
+        LOWER(COALESCE(a.serial_number, '')) LIKE ? OR
+        LOWER(COALESCE(a.department, '')) LIKE ? OR
+        LOWER(COALESCE(a.location, '')) LIKE ? OR
+        LOWER(COALESCE(a.assigned_user, '')) LIKE ? OR
+        LOWER(COALESCE(k.product_key, '')) LIKE ? OR
+        LOWER(COALESCE(a.remarks, '')) LIKE ? OR
+        LOWER(COALESCE(a.parts_added_summary, '')) LIKE ?
+      )`;
+      assetParams.push(term, term, term, term, term, term, term, term, term, term, term);
+    });
 
-    // 2. Search Repairs
-    const repairs = db.prepare(`
+    assetQuery += ` ORDER BY
+      CASE
+        WHEN LOWER(a.assigned_user) LIKE ? THEN 0
+        WHEN LOWER(a.internal_serial_number) LIKE ? THEN 1
+        WHEN LOWER(a.brand) LIKE ? THEN 2
+        WHEN LOWER(COALESCE(a.department, '')) LIKE ? THEN 3
+        ELSE 4
+      END ASC,
+      CAST(a.internal_serial_number AS INTEGER) ASC LIMIT 25`;
+    const fullPattern = `%${q.toLowerCase()}%`;
+    assetParams.push(fullPattern, fullPattern, fullPattern, fullPattern);
+    const rawAssets = db.prepare(assetQuery).all(...assetParams);
+
+    const assets = rawAssets.map(a => {
+      const primaryMatches = tokens.some(tok => {
+        const u = (a.assigned_user || '').toLowerCase();
+        const s = (a.internal_serial_number || '').toLowerCase();
+        const b = (a.brand || '').toLowerCase();
+        const d = (a.department || '').toLowerCase();
+        return u.includes(tok) || s.includes(tok) || b.includes(tok) || d.includes(tok);
+      });
+      return {
+        ...a,
+        matched_in_remarks: !primaryMatches && Boolean(a.remarks),
+        remarks_snippet: a.remarks || ''
+      };
+    });
+
+    // 2. Repairs Tokenized Search
+    let repairQuery = `
       SELECT r.*, a.internal_serial_number, a.brand, a.asset_type, a.assigned_user
       FROM repairs r
       JOIN assets a ON r.asset_id = a.id
-      WHERE r.ticket_number LIKE ?
-         OR r.issue_description LIKE ?
-         OR r.repair_vendor LIKE ?
-         OR r.technician_name LIKE ?
-         OR r.parts_added LIKE ?
-         OR r.remarks LIKE ?
-         OR a.internal_serial_number LIKE ?
-         OR a.assigned_user LIKE ?
-      LIMIT 20
-    `).all(term, term, term, term, term, term, term, term);
+      WHERE 1=1
+    `;
+    const repairParams = [];
+    tokens.forEach(tok => {
+      const term = `%${tok}%`;
+      repairQuery += ` AND (
+        LOWER(r.ticket_number) LIKE ? OR
+        LOWER(r.issue_description) LIKE ? OR
+        LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
+        LOWER(COALESCE(r.technician_name, '')) LIKE ? OR
+        LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
+        LOWER(COALESCE(r.remarks, '')) LIKE ? OR
+        LOWER(a.internal_serial_number) LIKE ? OR
+        LOWER(COALESCE(a.assigned_user, '')) LIKE ?
+      )`;
+      repairParams.push(term, term, term, term, term, term, term, term);
+    });
+    repairQuery += ` ORDER BY r.created_at DESC LIMIT 20`;
+    const repairs = db.prepare(repairQuery).all(...repairParams);
 
-    // 3. Search Quick Heal Keys
-    const keys = db.prepare(`
+    // 3. Keys Tokenized Search
+    let keyQuery = `
       SELECT k.*, a.internal_serial_number, a.assigned_user as asset_assigned_user
       FROM quick_heal_keys k
       LEFT JOIN assets a ON k.assigned_asset_id = a.id
-      WHERE k.product_key LIKE ?
-         OR k.assigned_user LIKE ?
-         OR k.notes LIKE ?
-         OR a.internal_serial_number LIKE ?
-      LIMIT 20
-    `).all(term, term, term, term);
+      WHERE 1=1
+    `;
+    const keyParams = [];
+    tokens.forEach(tok => {
+      const term = `%${tok}%`;
+      keyQuery += ` AND (
+        LOWER(k.product_key) LIKE ? OR
+        LOWER(COALESCE(k.assigned_user, '')) LIKE ? OR
+        LOWER(COALESCE(k.notes, '')) LIKE ? OR
+        LOWER(COALESCE(a.internal_serial_number, '')) LIKE ?
+      )`;
+      keyParams.push(term, term, term, term);
+    });
+    keyQuery += ` ORDER BY k.status ASC, k.validity_date ASC LIMIT 20`;
+    const keys = db.prepare(keyQuery).all(...keyParams);
 
-    // 4. Search Accessories
-    const accessories = db.prepare(`
+    // 4. Accessories Tokenized Search
+    let accQuery = `
       SELECT acc.*, a.internal_serial_number as asset_serial
       FROM accessories acc
       LEFT JOIN assets a ON acc.assigned_asset_id = a.id
-      WHERE acc.accessory_code LIKE ?
-         OR acc.name LIKE ?
-         OR acc.category LIKE ?
-         OR acc.brand LIKE ?
-         OR acc.model LIKE ?
-         OR acc.assigned_user LIKE ?
-         OR acc.location LIKE ?
-         OR acc.remarks LIKE ?
-      LIMIT 20
-    `).all(term, term, term, term, term, term, term, term);
+      WHERE 1=1
+    `;
+    const accParams = [];
+    tokens.forEach(tok => {
+      const term = `%${tok}%`;
+      accQuery += ` AND (
+        LOWER(acc.accessory_code) LIKE ? OR
+        LOWER(acc.name) LIKE ? OR
+        LOWER(acc.category) LIKE ? OR
+        LOWER(COALESCE(acc.brand, '')) LIKE ? OR
+        LOWER(COALESCE(acc.model, '')) LIKE ? OR
+        LOWER(COALESCE(acc.assigned_user, '')) LIKE ? OR
+        LOWER(COALESCE(acc.location, '')) LIKE ? OR
+        LOWER(COALESCE(acc.remarks, '')) LIKE ?
+      )`;
+      accParams.push(term, term, term, term, term, term, term, term);
+    });
+    accQuery += ` ORDER BY acc.id ASC LIMIT 20`;
+    const accessories = db.prepare(accQuery).all(...accParams);
 
-    // 5. Search Users (Admin and Technicians only)
+    // 5. Users Search (Admin and Technicians only)
     let users = [];
     if (['admin', 'technician'].includes(req.user.role)) {
-      users = db.prepare(`
-        SELECT id, username, full_name, email, role, status
-        FROM users
-        WHERE username LIKE ? OR full_name LIKE ? OR email LIKE ? OR role LIKE ?
-        LIMIT 10
-      `).all(term, term, term, term);
+      let userQuery = `SELECT id, username, full_name, email, role, status FROM users WHERE 1=1`;
+      const userParams = [];
+      tokens.forEach(tok => {
+        const term = `%${tok}%`;
+        userQuery += ` AND (
+          LOWER(username) LIKE ? OR
+          LOWER(full_name) LIKE ? OR
+          LOWER(COALESCE(email, '')) LIKE ? OR
+          LOWER(role) LIKE ?
+        )`;
+        userParams.push(term, term, term, term);
+      });
+      userQuery += ` LIMIT 10`;
+      users = db.prepare(userQuery).all(...userParams);
     }
 
     const totalResults = assets.length + repairs.length + keys.length + accessories.length + users.length;

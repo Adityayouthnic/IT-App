@@ -73,6 +73,7 @@ function initSchema() {
       asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
       issue_description TEXT NOT NULL,
       repair_date TEXT NOT NULL,
+      due_date TEXT,
       repair_vendor TEXT,
       technician_name TEXT,
       technician_contact TEXT,
@@ -128,8 +129,21 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(assigned_user);
     CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(working_status);
     CREATE INDEX IF NOT EXISTS idx_repairs_asset ON repairs(asset_id);
+    CREATE INDEX IF NOT EXISTS idx_repairs_status ON repairs(status);
     CREATE INDEX IF NOT EXISTS idx_keys_code ON quick_heal_keys(product_key);
+    CREATE INDEX IF NOT EXISTS idx_acc_status ON accessories(status);
   `);
+
+  // Migration: Ensure due_date column exists in repairs
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(repairs)").all();
+    const hasDueDate = tableInfo.some(col => col.name === 'due_date');
+    if (!hasDueDate) {
+      db.exec("ALTER TABLE repairs ADD COLUMN due_date TEXT");
+    }
+  } catch (e) {
+    console.warn('Migration due_date check error:', e.message);
+  }
 }
 
 // Seed Initial Users

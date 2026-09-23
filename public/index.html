@@ -213,6 +213,29 @@
           </button>
         </div>
 
+        <!-- High Priority Security Alert for Unprotected Workstations -->
+        <div id="sec-alert-banner" class="hidden bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-rose-500/10 border-2 border-rose-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div class="flex items-start sm:items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-rose-500/30">
+              <i data-lucide="shield-alert" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-black uppercase tracking-wider text-rose-700 bg-rose-100 px-2 py-0.5 rounded">High Security Risk</span>
+                <span class="text-xs text-rose-600 font-semibold">Priority Action Required</span>
+              </div>
+              <p class="text-sm font-bold text-slate-900 mt-1">
+                <span id="sec-alert-count" class="font-mono text-rose-600 font-extrabold text-base">0</span> Workstation(s) (Laptops / Desktops) do not have Quick Heal Antivirus Keys Assigned!
+              </p>
+              <p class="text-xs text-slate-500">Unprotected endpoints pose security vulnerabilities to company network and order databases.</p>
+            </div>
+          </div>
+          <button onclick="navigate('assets', { quick_heal: 'unprotected' })" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-md shadow-rose-500/25 transition-all flex-shrink-0">
+            <i data-lucide="shield-plus" class="w-4 h-4"></i>
+            <span>View & Protect Devices</span>
+          </button>
+        </div>
+
         <!-- 6 KPI Metric Cards -->
         <div class="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
           <!-- Total Assets -->
@@ -377,6 +400,10 @@
               <i data-lucide="download" class="w-3.5 h-3.5 text-slate-500"></i>
               <span>Export CSV</span>
             </button>
+            <button onclick="openBulkImportModal()" class="tech-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-all">
+              <i data-lucide="upload" class="w-3.5 h-3.5 text-slate-500"></i>
+              <span>Bulk Import</span>
+            </button>
             <button onclick="openNewAssetModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               <span>Add IT Asset</span>
@@ -423,8 +450,9 @@
 
           <select id="asset-filter-key" onchange="loadAssets()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Antivirus</option>
+            <option value="unprotected">⚠️ Unprotected Workstations (Laptops & Desktops)</option>
             <option value="mapped">Mapped Key</option>
-            <option value="unmapped">No Key Mapped</option>
+            <option value="unmapped">No Key Mapped (Any Asset)</option>
           </select>
 
           <button onclick="resetAssetFilters()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
@@ -477,6 +505,22 @@
           </button>
         </div>
 
+        <!-- Ticket Status Filter Tabs -->
+        <div class="flex items-center gap-2 border-b border-slate-200 pb-3">
+          <button id="tab-repairs-all" onclick="filterRepairTab('all')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+            <span>All Tickets</span>
+            <span id="repairs-total-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-700 text-slate-200">0</span>
+          </button>
+          <button id="tab-repairs-open" onclick="filterRepairTab('open')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5">
+            <span>Open Tickets</span>
+            <span id="repairs-open-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold">0</span>
+          </button>
+          <button id="tab-repairs-closed" onclick="filterRepairTab('closed')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5">
+            <span>Closed / Resolved</span>
+            <span id="repairs-closed-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-extrabold">0</span>
+          </button>
+        </div>
+
         <!-- Filter Bar -->
         <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
           <div class="relative flex-1 min-w-[200px]">
@@ -508,7 +552,8 @@
                   <th class="py-3 px-4">Issue Description</th>
                   <th class="py-3 px-4">Parts Added / Replaced</th>
                   <th class="py-3 px-4">Technician / Vendor</th>
-                  <th class="py-3 px-4">Date</th>
+                  <th class="py-3 px-4">Logged Date</th>
+                  <th class="py-3 px-4">Due Date</th>
                   <th class="py-3 px-4">Cost</th>
                   <th class="py-3 px-4">Status</th>
                   <th class="py-3 px-4 text-right">Actions</th>
@@ -640,6 +685,40 @@
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
             <span>Add Accessory</span>
           </button>
+        <!-- Accessories Stock Summary KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Total Stock / Units</span>
+              <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <i data-lucide="package" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="acc-metric-total" class="text-2xl font-black text-slate-900">0</div>
+            <p class="text-[10px] text-slate-500 font-medium mt-0.5">Total inventory units across categories</p>
+          </div>
+
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Available in Stock</span>
+              <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="acc-metric-available" class="text-2xl font-black text-emerald-600">0</div>
+            <p class="text-[10px] text-emerald-600 font-medium mt-0.5">Ready for deployment to staff</p>
+          </div>
+
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider">Assigned to Personnel</span>
+              <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                <i data-lucide="user-check" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div id="acc-metric-assigned" class="text-2xl font-black text-purple-600">0</div>
+            <p class="text-[10px] text-purple-600 font-medium mt-0.5">Currently issued to staff members</p>
+          </div>
         </div>
 
         <!-- Filter Bar -->
@@ -931,6 +1010,16 @@
               <option value="Retired">Retired / Scrapped</option>
             </select>
           </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Condition Rating *</label>
+            <select id="asset-condition" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              <option value="Good" selected>Good</option>
+              <option value="New">New</option>
+              <option value="Fair">Fair</option>
+              <option value="Poor">Poor</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </div>
           <div class="sm:col-span-2">
             <label class="block text-xs font-semibold text-slate-700 mb-1">Map Quick Heal Antivirus Key</label>
             <select id="asset-key-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 font-mono">
@@ -966,15 +1055,33 @@
       <form id="form-repair" onsubmit="handleRepairSubmit(event)" class="flex-1 overflow-y-auto p-6 space-y-4">
         <input type="hidden" id="repair-form-id">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="sm:col-span-2">
+          <!-- Searchable Combobox for Asset Selection -->
+          <div class="sm:col-span-2 relative">
             <label class="block text-xs font-semibold text-slate-700 mb-1">Select IT Asset to Service *</label>
-            <select id="repair-asset-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
-              <!-- Populated via JS -->
-            </select>
+            <input type="hidden" id="repair-asset-select" required>
+            <div id="combobox-repair-asset" class="relative">
+              <div class="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-amber-500">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 mr-2 flex-shrink-0"></i>
+                <input type="text" id="combobox-repair-asset-input" placeholder="Type serial #, user, brand, or model to select asset..." autocomplete="off" class="w-full bg-transparent border-none text-xs p-0 focus:outline-none focus:ring-0 text-slate-800">
+                <button type="button" id="combobox-repair-asset-clear" class="hidden text-slate-400 hover:text-slate-600 p-0.5 ml-1">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </div>
+              <div id="combobox-repair-asset-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl z-50 divide-y divide-slate-100 text-xs">
+                <!-- Filtered options populated via JS -->
+              </div>
+            </div>
+            <div id="repair-selected-asset-preview" class="hidden mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-[11px] text-amber-900 font-medium">
+              <span id="repair-selected-asset-text"></span>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Service Date *</label>
             <input type="date" id="repair-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Target Due Date</label>
+            <input type="date" id="repair-due-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Repair / Maintenance Type</label>
@@ -1108,14 +1215,233 @@
           <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Assigning License Key:</span>
           <div id="map-key-display" class="font-mono font-bold text-sm text-purple-900 mt-0.5">6X88C-7W62R-7720A-16510</div>
         </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Choose Destination IT Asset *</label>
-          <select id="map-asset-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500" required>
-            <!-- Populated via JS -->
-          </select>
+        <div class="relative">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Choose Destination Workstation *</label>
+            <span class="text-[10px] text-purple-600 font-bold uppercase">Laptops & Desktops Only</span>
+          </div>
+          <input type="hidden" id="map-asset-select" required>
+          <div id="combobox-map-asset" class="relative">
+            <div class="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-purple-500">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 mr-2 flex-shrink-0"></i>
+              <input type="text" id="combobox-map-asset-input" placeholder="Type serial #, user, brand to select workstation..." autocomplete="off" class="w-full bg-transparent border-none text-xs p-0 focus:outline-none focus:ring-0 text-slate-800">
+              <button type="button" id="combobox-map-asset-clear" class="hidden text-slate-400 hover:text-slate-600 p-0.5 ml-1">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
+            <div id="combobox-map-asset-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl z-50 divide-y divide-slate-100 text-xs">
+              <!-- Filtered options populated via JS -->
+            </div>
+          </div>
+          <div id="map-selected-asset-preview" class="hidden mt-1.5 p-2 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-[11px] text-purple-900 font-medium">
+            <span id="map-selected-asset-text"></span>
+          </div>
         </div>
         <div class="flex items-center justify-end gap-2 pt-2">
           <button type="button" onclick="closeModal('modal-map-key')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20">Confirm Assignment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Close / Resolve Repair Ticket Modal -->
+  <div id="modal-close-repair" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="close-repair-modal-title" class="text-base font-bold text-slate-900">Resolve & Close Ticket</h3>
+            <p id="close-repair-modal-sub" class="text-xs text-slate-500">Restore asset to operational fleet</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-close-repair')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-close-repair" onsubmit="submitCloseTicket(event)" class="space-y-4">
+        <input type="hidden" id="close-repair-id">
+
+        <div id="close-repair-asset-banner" class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-mono font-bold text-brand-600 text-sm" id="close-repair-asset-serial">#50016</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" id="close-repair-ticket-num">REP-2026-001</span>
+          </div>
+          <div class="text-slate-700 font-semibold" id="close-repair-asset-name">Desktop - Lenovo (Returns Department)</div>
+          <div class="text-slate-500 text-[11px]" id="close-repair-asset-issue">Issue: Diagnostics in progress.</div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Completion Date *</label>
+            <input type="date" id="close-repair-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Final Repair Cost (₹) *</label>
+            <input type="number" id="close-repair-cost" min="0" placeholder="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-500" required>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Parts Added / Replaced Summary</label>
+          <input type="text" id="close-repair-parts" placeholder="e.g. Replaced 65W Power Supply Unit; Installed new RAM" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Asset Status After Resolution *</label>
+          <select id="close-repair-asset-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-emerald-500" required>
+            <option value="Working" selected>✅ Working (Fully Operational & Reintegrated)</option>
+            <option value="Not Working">❌ Beyond Repair (Decommission / EOL Scrapped)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Resolution Notes & Technician Comments</label>
+          <textarea id="close-repair-remarks" rows="2" placeholder="e.g. Diagnostics confirmed bad PSU. Replaced with genuine Lenovo part and benchmarked for 2 hours. Normal boot restored." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-close-repair')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" id="btn-submit-close-repair" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/20">Confirm & Close Ticket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bulk Import IT Assets Modal -->
+  <div id="modal-bulk-import" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Bulk Import IT Assets Inventory</h3>
+            <p class="text-xs text-slate-500">Upload CSV or Excel (.xlsx) spreadsheet to import multiple assets at once</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-bulk-import')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 flex-1 overflow-y-auto">
+        <!-- Step 1: Download Template -->
+        <div class="p-4 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-indigo-600"></i>
+              <span>Step 1: Download Standard Spreadsheet Template</span>
+            </div>
+            <p class="text-[11px] text-indigo-700/90 mt-0.5">Use our pre-configured CSV template with proper column headers to ensure 100% data validation accuracy.</p>
+          </div>
+          <button onclick="downloadAssetTemplate()" type="button" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm flex-shrink-0">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Download CSV Template</span>
+          </button>
+        </div>
+
+        <!-- Step 2: File Selector / Drag-and-drop -->
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-slate-800">Step 2: Upload CSV or Excel (.xlsx) File</label>
+          <div id="dropzone-bulk-import" onclick="document.getElementById('bulk-import-file').click()" class="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-2xl p-6 text-center bg-slate-50 hover:bg-brand-50/20 transition-all cursor-pointer">
+            <input type="file" id="bulk-import-file" accept=".csv, .xlsx, .xls" class="hidden" onchange="handleBulkFileSelect(event)">
+            <div class="w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-2 text-slate-500">
+              <i data-lucide="upload-cloud" class="w-6 h-6 text-brand-600"></i>
+            </div>
+            <div id="bulk-file-label" class="text-xs font-bold text-slate-800">Click to browse file or drag and drop here</div>
+            <p class="text-[10px] text-slate-500 mt-1">Supports CSV, XLSX, XLS (up to 15MB)</p>
+          </div>
+        </div>
+
+        <!-- Preview and Status Area -->
+        <div id="bulk-preview-container" class="hidden space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800">Detected Rows (<span id="bulk-preview-count">0</span>)</span>
+            <span class="text-[11px] text-emerald-600 font-semibold" id="bulk-file-status">Ready to import</span>
+          </div>
+          <div class="max-h-48 overflow-x-auto overflow-y-auto border border-slate-200 rounded-xl bg-white">
+            <table class="w-full text-left text-[11px]">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="py-2 px-3">Serial #</th>
+                  <th class="py-2 px-3">Type</th>
+                  <th class="py-2 px-3">Brand</th>
+                  <th class="py-2 px-3">Model</th>
+                  <th class="py-2 px-3">Department</th>
+                  <th class="py-2 px-3">User</th>
+                  <th class="py-2 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody id="bulk-preview-tbody" class="divide-y divide-slate-100 font-mono text-[10px]">
+                <!-- Rows previewed via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Import Results Log -->
+        <div id="bulk-results-log" class="hidden p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1"></div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/60">
+        <button type="button" onclick="closeModal('modal-bulk-import')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+        <button type="button" id="btn-execute-bulk-import" onclick="executeBulkImport()" disabled class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-md shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+          Import Assets
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assign Accessory to Personnel Modal -->
+  <div id="modal-assign-accessory" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <i data-lucide="user-check" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Issue Accessory to Staff</h3>
+            <p class="text-xs text-slate-500">Track personnel assignment and location</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-assign-accessory')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-assign-accessory" onsubmit="submitAssignAccessory(event)" class="space-y-4">
+        <input type="hidden" id="assign-acc-id">
+
+        <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs">
+          <div class="text-[10px] font-bold uppercase text-purple-600">Accessory Item:</div>
+          <div id="assign-acc-item-title" class="font-bold text-purple-900 text-sm mt-0.5">USB Standard Keyboard (ACC-002)</div>
+          <div id="assign-acc-item-info" class="text-purple-700 text-[11px] mt-0.5">Brand: Dell • Available Quantity: 10</div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Issue To Personnel / Staff Name *</label>
+          <input type="text" id="assign-acc-user" placeholder="e.g. Komal Parate, Chandan Yadav" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500" required>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">New Physical Location</label>
+          <input type="text" id="assign-acc-location" placeholder="e.g. Orders Floor Desk 3, Dispatch Bay" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assignment Remarks / Reason</label>
+          <input type="text" id="assign-acc-remarks" placeholder="e.g. Issued for replacement of faulty mouse" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500">
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-assign-accessory')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
           <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/20">Confirm Assignment</button>
         </div>
       </form>
