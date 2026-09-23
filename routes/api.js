@@ -203,6 +203,7 @@ router.get('/assets', (req, res) => {
 
     if (searchTokens.length > 0) {
       // Require each token to match in at least one searchable column (AND condition across tokens)
+      // Excludes internal notes/remarks per user requirement
       searchTokens.forEach(tok => {
         const term = `%${tok}%`;
         query += ` AND (
@@ -215,10 +216,9 @@ router.get('/assets', (req, res) => {
           LOWER(COALESCE(a.location, '')) LIKE ? OR
           LOWER(COALESCE(a.assigned_user, '')) LIKE ? OR
           LOWER(COALESCE(k.product_key, '')) LIKE ? OR
-          LOWER(COALESCE(a.remarks, '')) LIKE ? OR
           LOWER(COALESCE(a.parts_added_summary, '')) LIKE ?
         )`;
-        params.push(term, term, term, term, term, term, term, term, term, term, term);
+        params.push(term, term, term, term, term, term, term, term, term, term);
       });
     }
 
@@ -265,33 +265,12 @@ router.get('/assets', (req, res) => {
 
     const assets = db.prepare(query).all(...params);
 
-    // Enrich with lifecycle info and remarks match indicators
+    // Enrich with lifecycle info
     const enriched = assets.map(asset => {
       const lifecycle = computeAssetLifecycle(asset, asset.repair_count, asset.total_repair_cost);
-
-      let matchedInRemarks = false;
-      let remarksSnippet = '';
-      if (searchTokens.length > 0) {
-        const primaryMatches = searchTokens.some(tok => {
-          const user = (asset.assigned_user || '').toLowerCase();
-          const serial = (asset.internal_serial_number || '').toLowerCase();
-          const brand = (asset.brand || '').toLowerCase();
-          const type = (asset.asset_type || '').toLowerCase();
-          const dept = (asset.department || '').toLowerCase();
-          const key = (asset.quick_heal_key_str || '').toLowerCase();
-          return user.includes(tok) || serial.includes(tok) || brand.includes(tok) || type.includes(tok) || dept.includes(tok) || key.includes(tok);
-        });
-        if (!primaryMatches && asset.remarks) {
-          matchedInRemarks = true;
-          remarksSnippet = asset.remarks;
-        }
-      }
-
       return {
         ...asset,
-        ...lifecycle,
-        matched_in_remarks: matchedInRemarks,
-        remarks_snippet: remarksSnippet
+        ...lifecycle
       };
     });
 
@@ -347,10 +326,13 @@ router.get('/assets/:id', (req, res) => {
       SELECT * FROM repairs WHERE asset_id = ? ORDER BY repair_date DESC, created_at DESC
     `).all(asset.id);
 
-    // Fetch linked accessories
+    // Fetch linked accessories (assigned to this asset OR assigned to this user)
     const accessories = db.prepare(`
-      SELECT * FROM accessories WHERE assigned_asset_id = ?
-    `).all(asset.id);
+      SELECT * FROM accessories
+      WHERE assigned_asset_id = ?
+         OR (assigned_user IS NOT NULL AND TRIM(assigned_user) != '' AND LOWER(assigned_user) = LOWER(?))
+      ORDER BY status ASC, id ASC
+    `).all(asset.id, (asset.assigned_user || '').trim());
 
     const totalRepairCost = repairs.reduce((sum, r) => sum + (Number(r.repair_cost) || 0), 0);
     const lifecycle = computeAssetLifecycle(asset, repairs.length, totalRepairCost);
@@ -803,11 +785,10 @@ router.get('/repairs', (req, res) => {
         LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
         LOWER(COALESCE(r.technician_name, '')) LIKE ? OR
         LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
-        LOWER(COALESCE(r.remarks, '')) LIKE ? OR
         LOWER(a.internal_serial_number) LIKE ? OR
         LOWER(COALESCE(a.assigned_user, '')) LIKE ?
       )`;
-      params.push(term, term, term, term, term, term, term, term);
+      params.push(term, term, term, term, term, term, term);
     }
 
     query += ` ORDER BY r.created_at DESC`;
@@ -1113,12 +1094,11 @@ router.get('/keys', (req, res) => {
       const term = `%${search.trim()}%`;
       query += ` AND (
         k.product_key LIKE ? OR
-        k.notes LIKE ? OR
         k.assigned_user LIKE ? OR
         a.internal_serial_number LIKE ? OR
         a.assigned_user LIKE ?
       )`;
-      params.push(term, term, term, term, term);
+      params.push(term, term, term, term);
     }
 
     query += ` ORDER BY k.status ASC, k.validity_date ASC, k.id ASC`;
@@ -1381,10 +1361,9 @@ router.get('/accessories', (req, res) => {
         LOWER(acc.brand) LIKE ? OR
         LOWER(acc.model) LIKE ? OR
         LOWER(COALESCE(acc.assigned_user, '')) LIKE ? OR
-        LOWER(COALESCE(acc.location, '')) LIKE ? OR
-        LOWER(COALESCE(acc.remarks, '')) LIKE ?
+        LOWER(COALESCE(acc.location, '')) LIKE ?
       )`;
-      params.push(term, term, term, term, term, term, term);
+      params.push(term, term, term, term, term, term);
     }
 
     query += ` ORDER BY acc.id ASC`;
@@ -1637,10 +1616,9 @@ router.get('/search', (req, res) => {
         LOWER(COALESCE(a.location, '')) LIKE ? OR
         LOWER(COALESCE(a.assigned_user, '')) LIKE ? OR
         LOWER(COALESCE(k.product_key, '')) LIKE ? OR
-        LOWER(COALESCE(a.remarks, '')) LIKE ? OR
         LOWER(COALESCE(a.parts_added_summary, '')) LIKE ?
       )`;
-      assetParams.push(term, term, term, term, term, term, term, term, term, term, term);
+      assetParams.push(term, term, term, term, term, term, term, term, term, term);
     });
 
     assetQuery += ` ORDER BY
@@ -1654,22 +1632,7 @@ router.get('/search', (req, res) => {
       CAST(a.internal_serial_number AS INTEGER) ASC LIMIT 25`;
     const fullPattern = `%${q.toLowerCase()}%`;
     assetParams.push(fullPattern, fullPattern, fullPattern, fullPattern);
-    const rawAssets = db.prepare(assetQuery).all(...assetParams);
-
-    const assets = rawAssets.map(a => {
-      const primaryMatches = tokens.some(tok => {
-        const u = (a.assigned_user || '').toLowerCase();
-        const s = (a.internal_serial_number || '').toLowerCase();
-        const b = (a.brand || '').toLowerCase();
-        const d = (a.department || '').toLowerCase();
-        return u.includes(tok) || s.includes(tok) || b.includes(tok) || d.includes(tok);
-      });
-      return {
-        ...a,
-        matched_in_remarks: !primaryMatches && Boolean(a.remarks),
-        remarks_snippet: a.remarks || ''
-      };
-    });
+    const assets = db.prepare(assetQuery).all(...assetParams);
 
     // 2. Repairs Tokenized Search
     let repairQuery = `
@@ -1687,11 +1650,10 @@ router.get('/search', (req, res) => {
         LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
         LOWER(COALESCE(r.technician_name, '')) LIKE ? OR
         LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
-        LOWER(COALESCE(r.remarks, '')) LIKE ? OR
         LOWER(a.internal_serial_number) LIKE ? OR
         LOWER(COALESCE(a.assigned_user, '')) LIKE ?
       )`;
-      repairParams.push(term, term, term, term, term, term, term, term);
+      repairParams.push(term, term, term, term, term, term, term);
     });
     repairQuery += ` ORDER BY r.created_at DESC LIMIT 20`;
     const repairs = db.prepare(repairQuery).all(...repairParams);
@@ -1709,10 +1671,9 @@ router.get('/search', (req, res) => {
       keyQuery += ` AND (
         LOWER(k.product_key) LIKE ? OR
         LOWER(COALESCE(k.assigned_user, '')) LIKE ? OR
-        LOWER(COALESCE(k.notes, '')) LIKE ? OR
         LOWER(COALESCE(a.internal_serial_number, '')) LIKE ?
       )`;
-      keyParams.push(term, term, term, term);
+      keyParams.push(term, term, term);
     });
     keyQuery += ` ORDER BY k.status ASC, k.validity_date ASC LIMIT 20`;
     const keys = db.prepare(keyQuery).all(...keyParams);
@@ -1734,10 +1695,9 @@ router.get('/search', (req, res) => {
         LOWER(COALESCE(acc.brand, '')) LIKE ? OR
         LOWER(COALESCE(acc.model, '')) LIKE ? OR
         LOWER(COALESCE(acc.assigned_user, '')) LIKE ? OR
-        LOWER(COALESCE(acc.location, '')) LIKE ? OR
-        LOWER(COALESCE(acc.remarks, '')) LIKE ?
+        LOWER(COALESCE(acc.location, '')) LIKE ?
       )`;
-      accParams.push(term, term, term, term, term, term, term, term);
+      accParams.push(term, term, term, term, term, term, term);
     });
     accQuery += ` ORDER BY acc.id ASC LIMIT 20`;
     const accessories = db.prepare(accQuery).all(...accParams);

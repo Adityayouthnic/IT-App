@@ -113,8 +113,65 @@ async function apiFetch(url, options = {}) {
 // ==========================================
 // 2. ROUTING & VIEW NAVIGATION
 // ==========================================
+// 2. ROUTING & VIEW NAVIGATION
+// ==========================================
+
+let isProgrammaticNav = false;
+
+function resetAssetFilterUI(overrides = {}) {
+  const s = document.getElementById('asset-filter-search');
+  const t = document.getElementById('asset-filter-type');
+  const d = document.getElementById('asset-filter-dept');
+  const st = document.getElementById('asset-filter-status');
+  const k = document.getElementById('asset-filter-key');
+  if (s) s.value = overrides.search || '';
+  if (t) t.value = overrides.type || '';
+  if (d) d.value = overrides.department || '';
+  if (st) st.value = overrides.status || '';
+  if (k) k.value = overrides.quick_heal || '';
+}
+
+function resetRepairFilterUI(overrides = {}) {
+  const s = document.getElementById('repair-filter-search');
+  const st = document.getElementById('repair-filter-status');
+  if (s) s.value = overrides.search || '';
+  if (st) st.value = overrides.status || '';
+  if (typeof filterRepairTab === 'function') {
+    filterRepairTab(overrides.ticket_status || 'all', false);
+  }
+}
+
+function resetKeyFilterUI(overrides = {}) {
+  const s = document.getElementById('key-filter-search');
+  const st = document.getElementById('key-filter-status');
+  if (s) s.value = overrides.search || '';
+  if (st) st.value = overrides.status || '';
+}
+
+function resetAccessoryFilterUI(overrides = {}) {
+  const s = document.getElementById('acc-filter-search');
+  const c = document.getElementById('acc-filter-cat');
+  const st = document.getElementById('acc-filter-status');
+  if (s) s.value = overrides.search || '';
+  if (c) c.value = overrides.category || '';
+  if (st) st.value = overrides.status || '';
+}
+
+function resetSearchUI(overrides = {}) {
+  const inp = document.getElementById('dedicated-search-input');
+  if (inp) inp.value = overrides.q || '';
+  const container = document.getElementById('master-search-results-container');
+  if (container && !overrides.q) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-slate-400">
+        <p class="text-xs">Type a keyword above to search all modules.</p>
+      </div>
+    `;
+  }
+}
 
 function handleRoute() {
+  if (isProgrammaticNav) return;
   const hash = window.location.hash.replace('#', '') || 'dashboard';
   navigate(hash, {}, false);
 }
@@ -124,7 +181,11 @@ window.addEventListener('hashchange', handleRoute);
 function navigate(viewName, params = {}, updateHash = true) {
   currentView = viewName;
   if (updateHash) {
+    isProgrammaticNav = true;
     window.location.hash = viewName;
+    setTimeout(() => {
+      isProgrammaticNav = false;
+    }, 100);
   }
 
   // Update Nav links
@@ -153,26 +214,30 @@ function navigate(viewName, params = {}, updateHash = true) {
   // Close mobile sidebar if open
   closeSidebar();
 
-  // Trigger view data loaders
+  // Trigger view data loaders with fresh resets or explicit params
   switch (viewName) {
     case 'dashboard':
       loadDashboard();
       break;
     case 'assets':
+      resetAssetFilterUI(params);
       loadAssets(params);
       break;
     case 'repairs':
+      resetRepairFilterUI(params);
       loadRepairs(params);
       break;
     case 'keys':
+      resetKeyFilterUI(params);
       loadKeys(params);
       break;
     case 'accessories':
+      resetAccessoryFilterUI(params);
       loadAccessories(params);
       break;
     case 'search':
+      resetSearchUI(params);
       if (params.q) {
-        document.getElementById('dedicated-search-input').value = params.q;
         executeMasterSearch(params.q, 'master-search-results-container');
       }
       break;
@@ -542,7 +607,6 @@ async function loadAssets(filterParams = {}) {
         <td class="py-3 px-4 text-slate-500 text-[11px]">${escapeHtml(a.location || '—')}</td>
         <td class="py-3 px-4 font-semibold text-slate-800">
           <div>${escapeHtml(a.assigned_user || 'Unassigned')}</div>
-          ${a.matched_in_remarks ? `<div class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title="Matched in internal remarks"><i data-lucide="file-text" class="w-2.5 h-2.5 text-amber-600"></i><span>Note: "${escapeHtml(a.matched_remark_snippet || '...')}"</span></div>` : ''}
         </td>
         <td class="py-3 px-4">${keyBadge}</td>
         <td class="py-3 px-4">${statusBadge}</td>
@@ -732,6 +796,46 @@ async function viewAssetDetail(assetId) {
         <p class="text-xs text-slate-700 mt-1 font-medium leading-relaxed">${escapeHtml(asset.remarks || 'No usage notes recorded.')}</p>
       </div>
 
+      <!-- Issued Accessories & Peripherals for User/Asset -->
+      <div class="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200/80">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+              <i data-lucide="package" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-950">Issued Accessories & Peripherals (${(asset.accessories || []).length})</h4>
+              <p class="text-[11px] text-indigo-700">Hardware & peripherals used by <strong>${escapeHtml(asset.assigned_user || 'this device')}</strong></p>
+            </div>
+          </div>
+          <button onclick="closeModal('modal-asset-detail'); navigate('accessories');" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline">
+            Accessories Inventory &rarr;
+          </button>
+        </div>
+
+        ${asset.accessories && asset.accessories.length > 0 ? `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            ${asset.accessories.map(acc => `
+              <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(acc.accessory_code)}</span>
+                    <span class="font-bold text-xs text-slate-900">${escapeHtml(acc.name)}</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(acc.category)} • ${escapeHtml(acc.brand || 'Standard')} ${escapeHtml(acc.model || '')} (Qty: ${acc.quantity})</div>
+                  ${acc.location ? `<div class="text-[10px] text-slate-400 mt-0.5">Location: ${escapeHtml(acc.location)}</div>` : ''}
+                </div>
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${acc.status === 'Assigned' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${escapeHtml(acc.status)}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <div class="p-3 bg-white/70 border border-indigo-100 rounded-xl text-center text-xs text-indigo-600 font-medium">
+            ✨ No accessories or peripherals currently assigned to ${asset.assigned_user ? `<strong>${escapeHtml(asset.assigned_user)}</strong>` : 'this workstation'}.
+          </div>
+        `}
+      </div>
+
       ${repairsHtml}
     `;
 
@@ -906,20 +1010,26 @@ function openMapKeyModalForAsset(assetId) {
   openEditAssetModal(assetId);
 }
 
-// Ensure assets are loaded for dropdowns / comboboxes
-async function ensureAssetsCached() {
-  if (!cachedAssets || cachedAssets.length === 0) {
+// Ensure assets are loaded for dropdowns / comboboxes (independent of search filters)
+let allMasterAssets = [];
+async function fetchMasterAssets(force = false) {
+  if (force || !allMasterAssets || allMasterAssets.length === 0) {
     try {
       const res = await apiFetch('/api/assets');
       if (res.ok) {
         const data = await res.json();
-        cachedAssets = data.assets || [];
-        window._allAssetsList = data.assets || [];
+        allMasterAssets = data.assets || [];
+        window._allMasterAssets = allMasterAssets;
       }
     } catch (e) {
-      console.error('Failed to pre-cache assets:', e);
+      console.error('Failed to pre-cache master assets:', e);
     }
   }
+  return allMasterAssets;
+}
+
+async function ensureAssetsCached() {
+  return fetchMasterAssets(false);
 }
 
 // Searchable Combobox Component
@@ -931,6 +1041,7 @@ function initSearchableCombobox({
   clearBtnId,
   previewContainerId,
   previewTextId,
+  getAssetsFn,
   filterFn
 }) {
   const container = document.getElementById(containerId);
@@ -942,13 +1053,31 @@ function initSearchableCombobox({
   const previewText = document.getElementById(previewTextId);
 
   if (!container || !input || !dropdown || !hiddenInput) {
-    return { setValue: () => {}, selectAsset: () => {} };
+    return { setValue: () => {}, selectAsset: () => {}, openDropdown: () => {} };
   }
 
   function getAvailableAssets() {
-    const list = (cachedAssets && cachedAssets.length > 0) ? cachedAssets : (window._allAssetsList || []);
-    if (!filterFn) return list;
-    return list.filter(filterFn);
+    let list = [];
+    if (typeof getAssetsFn === 'function') {
+      list = getAssetsFn();
+    } else if (window._allMasterAssets && window._allMasterAssets.length > 0) {
+      list = window._allMasterAssets;
+    } else if (cachedAssets && cachedAssets.length > 0) {
+      list = cachedAssets;
+    } else {
+      list = window._allAssetsList || [];
+    }
+    if (filterFn) {
+      list = list.filter(filterFn);
+    }
+    // Sort so workstations needing keys appear first, then sorted by assigned user
+    return list.slice().sort((a, b) => {
+      const aNeeds = ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase()) && !a.quick_heal_key_str;
+      const bNeeds = ['laptop', 'desktop'].includes(String(b.asset_type || '').toLowerCase()) && !b.quick_heal_key_str;
+      if (aNeeds && !bNeeds) return -1;
+      if (!aNeeds && bNeeds) return 1;
+      return (a.assigned_user || '').localeCompare(b.assigned_user || '');
+    });
   }
 
   function renderOptions(query = '') {
@@ -960,23 +1089,45 @@ function initSearchableCombobox({
     });
 
     if (assets.length === 0) {
-      dropdown.innerHTML = `<div class="p-3 text-center text-xs text-slate-400">No matching assets found</div>`;
+      dropdown.innerHTML = `<div class="p-3 text-center text-xs text-slate-400 font-medium">No matching workstations or devices found</div>`;
       dropdown.classList.remove('hidden');
       return;
     }
 
-    dropdown.innerHTML = assets.slice(0, 60).map(a => `
-      <div data-id="${a.id}" class="combobox-opt p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-center justify-between transition-colors">
-        <div>
-          <span class="font-mono font-bold text-brand-600">#${escapeHtml(a.internal_serial_number)}</span>
-          <span class="font-bold text-slate-800 ml-1">${escapeHtml(a.brand || '')} ${escapeHtml(a.asset_type)}</span>
-          <div class="text-[10px] text-slate-500 mt-0.5">User: <strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(a.department || '—')}</div>
+    dropdown.innerHTML = assets.slice(0, 80).map(a => {
+      const isWorkstation = ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase());
+      const needsKey = isWorkstation && !a.quick_heal_key_str;
+      return `
+        <div data-id="${a.id}" class="combobox-opt p-3 hover:bg-purple-50/80 cursor-pointer flex items-center justify-between transition-colors border-b border-slate-100 last:border-b-0">
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-bold text-xs text-slate-900">${escapeHtml(a.assigned_user ? '👤 ' + a.assigned_user : '👤 Unassigned')}</span>
+              <span class="font-mono font-bold text-brand-600 text-xs">#${escapeHtml(a.internal_serial_number)}</span>
+              <span class="text-xs text-slate-600 font-semibold">• ${escapeHtml(a.brand || '')} ${escapeHtml(a.asset_type)}</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5">Dept: ${escapeHtml(a.department || 'General')} • Loc: ${escapeHtml(a.location || 'Head Office')} ${a.serial_number ? `• S/N: ${escapeHtml(a.serial_number)}` : ''}</div>
+          </div>
+          <div class="text-right flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+            ${needsKey ? `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-300 shadow-xs" title="High Priority Security Risk: Missing Antivirus Key">
+                <i data-lucide="shield-alert" class="w-3 h-3 text-rose-600"></i>
+                <span>⚠️ Unprotected</span>
+              </span>
+            ` : a.quick_heal_key_str ? `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="Key: ${escapeHtml(a.quick_heal_key_str)}">
+                <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
+                <span>Mapped</span>
+              </span>
+            ` : `
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${a.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${escapeHtml(a.working_status)}</span>
+            `}
+          </div>
         </div>
-        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${a.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${escapeHtml(a.working_status)}</span>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     dropdown.classList.remove('hidden');
+    lucide.createIcons();
 
     dropdown.querySelectorAll('.combobox-opt').forEach(opt => {
       opt.onclick = () => {
@@ -1039,6 +1190,8 @@ function initSearchableCombobox({
 
   return {
     selectAsset,
+    openDropdown: () => renderOptions(input.value),
+    closeDropdown: () => dropdown.classList.add('hidden'),
     setValue: (assetId) => {
       if (!assetId) {
         selectAsset(null);
@@ -1247,7 +1400,7 @@ async function openRepairModal(preselectedAssetId = null) {
   document.getElementById('repair-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('repair-due-date').value = '';
 
-  await ensureAssetsCached();
+  await fetchMasterAssets(false);
 
   if (!repairCombobox) {
     repairCombobox = initSearchableCombobox({
@@ -1258,6 +1411,7 @@ async function openRepairModal(preselectedAssetId = null) {
       clearBtnId: 'combobox-repair-asset-clear',
       previewContainerId: 'repair-selected-asset-preview',
       previewTextId: 'repair-selected-asset-text',
+      getAssetsFn: () => (window._allMasterAssets || []),
       filterFn: () => true
     });
   }
@@ -1619,7 +1773,7 @@ async function openMapKeyModal(keyId, keyCode) {
   document.getElementById('map-key-id').value = keyId;
   document.getElementById('map-key-display').textContent = keyCode;
 
-  await ensureAssetsCached();
+  await fetchMasterAssets(true);
 
   if (!mapKeyCombobox) {
     mapKeyCombobox = initSearchableCombobox({
@@ -1630,6 +1784,7 @@ async function openMapKeyModal(keyId, keyCode) {
       clearBtnId: 'combobox-map-asset-clear',
       previewContainerId: 'map-selected-asset-preview',
       previewTextId: 'map-selected-asset-text',
+      getAssetsFn: () => (window._allMasterAssets || []).filter(a => ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase())),
       // Quick Heal keys are required ONLY for Laptops and Desktops!
       filterFn: (a) => ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase())
     });
@@ -1637,6 +1792,13 @@ async function openMapKeyModal(keyId, keyCode) {
 
   mapKeyCombobox.setValue(null);
   openModal('modal-map-key');
+
+  // Automatically render and open options dropdown on modal launch
+  setTimeout(() => {
+    if (mapKeyCombobox && typeof mapKeyCombobox.openDropdown === 'function') {
+      mapKeyCombobox.openDropdown();
+    }
+  }, 100);
 }
 
 async function handleMapKeySubmit(e) {
@@ -1657,6 +1819,8 @@ async function handleMapKeySubmit(e) {
     if (res.ok) {
       showToast(data.message, 'success');
       closeModal('modal-map-key');
+      allMasterAssets = [];
+      window._allMasterAssets = [];
       loadKeys();
       loadAssets();
       loadDashboard();

@@ -343,6 +343,77 @@ async function runTests() {
   await fetch(`${BASE_URL}/api/assets/${testAssetId}`, { method: 'DELETE', headers: authHeaders });
   console.log('Cleaned up test assets.');
 
+  // Test 10: Strict Exclusion of Remarks & Notes from Search
+  console.log('\nTest 10: Strict Exclusion of Remarks & Notes from Search');
+  const resRemarksAsset = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: '99881',
+      asset_type: 'Desktop',
+      brand: 'ExclusionBrand',
+      assigned_user: 'ExclusionUser',
+      remarks: 'aditya pawan cabin secret_keyword_12345'
+    })
+  });
+  const dataRemarksAsset = await resRemarksAsset.json();
+  const exclusionAssetId = dataRemarksAsset.id;
+
+  // Search by remarks keyword in /api/assets
+  const resSearchNotes = await fetch(`${BASE_URL}/api/assets?search=secret_keyword_12345`, { headers: authHeaders });
+  const dataSearchNotes = await resSearchNotes.json();
+  if (dataSearchNotes.assets.length !== 0) {
+    throw new Error(`Expected 0 assets when searching remarks keyword, got ${dataSearchNotes.assets.length}`);
+  }
+
+  // Search by remarks keyword in /api/search (Master Search)
+  const resMasterNotes = await fetch(`${BASE_URL}/api/search?q=secret_keyword_12345`, { headers: authHeaders });
+  const dataMasterNotes = await resMasterNotes.json();
+  if (dataMasterNotes.assets.length !== 0) {
+    throw new Error(`Expected 0 assets in master search when querying remarks keyword, got ${dataMasterNotes.assets.length}`);
+  }
+
+  // Searching by actual assigned user or brand should still find it
+  const resSearchBrand = await fetch(`${BASE_URL}/api/assets?search=ExclusionBrand`, { headers: authHeaders });
+  const dataSearchBrand = await resSearchBrand.json();
+  if (dataSearchBrand.assets.length !== 1) {
+    throw new Error(`Expected 1 asset when searching brand 'ExclusionBrand', got ${dataSearchBrand.assets.length}`);
+  }
+  console.log('✅ Notes & Remarks exclusion verified: Search only matches visible columns and ignores background notes!');
+
+  // Test 11: Link Accessories with Person in Asset Dossier
+  console.log('\nTest 11: Link Accessories with Person in Asset Dossier');
+  // Create an accessory assigned to ExclusionUser
+  const resCreateAcc = await fetch(`${BASE_URL}/api/accessories`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      accessory_code: 'ACC-EXCL-1',
+      name: 'Wireless Ergonomic Mouse',
+      category: 'Mouse',
+      brand: 'Logitech',
+      assigned_user: 'ExclusionUser',
+      status: 'Assigned'
+    })
+  });
+  const dataCreateAcc = await resCreateAcc.json();
+  const exclAccId = dataCreateAcc.id;
+
+  // Fetch the asset dossier for ExclusionUser's asset
+  const resDossier = await fetch(`${BASE_URL}/api/assets/${exclusionAssetId}`, { headers: authHeaders });
+  const dataDossier = await resDossier.json();
+  const linkedAccessories = dataDossier.asset?.accessories || [];
+  console.log(`Dossier for ExclusionUser asset #${dataDossier.asset.internal_serial_number} found ${linkedAccessories.length} linked accessories.`);
+  if (!linkedAccessories.some(acc => acc.accessory_code === 'ACC-EXCL-1')) {
+    throw new Error('Expected ACC-EXCL-1 to be linked with ExclusionUser in asset dossier!');
+  }
+  console.log('✅ Person-linked accessories verified: Dossier correctly lists accessories assigned to the user!');
+
+  // Clean up Test 10 and 11 records
+  await fetch(`${BASE_URL}/api/assets/${exclusionAssetId}`, { method: 'DELETE', headers: authHeaders });
+  await fetch(`${BASE_URL}/api/accessories/${exclAccId}`, { method: 'DELETE', headers: authHeaders });
+  console.log('Cleaned up Test 10 & 11 temporary records.');
+
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');

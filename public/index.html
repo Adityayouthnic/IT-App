@@ -263,7 +263,7 @@
           </div>
 
           <!-- Under Repair -->
-          <div onclick="navigate('repairs')" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-amber-300 transition-all group">
+          <div onclick="navigate('assets', { status: 'In Repair' })" class="cursor-pointer bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-amber-300 transition-all group">
             <div class="flex items-center justify-between text-slate-500 mb-2">
               <span class="text-[11px] font-bold uppercase tracking-wider">In Repair</span>
               <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -685,6 +685,8 @@
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
             <span>Add Accessory</span>
           </button>
+        </div>
+
         <!-- Accessories Stock Summary KPI Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
