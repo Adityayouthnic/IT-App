@@ -984,13 +984,9 @@ async function openNewAssetModal() {
   document.getElementById('form-asset').reset();
   document.getElementById('asset-form-id').value = '';
   document.getElementById('asset-form-title').textContent = 'Add New IT Asset';
+  document.getElementById('asset-serial').value = '';
 
   try {
-    const res = await apiFetch('/api/assets/next-serial');
-    if (res.ok) {
-      const data = await res.json();
-      document.getElementById('asset-serial').value = data.nextSerial;
-    }
     await populateKeySelector();
     openModal('modal-asset-form');
   } catch (err) {
