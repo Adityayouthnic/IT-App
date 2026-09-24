@@ -15,6 +15,7 @@ let cachedKeys = [];
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
   setupGlobalEvents();
+  updateGlobalSidebarCounters();
   handleRoute();
 });
 
@@ -111,7 +112,45 @@ async function apiFetch(url, options = {}) {
 }
 
 // ==========================================
-// 2. ROUTING & VIEW NAVIGATION
+// 1.1 GLOBAL SIDEBAR BADGE SYNCHRONIZATION
+// ==========================================
+
+async function updateGlobalSidebarCounters() {
+  try {
+    const res = await apiFetch('/api/dashboard/stats');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const assetBadge = document.getElementById('sidebar-asset-count');
+    if (assetBadge) {
+      assetBadge.textContent = data.assets?.total ?? 0;
+    }
+
+    const repairBadge = document.getElementById('sidebar-repair-count');
+    if (repairBadge) {
+      repairBadge.textContent = data.repairs?.open_tickets ?? 0;
+    }
+
+    const keyBadge = document.getElementById('sidebar-key-count');
+    if (keyBadge) {
+      keyBadge.textContent = data.keys?.total ?? 0;
+    }
+
+    const accBadge = document.getElementById('sidebar-acc-count');
+    if (accBadge) {
+      accBadge.textContent = data.accessories?.total ?? 0;
+    }
+
+    const expBadge = document.getElementById('sidebar-expense-total');
+    if (expBadge) {
+      const totalRepairCost = data.repairs?.total_cost || 0;
+      expBadge.textContent = totalRepairCost >= 1000 ? `₹${(totalRepairCost / 1000).toFixed(1)}k` : `₹${totalRepairCost}`;
+    }
+  } catch (err) {
+    console.debug('Sidebar counters sync error:', err);
+  }
+}
+
 // ==========================================
 // 2. ROUTING & VIEW NAVIGATION
 // ==========================================
@@ -217,6 +256,9 @@ function navigate(viewName, params = {}, updateHash = true) {
 
   // Close mobile sidebar if open
   closeSidebar();
+
+  // Keep sidebar badges synchronized across all views
+  updateGlobalSidebarCounters();
 
   // Trigger view data loaders with fresh resets or explicit params
   switch (viewName) {
@@ -434,7 +476,7 @@ async function loadDashboard() {
     }
 
     document.getElementById('kpi-total-keys').textContent = totalKeys;
-    document.getElementById('sidebar-key-count').textContent = availKeys;
+    document.getElementById('sidebar-key-count').textContent = totalKeys;
     document.getElementById('kpi-keys-sub').textContent = `${availKeys} available / ${assignedKeys} assigned`;
 
     const accBadge = document.getElementById('sidebar-acc-count');
@@ -613,6 +655,10 @@ async function loadAssets(filterParams = {}) {
     tbody.innerHTML = '';
 
     document.getElementById('assets-count-label').textContent = `Showing ${data.total} assets`;
+    if (!search && !type && !dept && !status && !key) {
+      const assetBadge = document.getElementById('sidebar-asset-count');
+      if (assetBadge) assetBadge.textContent = data.total;
+    }
 
     if (data.assets.length === 0) {
       tbody.innerHTML = `<tr><td colspan="10" class="py-12 text-center text-slate-400">No IT assets match the current filter.</td></tr>`;
@@ -1351,6 +1397,8 @@ async function loadRepairs(filterParams = {}) {
       if (totalEl) totalEl.textContent = data.counts.total ?? 0;
       if (openEl) openEl.textContent = data.counts.open_count ?? 0;
       if (closedEl) closedEl.textContent = data.counts.closed_count ?? 0;
+      const sidebarRepairEl = document.getElementById('sidebar-repair-count');
+      if (sidebarRepairEl) sidebarRepairEl.textContent = data.counts.open_count ?? 0;
     }
 
     const tbody = document.getElementById('repairs-table-body');
@@ -1713,6 +1761,10 @@ async function loadKeys(filterParams = {}) {
     document.getElementById('keys-kpi-avail').textContent = avail;
     document.getElementById('keys-kpi-assigned').textContent = assigned;
     document.getElementById('keys-kpi-expiring').textContent = expiring;
+    if (!search && !status) {
+      const sidebarKeyEl = document.getElementById('sidebar-key-count');
+      if (sidebarKeyEl) sidebarKeyEl.textContent = total;
+    }
 
     const tbody = document.getElementById('keys-table-body');
     tbody.innerHTML = '';
@@ -1824,6 +1876,7 @@ async function handleKeySubmit(e) {
       showToast('Quick Heal key added successfully!', 'success');
       closeModal('modal-key-form');
       loadKeys();
+      updateGlobalSidebarCounters();
     } else {
       showToast(data.error || 'Failed to add key', 'error');
     }
@@ -1850,6 +1903,7 @@ async function handleBulkKeySubmit(e) {
       showToast(data.message, 'success');
       closeModal('modal-key-bulk');
       loadKeys();
+      updateGlobalSidebarCounters();
     } else {
       showToast(data.error || 'Bulk import failed', 'error');
     }
@@ -2097,6 +2151,7 @@ async function handleMapKeySubmit(e) {
       loadKeys();
       loadAssets();
       loadDashboard();
+      updateGlobalSidebarCounters();
     } else {
       showToast(data.error || 'Failed to map key', 'error');
     }
@@ -2115,6 +2170,7 @@ async function unmapKey(keyId) {
       showToast(data.message, 'success');
       loadKeys();
       loadAssets();
+      updateGlobalSidebarCounters();
     } else {
       showToast(data.error, 'error');
     }
@@ -2132,6 +2188,7 @@ async function deleteKey(keyId, keyCode) {
     if (res.ok) {
       showToast(data.message, 'success');
       loadKeys();
+      updateGlobalSidebarCounters();
     } else {
       showToast(data.error, 'error');
     }
@@ -2166,7 +2223,10 @@ async function loadAccessories(filterParams = {}) {
     const data = await res.json();
     window._cachedAccessories = data.accessories || [];
 
-    document.getElementById('sidebar-acc-count').textContent = data.accessories.length;
+    const accBadge = document.getElementById('sidebar-acc-count');
+    if (accBadge && !search && !cat && !status) {
+      accBadge.textContent = data.accessories.length;
+    }
 
     // Update 3 Stock KPI Cards
     if (data.stats) {
@@ -2901,6 +2961,13 @@ async function loadExpenses(filterParams = {}) {
     if (totalSpendEl) totalSpendEl.textContent = `₹${totalSpend.toLocaleString('en-IN')}`;
     if (openLiabEl) openLiabEl.textContent = `₹${openLiability.toLocaleString('en-IN')}`;
     if (avgCostEl) avgCostEl.textContent = `₹${avgCost.toLocaleString('en-IN')}`;
+
+    if (!search && !dept && !repair_type && !status && !date_from && !date_to) {
+      const expBadge = document.getElementById('sidebar-expense-total');
+      if (expBadge) {
+        expBadge.textContent = totalSpend >= 1000 ? `₹${(totalSpend / 1000).toFixed(1)}k` : `₹${totalSpend}`;
+      }
+    }
 
     if (topDeptEl) {
       if (data.stats.top_department) {
