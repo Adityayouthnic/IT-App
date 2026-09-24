@@ -24,6 +24,8 @@ function authenticateToken(req, res, next) {
     token = authHeader.substring(7);
   } else if (req.cookies && req.cookies.it_app_token) {
     token = req.cookies.it_app_token;
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
   }
 
   if (!token) {

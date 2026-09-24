@@ -678,13 +678,19 @@ async function generateAssetExcelTemplate() {
   statuses.forEach((v, i) => { lookupWs.getCell(`C${i + 1}`).value = v; });
   conditions.forEach((v, i) => { lookupWs.getCell(`D${i + 1}`).value = v; });
 
+  // Reference lists for dropdown menus
+  const typeFormula = '"Desktop,Laptop,Normal Printer,Tag Printer,Label Printer,Scanner,WebCam,Server,Other"';
+  const deptFormula = '"Orders,Dispatch,Listings,Company,Accounts,Data Analysis,Return,IT Infrastructure,Warehouse,HR,Sales,Management,Other"';
+  const statusFormula = '"Working,In Repair,Not Working,Retired"';
+  const conditionFormula = '"Brand New,Good,Fair,Poor"';
+
   // 3. Apply Data Validation Dropdowns for rows 2 to 1000
   for (let r = 2; r <= 1000; r++) {
     // Column B: Asset Type
     ws.getCell(`B${r}`).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: [`Lists!$A$1:$A$${assetTypes.length}`],
+      formulae: [typeFormula],
       showErrorMessage: true,
       errorTitle: 'Invalid Asset Type',
       error: 'Please choose an Asset Type from the dropdown menu.'
@@ -694,7 +700,7 @@ async function generateAssetExcelTemplate() {
     ws.getCell(`I${r}`).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: [`Lists!$B$1:$B$${departments.length}`],
+      formulae: [deptFormula],
       showErrorMessage: true,
       errorTitle: 'Invalid Department',
       error: 'Please choose a Department from the dropdown menu.'
@@ -704,7 +710,7 @@ async function generateAssetExcelTemplate() {
     ws.getCell(`L${r}`).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: [`Lists!$C$1:$C$${statuses.length}`],
+      formulae: [statusFormula],
       showErrorMessage: true,
       errorTitle: 'Invalid Working Status',
       error: 'Please choose a Working Status from the dropdown menu.'
@@ -714,7 +720,7 @@ async function generateAssetExcelTemplate() {
     ws.getCell(`M${r}`).dataValidation = {
       type: 'list',
       allowBlank: true,
-      formulae: [`Lists!$D$1:$D$${conditions.length}`],
+      formulae: [conditionFormula],
       showErrorMessage: true,
       errorTitle: 'Invalid Condition Rating',
       error: 'Please choose Brand New, Good, Fair, or Poor from the dropdown menu.'

@@ -2498,11 +2498,35 @@ function openBulkImportModal() {
   openModal('modal-bulk-import');
 }
 
-function downloadAssetTemplate(format = 'excel') {
-  if (format === 'csv') {
-    window.open('/api/assets/template/csv', '_blank');
-  } else {
-    window.open('/api/assets/template/excel', '_blank');
+async function downloadAssetTemplate(format = 'excel', event = null) {
+  if (event) {
+    try { event.preventDefault(); } catch (e) {}
+  }
+
+  const url = format === 'csv' ? '/api/assets/template/csv' : '/api/assets/template/excel';
+  const filename = format === 'csv' ? 'it_assets_bulk_import_template.csv' : 'it_assets_bulk_import_template.xlsx';
+
+  showToast('Preparing ' + (format === 'csv' ? 'CSV' : 'Excel (.xlsx)') + ' template...', 'info');
+
+  try {
+    const res = await apiFetch(url);
+    if (!res.ok) {
+      window.location.href = url;
+      return;
+    }
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1500);
+    showToast('Downloaded ' + filename, 'success');
+  } catch (err) {
+    console.error('Download error, falling back to direct URL:', err);
+    window.location.href = url;
   }
 }
 
