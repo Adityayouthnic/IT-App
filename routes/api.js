@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const xlsx = require('xlsx');
+const ExcelJS = require('exceljs');
 const { db, purgeOperationalData } = require('../database');
 const { authenticateToken, requireRoles, logAudit } = require('../auth');
 
@@ -572,6 +573,170 @@ router.delete('/assets/:id', requireRoles('admin'), (req, res) => {
   }
 });
 
+// Helper: Generate Excel Template with interactive Data Validation Dropdowns
+async function generateAssetExcelTemplate() {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'VB EXPORTS IT Asset Hub';
+  wb.created = new Date();
+
+  // 1. Primary Data Sheet
+  const ws = wb.addWorksheet('it_assets_bulk_import_template', {
+    views: [{ state: 'frozen', ySplit: 1 }]
+  });
+
+  ws.columns = [
+    { header: 'Internal Serial Number', key: 'internal_serial_number', width: 24 },
+    { header: 'Asset Type', key: 'asset_type', width: 18 },
+    { header: 'Brand', key: 'brand', width: 16 },
+    { header: 'Model Name', key: 'model_name', width: 22 },
+    { header: 'Manufacturer Serial', key: 'serial_number', width: 22 },
+    { header: 'Purchase Date', key: 'purchase_date', width: 16 },
+    { header: 'Purchase Vendor', key: 'purchase_vendor', width: 22 },
+    { header: 'Purchase Cost', key: 'purchase_cost', width: 16 },
+    { header: 'Department', key: 'department', width: 20 },
+    { header: 'Location', key: 'location', width: 25 },
+    { header: 'Assigned User', key: 'assigned_user', width: 20 },
+    { header: 'Working Status', key: 'working_status', width: 18 },
+    { header: 'Condition Rating', key: 'condition_rating', width: 18 },
+    { header: 'Parts Added', key: 'parts_added_summary', width: 25 },
+    { header: 'Remarks', key: 'remarks', width: 25 }
+  ];
+
+  // Header style
+  const headerRow = ws.getRow(1);
+  headerRow.height = 28;
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF4F46E5' } // Brand Indigo
+  };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+  // Sample data rows
+  const sampleRows = [
+    ['50060', 'Laptop', 'Lenovo', 'ThinkPad T14', 'PF-99901', '15-01-2026', 'Lenovo Store', 65000, 'Accounts', 'Head Office Floor 2', 'Rohan Gupta', 'Working', 'Good', '', 'Standard office laptop'],
+    ['50061', 'Desktop', 'Dell', 'OptiPlex 3080', 'DL-44821', '20-11-2025', 'Dell Direct', 48000, 'Orders', 'Orders Floor Desk 4', 'Priya Patel', 'Working', 'Good', 'Upgraded 16GB RAM', 'For order processing'],
+    ['50062', 'Tag Printer', 'TSC', 'TE244', 'TSC-8812', '10-08-2025', 'TSC Vendor', 14500, 'Dispatch', 'Dispatch Bay', 'FREE', 'Working', 'Good', '', 'Picklist label printing']
+  ];
+
+  sampleRows.forEach(r => {
+    const row = ws.addRow(r);
+    row.height = 20;
+    row.alignment = { vertical: 'middle' };
+  });
+
+  // Allowed list values for dropdowns
+  const assetTypes = [
+    'Desktop',
+    'Laptop',
+    'Normal Printer',
+    'Tag Printer',
+    'Label Printer',
+    'Scanner',
+    'WebCam',
+    'Server',
+    'Other'
+  ];
+
+  const departments = [
+    'Orders',
+    'Dispatch',
+    'Listings',
+    'Company',
+    'Accounts',
+    'Data Analysis',
+    'Return',
+    'IT Infrastructure',
+    'Warehouse',
+    'HR',
+    'Sales',
+    'Management',
+    'Other'
+  ];
+
+  const statuses = [
+    'Working',
+    'In Repair',
+    'Not Working',
+    'Retired'
+  ];
+
+  const conditions = [
+    'Brand New',
+    'Good',
+    'Fair',
+    'Poor'
+  ];
+
+  // 2. Reference sheet for reliable dropdown options in Excel
+  const lookupWs = wb.addWorksheet('Lists');
+  lookupWs.state = 'veryHidden';
+
+  assetTypes.forEach((v, i) => { lookupWs.getCell(`A${i + 1}`).value = v; });
+  departments.forEach((v, i) => { lookupWs.getCell(`B${i + 1}`).value = v; });
+  statuses.forEach((v, i) => { lookupWs.getCell(`C${i + 1}`).value = v; });
+  conditions.forEach((v, i) => { lookupWs.getCell(`D${i + 1}`).value = v; });
+
+  // 3. Apply Data Validation Dropdowns for rows 2 to 1000
+  for (let r = 2; r <= 1000; r++) {
+    // Column B: Asset Type
+    ws.getCell(`B${r}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`Lists!$A$1:$A$${assetTypes.length}`],
+      showErrorMessage: true,
+      errorTitle: 'Invalid Asset Type',
+      error: 'Please choose an Asset Type from the dropdown menu.'
+    };
+
+    // Column I: Department
+    ws.getCell(`I${r}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`Lists!$B$1:$B$${departments.length}`],
+      showErrorMessage: true,
+      errorTitle: 'Invalid Department',
+      error: 'Please choose a Department from the dropdown menu.'
+    };
+
+    // Column L: Working Status
+    ws.getCell(`L${r}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`Lists!$C$1:$C$${statuses.length}`],
+      showErrorMessage: true,
+      errorTitle: 'Invalid Working Status',
+      error: 'Please choose a Working Status from the dropdown menu.'
+    };
+
+    // Column M: Condition Rating
+    ws.getCell(`M${r}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`Lists!$D$1:$D$${conditions.length}`],
+      showErrorMessage: true,
+      errorTitle: 'Invalid Condition Rating',
+      error: 'Please choose Brand New, Good, Fair, or Poor from the dropdown menu.'
+    };
+  }
+
+  return await wb.xlsx.writeBuffer();
+}
+
+// GET /api/assets/template/excel - Download Excel Template with Data Validation Dropdowns
+router.get(['/assets/template/excel', '/assets/template'], async (req, res) => {
+  try {
+    const buffer = await generateAssetExcelTemplate();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="it_assets_bulk_import_template.xlsx"');
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('Error generating Excel template:', err);
+    res.status(500).json({ error: 'Failed to generate Excel template' });
+  }
+});
+
 // GET /api/assets/template/csv - Download Sample CSV Template for Bulk Import
 router.get('/assets/template/csv', (req, res) => {
   const templateContent = [
@@ -648,8 +813,27 @@ router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.s
         const brand = String(row['Brand'] || row['brand'] || row['Brand of the product'] || '').trim();
         const model = String(row['Model Name'] || row['model_name'] || row['Model'] || '').trim();
         const hwSerial = String(row['Manufacturer Serial'] || row['serial_number'] || '').trim();
-        let purchaseDate = String(row['Purchase Date'] || row['purchase_date'] || '').trim();
-        if (purchaseDate === 'None' || !purchaseDate) purchaseDate = null;
+        let rawDate = row['Purchase Date'] || row['purchase_date'] || '';
+        let purchaseDate = null;
+        if (rawDate && rawDate !== 'None') {
+          if (typeof rawDate === 'number') {
+            const d = new Date((rawDate - (25567 + 2)) * 86400 * 1000);
+            if (!isNaN(d.getTime())) purchaseDate = d.toISOString().split('T')[0];
+          } else {
+            const str = String(rawDate).trim();
+            const dmy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+            if (dmy) {
+              purchaseDate = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+            } else {
+              const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+              if (ymd) {
+                purchaseDate = `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+              } else {
+                purchaseDate = str;
+              }
+            }
+          }
+        }
         const vendor = String(row['Purchase Vendor'] || row['purchase_vendor'] || row['Vendor'] || '').trim();
         const cost = Number(row['Purchase Cost'] || row['purchase_cost'] || row['Cost'] || 0) || 0;
         const dept = String(row['Department'] || row['department'] || 'General').trim();

@@ -1633,12 +1633,17 @@
               <i data-lucide="download" class="w-3.5 h-3.5 text-indigo-600"></i>
               <span>Step 1: Download Standard Spreadsheet Template</span>
             </div>
-            <p class="text-[11px] text-indigo-700/90 mt-0.5">Use our pre-configured CSV template with proper column headers to ensure 100% data validation accuracy.</p>
+            <p class="text-[11px] text-indigo-700/90 mt-0.5">Includes interactive dropdown validation menus for <strong>Asset Type, Department, Working Status, and Condition</strong>.</p>
           </div>
-          <button onclick="downloadAssetTemplate()" type="button" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm flex-shrink-0">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            <span>Download CSV Template</span>
-          </button>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button onclick="downloadAssetTemplate('excel')" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+              <span>Download Excel (.xlsx)</span>
+            </button>
+            <button onclick="downloadAssetTemplate('csv')" type="button" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-indigo-700 bg-white hover:bg-indigo-100/60 border border-indigo-200 shadow-sm transition-all" title="Download Plain CSV Template">
+              <span>CSV</span>
+            </button>
+          </div>
         </div>
 
         <!-- Step 2: File Selector / Drag-and-drop -->

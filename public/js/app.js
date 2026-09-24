@@ -2498,8 +2498,12 @@ function openBulkImportModal() {
   openModal('modal-bulk-import');
 }
 
-function downloadAssetTemplate() {
-  window.open('/api/assets/template/csv', '_blank');
+function downloadAssetTemplate(format = 'excel') {
+  if (format === 'csv') {
+    window.open('/api/assets/template/csv', '_blank');
+  } else {
+    window.open('/api/assets/template/excel', '_blank');
+  }
 }
 
 function handleBulkFileSelect(e) {
