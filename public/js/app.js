@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupGlobalEvents();
   updateGlobalSidebarCounters();
   fetchUserMasterList();
+  populateDepartmentDropdowns();
   handleRoute();
 });
 
@@ -145,6 +146,11 @@ async function updateGlobalSidebarCounters() {
     const userMasterBadge = document.getElementById('sidebar-user-master-count');
     if (userMasterBadge) {
       userMasterBadge.textContent = data.employees?.total ?? 0;
+    }
+
+    const deptBadge = document.getElementById('sidebar-dept-count');
+    if (deptBadge) {
+      deptBadge.textContent = data.departments?.total ?? 0;
     }
 
     const expBadge = document.getElementById('sidebar-expense-total');
@@ -306,6 +312,10 @@ function navigate(viewName, params = {}, updateHash = true) {
       resetEmployeeFilterUI(params);
       loadEmployees(params);
       break;
+    case 'departments':
+      resetDepartmentFilterUI(params);
+      loadDepartments(params);
+      break;
     case 'search':
       resetSearchUI(params);
       if (params.q) {
@@ -404,6 +414,12 @@ function setupGlobalEvents() {
       }
     });
   });
+
+  // Dynamically toggle Quick Heal key selector when asset type changes
+  const assetTypeEl = document.getElementById('asset-type');
+  if (assetTypeEl) {
+    assetTypeEl.addEventListener('change', updateAssetKeyFieldVisibility);
+  }
 
   // Hotkey listener: Ctrl+K or / opens Master Search; Escape closes modals
   document.addEventListener('keydown', (e) => {
@@ -709,20 +725,22 @@ async function loadAssets(filterParams = {}) {
         statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Retired</span>`;
       }
 
-      // Quick Heal pill (Laptops & Desktops strictly prioritized)
+      // Quick Heal pill (Laptops & Desktops strictly prioritized; non-workstations show clean dash)
       const isWorkstation = ['laptop', 'desktop'].includes(String(a.asset_type || '').toLowerCase());
-      let keyBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-200" title="Antivirus not required for ${escapeHtml(a.asset_type)}">Not Required</span>`;
+      let keyBadge = `<span class="text-slate-300 text-xs font-normal" title="Antivirus only applies to Laptops & Desktops">—</span>`;
 
-      if (a.quick_heal_key_str) {
-        keyBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200" title="License: ${escapeHtml(a.quick_heal_key_str)}">
+      if (isWorkstation) {
+        if (a.quick_heal_key_str) {
+          keyBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200" title="License: ${escapeHtml(a.quick_heal_key_str)}">
           <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
           <span>Mapped</span>
         </span>`;
-      } else if (isWorkstation) {
-        keyBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 shadow-xs" title="Antivirus key not assigned to this ${escapeHtml(a.asset_type)}">
+        } else {
+          keyBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 shadow-xs" title="Antivirus key not assigned to this ${escapeHtml(a.asset_type)}">
           <i data-lucide="shield-alert" class="w-3 h-3 text-rose-500"></i>
           <span>Unprotected</span>
         </span>`;
+        }
       }
 
       // Health badge
@@ -913,7 +931,8 @@ async function viewAssetDetail(assetId) {
         </div>
       </div>
 
-      <!-- Quick Heal License Card -->
+      <!-- Quick Heal License Card: Strictly for Desktops and Laptops ONLY -->
+      ${['desktop', 'laptop'].includes(String(asset.asset_type || '').trim().toLowerCase()) ? `
       <div class="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
@@ -926,11 +945,12 @@ async function viewAssetDetail(assetId) {
           </div>
         </div>
         ${!asset.quick_heal_key_str ? `
-          <button onclick="closeModal('modal-asset-detail'); openMapKeyModalForAsset(${asset.id});" class="tech-action px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-sm">
+          <button onclick="closeModal('modal-asset-detail'); openMapKeyModalForAsset(${asset.id});" class="tech-action px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-sm cursor-pointer">
             Assign Key
           </button>
         ` : ''}
       </div>
+      ` : ''}
 
       <!-- Parts Added Ledger -->
       <div class="p-4 rounded-2xl bg-sky-50/60 border border-sky-200/80">
@@ -1133,6 +1153,21 @@ function printAssetTag() {
   openModal('modal-print-tag');
 }
 
+// Function to show/hide Quick Heal Antivirus field based on asset type (Desktops & Laptops ONLY)
+function updateAssetKeyFieldVisibility() {
+  const typeEl = document.getElementById('asset-type');
+  const container = document.getElementById('container-asset-key');
+  if (!typeEl || !container) return;
+  const isWorkstation = ['desktop', 'laptop'].includes((typeEl.value || '').trim().toLowerCase());
+  if (isWorkstation) {
+    container.classList.remove('hidden');
+  } else {
+    container.classList.add('hidden');
+    const keySelect = document.getElementById('asset-key-select');
+    if (keySelect) keySelect.value = '';
+  }
+}
+
 // Add New Asset Modal
 async function openNewAssetModal() {
   document.getElementById('form-asset').reset();
@@ -1141,8 +1176,10 @@ async function openNewAssetModal() {
   document.getElementById('asset-serial').value = '';
 
   try {
+    await populateDepartmentDropdowns();
     await populateUserSelect('');
     await populateKeySelector();
+    updateAssetKeyFieldVisibility();
     openModal('modal-asset-form');
     lucide.createIcons();
   } catch (err) {
@@ -1155,8 +1192,12 @@ async function openNewAssetModalWithPrefill(prefill = {}) {
   await openNewAssetModal();
   if (prefill.asset_type) document.getElementById('asset-type').value = prefill.asset_type;
   if (prefill.assigned_user) await populateUserSelect(prefill.assigned_user);
-  if (prefill.department) document.getElementById('asset-department').value = prefill.department;
+  if (prefill.department) {
+    await populateDepartmentDropdowns(prefill.department);
+    document.getElementById('asset-department').value = prefill.department;
+  }
   if (prefill.location) document.getElementById('asset-location').value = prefill.location;
+  updateAssetKeyFieldVisibility();
 }
 
 // Edit Asset Modal
@@ -1176,15 +1217,16 @@ async function openEditAssetModal(assetId) {
     document.getElementById('asset-purchase-date').value = asset.purchase_date || '';
     document.getElementById('asset-vendor').value = asset.purchase_vendor || '';
     document.getElementById('asset-cost').value = asset.purchase_cost || 0;
-    document.getElementById('asset-department').value = asset.department || 'Orders';
     document.getElementById('asset-location').value = asset.location || '';
     document.getElementById('asset-status').value = asset.working_status || 'Working';
     document.getElementById('asset-condition').value = asset.condition_rating || 'Good';
     document.getElementById('asset-parts').value = asset.parts_added_summary || '';
     document.getElementById('asset-remarks').value = asset.remarks || '';
 
+    await populateDepartmentDropdowns(asset.department || 'Orders');
     await populateUserSelect(asset.assigned_user || '');
     await populateKeySelector(asset.quick_heal_key_id);
+    updateAssetKeyFieldVisibility();
     openModal('modal-asset-form');
     lucide.createIcons();
   } catch (err) {
@@ -1219,9 +1261,12 @@ async function handleAssetSubmit(e) {
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
+  const assetType = document.getElementById('asset-type').value;
+  const isWorkstation = ['desktop', 'laptop'].includes((assetType || '').trim().toLowerCase());
+
   const payload = {
     internal_serial_number: document.getElementById('asset-serial').value.trim(),
-    asset_type: document.getElementById('asset-type').value,
+    asset_type: assetType,
     brand: document.getElementById('asset-brand').value.trim(),
     model_name: document.getElementById('asset-model').value.trim(),
     serial_number: document.getElementById('asset-hw-serial').value.trim(),
@@ -1232,7 +1277,7 @@ async function handleAssetSubmit(e) {
     location: document.getElementById('asset-location').value.trim(),
     assigned_user: document.getElementById('asset-user').value.trim(),
     working_status: document.getElementById('asset-status').value,
-    quick_heal_key_id: document.getElementById('asset-key-select').value || null,
+    quick_heal_key_id: isWorkstation ? (document.getElementById('asset-key-select').value || null) : null,
     condition_rating: document.getElementById('asset-condition').value,
     parts_added_summary: document.getElementById('asset-parts').value.trim(),
     remarks: document.getElementById('asset-remarks').value.trim()
@@ -4595,6 +4640,607 @@ async function viewUserAssets(empId) {
   }
 }
 
+// ==========================================
+// 10. VIEW: DEPARTMENT MASTER & BREAKDOWN
+// ==========================================
+
+let cachedDepartmentsList = [];
+
+async function fetchDepartmentsList(force = false) {
+  if (!force && cachedDepartmentsList && cachedDepartmentsList.length > 0) {
+    return cachedDepartmentsList;
+  }
+  try {
+    const res = await apiFetch('/api/departments');
+    if (!res.ok) return [];
+    const data = await res.json();
+    cachedDepartmentsList = data.departments || [];
+    return cachedDepartmentsList;
+  } catch (err) {
+    console.error('fetchDepartmentsList error:', err);
+    return [];
+  }
+}
+
+// Dynamically populate all department dropdowns across the application
+async function populateDepartmentDropdowns(selectedDept = '') {
+  try {
+    const depts = await fetchDepartmentsList();
+    const sorted = depts.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // 1. Form dropdowns (Asset Form, Quick Add User, Employee Form)
+    const formSelectIds = ['asset-department', 'quick-user-dept', 'emp-department'];
+    formSelectIds.forEach(id => {
+      const select = document.getElementById(id);
+      if (!select) return;
+
+      const currentVal = selectedDept || select.value || '';
+      select.innerHTML = '<option value="">-- Select Department from Master --</option>';
+
+      let found = false;
+      sorted.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.name;
+        opt.textContent = d.code ? `${d.name} [${d.code}]` : d.name;
+        if (currentVal && d.name.trim().toLowerCase() === currentVal.trim().toLowerCase()) {
+          opt.selected = true;
+          found = true;
+        }
+        select.appendChild(opt);
+      });
+
+      // Preserve current custom value if not yet in master
+      if (currentVal && !found && currentVal !== '__NEW_DEPT__') {
+        const opt = document.createElement('option');
+        opt.value = currentVal;
+        opt.textContent = `${currentVal} (Current)`;
+        opt.selected = true;
+        select.insertBefore(opt, select.children[1] || null);
+      }
+
+      // Add Quick Add option at the bottom
+      const quickAddOpt = document.createElement('option');
+      quickAddOpt.value = '__NEW_DEPT__';
+      quickAddOpt.textContent = '➕ + Quick Add New Department to Master...';
+      quickAddOpt.className = 'font-bold text-pink-600 bg-pink-50';
+      select.appendChild(quickAddOpt);
+
+      if (!select._boundDeptChange) {
+        select._boundDeptChange = true;
+        select.addEventListener('change', () => {
+          if (select.value === '__NEW_DEPT__') {
+            select.value = select._lastSelectedDept || '';
+            openDepartmentModal();
+            return;
+          }
+          select._lastSelectedDept = select.value;
+        });
+      }
+      select._lastSelectedDept = select.value;
+    });
+
+    // 2. Filter dropdowns (Asset List filter, Employee List filter)
+    const filterSelectIds = ['asset-filter-dept', 'employee-filter-dept'];
+    filterSelectIds.forEach(id => {
+      const select = document.getElementById(id);
+      if (!select) return;
+
+      const currentVal = select.value || 'all';
+      select.innerHTML = '<option value="all">All Departments</option>';
+
+      sorted.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.name;
+        opt.textContent = d.code ? `${d.name} [${d.code}]` : d.name;
+        if (currentVal && (d.name.trim().toLowerCase() === currentVal.trim().toLowerCase() || currentVal === d.name)) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    });
+  } catch (err) {
+    console.error('populateDepartmentDropdowns error:', err);
+  }
+}
+
+function resetDepartmentFilterUI(overrides = {}) {
+  const s = document.getElementById('dept-search-input');
+  if (s) s.value = overrides.search || '';
+}
+
+let deptSearchTimeout = null;
+function debounceDeptSearch() {
+  clearTimeout(deptSearchTimeout);
+  deptSearchTimeout = setTimeout(() => {
+    loadDepartments({ search: document.getElementById('dept-search-input')?.value || '' });
+  }, 250);
+}
+
+// Load and render Department Master
+async function loadDepartments(filterParams = {}) {
+  try {
+    const search = filterParams.search !== undefined ? filterParams.search : document.getElementById('dept-search-input')?.value || '';
+
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+
+    const res = await apiFetch(`/api/departments?${params.toString()}`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    cachedDepartmentsList = data.departments || [];
+
+    // Update KPI metric counters
+    const totalEl = document.getElementById('dept-stat-total');
+    if (totalEl) totalEl.textContent = data.stats?.total_departments ?? cachedDepartmentsList.length;
+
+    const assetsEl = document.getElementById('dept-stat-assets');
+    if (assetsEl) assetsEl.textContent = data.stats?.total_department_assets ?? 0;
+
+    const personnelEl = document.getElementById('dept-stat-personnel');
+    if (personnelEl) personnelEl.textContent = data.stats?.total_department_personnel ?? 0;
+
+    const valueEl = document.getElementById('dept-stat-value');
+    if (valueEl) {
+      const val = data.stats?.total_department_value ?? 0;
+      valueEl.textContent = `₹${val.toLocaleString('en-IN')}`;
+    }
+
+    const indicatorEl = document.getElementById('dept-count-indicator');
+    if (indicatorEl) {
+      indicatorEl.textContent = `Showing ${cachedDepartmentsList.length} department(s)`;
+    }
+
+    // Update sidebar badge
+    const badge = document.getElementById('sidebar-dept-count');
+    if (badge && data.stats) {
+      badge.textContent = data.stats.total_departments ?? cachedDepartmentsList.length;
+    }
+
+    renderDepartmentsGrid(cachedDepartmentsList);
+  } catch (err) {
+    console.error('loadDepartments error:', err);
+  }
+}
+
+// Render Department Grid Cards
+function renderDepartmentsGrid(departments) {
+  const container = document.getElementById('departments-grid');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!departments || departments.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full py-16 text-center bg-white border border-slate-200/80 rounded-2xl shadow-sm">
+        <div class="w-12 h-12 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="building-2" class="w-6 h-6"></i>
+        </div>
+        <h4 class="text-sm font-bold text-slate-800">No Departments Found</h4>
+        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Create your first department in Department Master to organize assets and personnel.</p>
+        <button onclick="openDepartmentModal()" class="mt-4 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-pink-600 hover:bg-pink-500 shadow-md shadow-pink-500/20 cursor-pointer">
+          + Add New Department
+        </button>
+      </div>
+    `;
+    lucide.createIcons();
+    return;
+  }
+
+  const isAdmin = currentUser?.role === 'admin';
+  const isViewer = currentUser?.role === 'viewer';
+
+  departments.forEach(d => {
+    const stats = d.stats || {
+      total_assets: 0,
+      working: 0,
+      in_repair: 0,
+      not_working: 0,
+      retired: 0,
+      total_personnel: 0,
+      active_custodians_count: 0,
+      total_value: 0,
+      asset_types: {}
+    };
+
+    const card = document.createElement('div');
+    card.className = 'p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md hover:border-pink-300 transition-all flex flex-col justify-between space-y-4';
+
+    // Build hardware types chips
+    const typeEntries = Object.entries(stats.asset_types || {});
+    let typeBadges = '';
+    if (typeEntries.length > 0) {
+      typeBadges = typeEntries.slice(0, 4).map(([tName, count]) => `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+          <span>${escapeHtml(tName)}:</span>
+          <span class="font-mono text-brand-600">${count}</span>
+        </span>
+      `).join('');
+      if (typeEntries.length > 4) {
+        typeBadges += `<span class="text-[10px] font-bold text-slate-400 self-center">+${typeEntries.length - 4} more</span>`;
+      }
+    } else {
+      typeBadges = `<span class="text-[11px] text-slate-400 italic">No hardware assets allocated yet</span>`;
+    }
+
+    card.innerHTML = `
+      <div class="space-y-3">
+        <!-- Top header row -->
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center font-bold flex-shrink-0 shadow-xs">
+              <i data-lucide="building-2" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="font-bold text-sm text-slate-900 leading-tight">${escapeHtml(d.name)}</h3>
+                ${d.code ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-pink-100 text-pink-800">${escapeHtml(d.code)}</span>` : ''}
+              </div>
+              <div class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>📍 ${escapeHtml(d.location || 'Main Facility')}</span>
+                ${d.head_of_department ? `<span>• 👤 Lead: <strong>${escapeHtml(d.head_of_department)}</strong></span>` : ''}
+              </div>
+            </div>
+          </div>
+          ${!isViewer ? `
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <button onclick="openEditDepartmentModal(${d.id})" title="Edit Department" class="p-1.5 text-slate-400 hover:text-pink-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              ${isAdmin ? `
+                <button onclick="deleteDepartment(${d.id}, '${escapeHtml(d.name)}')" title="Delete Department" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              ` : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        ${d.description ? `
+          <p class="text-xs text-slate-600 font-normal line-clamp-2">${escapeHtml(d.description)}</p>
+        ` : ''}
+
+        <!-- Breakdown KPI Mini Grid -->
+        <div class="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-center">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Assets</span>
+            <span class="text-sm font-black font-mono text-slate-900">${stats.total_assets}</span>
+            <div class="text-[9px] text-emerald-600 font-semibold mt-0.5">${stats.working} Working</div>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Personnel</span>
+            <span class="text-sm font-black font-mono text-violet-600">${stats.total_personnel}</span>
+            <div class="text-[9px] text-slate-500 font-medium mt-0.5">${stats.active_custodians_count} Users</div>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Asset Value</span>
+            <span class="text-sm font-black font-mono text-emerald-600">₹${stats.total_value >= 1000 ? (stats.total_value / 1000).toFixed(0) + 'k' : stats.total_value}</span>
+            <div class="text-[9px] text-slate-400 font-medium mt-0.5">Fleet Cost</div>
+          </div>
+        </div>
+
+        <!-- Asset Types Chips -->
+        <div class="space-y-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Hardware Breakdown:</span>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            ${typeBadges}
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <button onclick="viewDepartmentDetail(${d.id})" class="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200/80 transition-colors cursor-pointer shadow-2xs">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+          <span>View Department Breakdown Dossier &rarr;</span>
+        </button>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+
+  lucide.createIcons();
+}
+
+// View Department Detail & Deep Breakdown Modal
+async function viewDepartmentDetail(deptId) {
+  try {
+    const res = await apiFetch(`/api/departments/${deptId}`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const { department: dept, stats, assets, employees } = data;
+
+    document.getElementById('dept-detail-title').textContent = dept.name;
+    const codeEl = document.getElementById('dept-detail-code');
+    if (codeEl) codeEl.textContent = dept.code || 'DEPT';
+    document.getElementById('dept-detail-sub').textContent = `Lead: ${dept.head_of_department || 'Unassigned'} • Location: ${dept.location || 'Main Office'} • Total Value: ₹${(stats.total_value || 0).toLocaleString('en-IN')}`;
+
+    const body = document.getElementById('dept-detail-body');
+    const workingPct = stats.total_assets > 0 ? Math.round((stats.working / stats.total_assets) * 100) : 0;
+    const repairPct = stats.total_assets > 0 ? Math.round((stats.in_repair / stats.total_assets) * 100) : 0;
+    const notWorkingPct = stats.total_assets > 0 ? Math.round((stats.not_working / stats.total_assets) * 100) : 0;
+
+    body.innerHTML = `
+      <!-- Department Profile Overview Card -->
+      <div class="p-4 rounded-2xl bg-pink-50/70 border border-pink-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="text-base font-bold text-slate-900">${escapeHtml(dept.name)}</h4>
+            ${dept.code ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-pink-200 text-pink-900">${escapeHtml(dept.code)}</span>` : ''}
+          </div>
+          <p class="text-xs text-slate-600 font-medium">${escapeHtml(dept.description || 'No operational description recorded.')}</p>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button onclick="closeModal('modal-department-detail'); openNewAssetModalWithPrefill({ department: '${escapeHtml(dept.name)}', location: '${escapeHtml(dept.location || '')}' })" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-pink-600 hover:bg-pink-500 shadow-sm cursor-pointer">
+            + Allocate Asset
+          </button>
+        </div>
+      </div>
+
+      <!-- 4 Summary KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Total Assets</span>
+          <strong class="text-base font-mono font-black text-slate-900">${stats.total_assets} Units</strong>
+          <div class="text-[10px] text-slate-500 mt-0.5">Assigned to ${escapeHtml(dept.name)}</div>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Working Health Rate</span>
+          <strong class="text-base font-mono font-black text-emerald-600">${workingPct}% Operational</strong>
+          <div class="text-[10px] text-emerald-600 mt-0.5">${stats.working} of ${stats.total_assets} working</div>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Personnel / Staff</span>
+          <strong class="text-base font-mono font-black text-violet-600">${stats.total_personnel} Members</strong>
+          <div class="text-[10px] text-violet-600 mt-0.5">Registered in department</div>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Total Asset Value</span>
+          <strong class="text-base font-mono font-black text-emerald-600">₹${(stats.total_value || 0).toLocaleString('en-IN')}</strong>
+          <div class="text-[10px] text-slate-400 mt-0.5">Total procurement cost</div>
+        </div>
+      </div>
+
+      <!-- Operational Health Progress Bar -->
+      <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+          <span>Department Hardware Status Breakdown:</span>
+          <span>${stats.working} Working • ${stats.in_repair} In Repair • ${stats.not_working} Defective</span>
+        </div>
+        <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
+          <div style="width: ${workingPct}%" class="bg-emerald-500 h-full" title="${workingPct}% Working"></div>
+          <div style="width: ${repairPct}%" class="bg-amber-400 h-full" title="${repairPct}% In Repair"></div>
+          <div style="width: ${notWorkingPct}%" class="bg-rose-500 h-full" title="${notWorkingPct}% Defective"></div>
+        </div>
+      </div>
+
+      <!-- Hardware Type Distribution Summary -->
+      <div class="space-y-2">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Hardware Allocation by Type</h4>
+        <div class="flex items-center gap-2 flex-wrap">
+          ${Object.entries(stats.asset_types || {}).length > 0 ? Object.entries(stats.asset_types).map(([typeName, count]) => `
+            <div class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 text-xs">
+              <span class="font-semibold text-slate-700">${escapeHtml(typeName)}:</span>
+              <span class="font-mono font-bold text-pink-600">${count}</span>
+            </div>
+          `).join('') : '<p class="text-xs text-slate-400">No assets allocated to this department.</p>'}
+        </div>
+      </div>
+
+      <!-- Department Assets Table -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Department Assets (${assets.length})</h4>
+          <button onclick="closeModal('modal-department-detail'); navigate('assets', { department: '${escapeHtml(dept.name)}' })" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline cursor-pointer">
+            View in Master Asset List &rarr;
+          </button>
+        </div>
+
+        ${assets.length > 0 ? `
+          <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div class="overflow-x-auto max-h-60">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold sticky top-0">
+                  <tr>
+                    <th class="py-2.5 px-3">Serial #</th>
+                    <th class="py-2.5 px-3">Type</th>
+                    <th class="py-2.5 px-3">Brand & Model</th>
+                    <th class="py-2.5 px-3">Custodian</th>
+                    <th class="py-2.5 px-3">Status</th>
+                    <th class="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${assets.map(a => `
+                    <tr class="hover:bg-slate-50/70">
+                      <td class="py-2 px-3 font-mono font-bold text-brand-600">#${escapeHtml(a.internal_serial_number)}</td>
+                      <td class="py-2 px-3 font-semibold text-slate-800">${escapeHtml(a.asset_type)}</td>
+                      <td class="py-2 px-3">${escapeHtml(a.brand || '')} ${escapeHtml(a.model_name || '')}</td>
+                      <td class="py-2 px-3 font-medium text-slate-700">${escapeHtml(a.assigned_user || 'Unassigned')}</td>
+                      <td class="py-2 px-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                          ${escapeHtml(a.working_status)}
+                        </span>
+                      </td>
+                      <td class="py-2 px-3 text-right">
+                        <button onclick="closeModal('modal-department-detail'); viewAssetDetail(${a.id})" class="text-xs font-semibold text-pink-600 hover:text-pink-700 underline cursor-pointer">
+                          View Dossier
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : `
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+            No assets currently allocated to ${escapeHtml(dept.name)}.
+          </div>
+        `}
+      </div>
+
+      <!-- Department Personnel Table -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Department Personnel (${employees.length})</h4>
+          <button onclick="closeModal('modal-department-detail'); navigate('employees', { department: '${escapeHtml(dept.name)}' })" class="text-xs text-violet-600 hover:text-violet-700 font-bold hover:underline cursor-pointer">
+            View in User Master &rarr;
+          </button>
+        </div>
+
+        ${employees.length > 0 ? `
+          <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div class="overflow-x-auto max-h-60">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold sticky top-0">
+                  <tr>
+                    <th class="py-2.5 px-3">Staff Member</th>
+                    <th class="py-2.5 px-3">Designation</th>
+                    <th class="py-2.5 px-3">Location</th>
+                    <th class="py-2.5 px-3">Contact</th>
+                    <th class="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${employees.map(e => `
+                    <tr class="hover:bg-slate-50/70">
+                      <td class="py-2 px-3 font-bold text-slate-900">${escapeHtml(e.name)}</td>
+                      <td class="py-2 px-3 text-slate-600">${escapeHtml(e.designation || 'Staff')}</td>
+                      <td class="py-2 px-3 text-slate-500">${escapeHtml(e.location || 'Main Office')}</td>
+                      <td class="py-2 px-3 text-slate-500">${escapeHtml(e.phone || e.email || '—')}</td>
+                      <td class="py-2 px-3 text-right">
+                        <button onclick="closeModal('modal-department-detail'); viewUserAssets(${e.id})" class="text-xs font-semibold text-violet-600 hover:text-violet-700 underline cursor-pointer">
+                          View Hardware
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : `
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+            No employees registered under ${escapeHtml(dept.name)} yet.
+          </div>
+        `}
+      </div>
+    `;
+
+    openModal('modal-department-detail');
+    lucide.createIcons();
+  } catch (err) {
+    console.error('viewDepartmentDetail error:', err);
+  }
+}
+
+// Open Department Form Modal (Add mode)
+function openDepartmentModal() {
+  const form = document.getElementById('form-department');
+  if (form) form.reset();
+
+  document.getElementById('dept-id').value = '';
+  document.getElementById('dept-form-title').textContent = 'Add New Department';
+  openModal('modal-department-form');
+  setTimeout(() => {
+    document.getElementById('dept-name')?.focus();
+    lucide.createIcons();
+  }, 60);
+}
+
+// Open Department Form Modal (Edit mode)
+async function openEditDepartmentModal(deptId) {
+  try {
+    const res = await apiFetch(`/api/departments/${deptId}`);
+    if (!res.ok) return;
+    const { department: dept } = await res.json();
+
+    document.getElementById('dept-form-title').textContent = `Edit Department: ${dept.name}`;
+    document.getElementById('dept-id').value = dept.id;
+    document.getElementById('dept-name').value = dept.name;
+    document.getElementById('dept-code').value = dept.code || '';
+    document.getElementById('dept-hod').value = dept.head_of_department || '';
+    document.getElementById('dept-location').value = dept.location || '';
+    document.getElementById('dept-description').value = dept.description || '';
+
+    openModal('modal-department-form');
+    lucide.createIcons();
+  } catch (err) {
+    console.error('openEditDepartmentModal error:', err);
+  }
+}
+
+// Handle Add / Edit Department Submit
+async function handleDepartmentSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('dept-id').value;
+  const btn = document.getElementById('btn-save-dept');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const payload = {
+    name: document.getElementById('dept-name').value.trim(),
+    code: document.getElementById('dept-code').value.trim(),
+    head_of_department: document.getElementById('dept-hod').value.trim(),
+    location: document.getElementById('dept-location').value.trim(),
+    description: document.getElementById('dept-description').value.trim()
+  };
+
+  try {
+    const url = id ? `/api/departments/${id}` : '/api/departments';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await apiFetch(url, {
+      method,
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Department saved successfully!', 'success');
+      closeModal('modal-department-form');
+      await fetchDepartmentsList(true);
+      await populateDepartmentDropdowns(payload.name);
+      if (currentView === 'departments') {
+        loadDepartments();
+      }
+      updateGlobalSidebarCounters();
+    } else {
+      showToast(data.error || 'Failed to save department', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Network error', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Department';
+  }
+}
+
+// Delete Department
+async function deleteDepartment(deptId, deptName) {
+  if (!confirm(`Are you sure you want to delete department '${deptName}' from Department Master?\n\nNote: If this department has assets or staff assigned, you must reassign them first.`)) {
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/departments/${deptId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Department deleted successfully', 'success');
+      await fetchDepartmentsList(true);
+      await populateDepartmentDropdowns();
+      loadDepartments();
+      updateGlobalSidebarCounters();
+    } else {
+      showToast(data.error || 'Failed to delete department', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Network error', 'error');
+  }
+}
+
 // Global window attachments
 window.fetchUserMasterList = fetchUserMasterList;
 window.openQuickAddUserModal = openQuickAddUserModal;
@@ -4611,4 +5257,17 @@ window.viewUserAssets = viewUserAssets;
 window.resetEmployeeFilterUI = resetEmployeeFilterUI;
 window.populateUserSelect = populateUserSelect;
 window.populateAccessoryUserSelect = populateAccessoryUserSelect;
+window.updateAssetKeyFieldVisibility = updateAssetKeyFieldVisibility;
+window.fetchDepartmentsList = fetchDepartmentsList;
+window.populateDepartmentDropdowns = populateDepartmentDropdowns;
+window.loadDepartments = loadDepartments;
+window.resetDepartmentFilterUI = resetDepartmentFilterUI;
+window.debounceDeptSearch = debounceDeptSearch;
+window.renderDepartmentsGrid = renderDepartmentsGrid;
+window.viewDepartmentDetail = viewDepartmentDetail;
+window.openDepartmentModal = openDepartmentModal;
+window.openEditDepartmentModal = openEditDepartmentModal;
+window.handleDepartmentSubmit = handleDepartmentSubmit;
+window.deleteDepartment = deleteDepartment;
+
 

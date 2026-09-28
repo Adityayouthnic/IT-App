@@ -138,6 +138,17 @@ function initSchema() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS departments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+      code TEXT,
+      description TEXT,
+      head_of_department TEXT,
+      location TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_assets_serial ON assets(internal_serial_number);
     CREATE INDEX IF NOT EXISTS idx_assets_dept ON assets(department);
     CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(assigned_user);
@@ -149,6 +160,7 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_employees_name ON employees(name);
     CREATE INDEX IF NOT EXISTS idx_employees_dept ON employees(department);
     CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
+    CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
   `);
 
   // Migration: Ensure due_date column exists in repairs
@@ -160,6 +172,22 @@ function initSchema() {
     }
   } catch (e) {
     console.warn('Migration due_date check error:', e.message);
+  }
+
+  // Migration: Ensure Quick Heal keys are unmapped from non-workstation assets (Printers, Scanners, Monitors, etc.)
+  try {
+    db.exec(`
+      UPDATE quick_heal_keys
+      SET status = 'Available', assigned_asset_id = NULL, assigned_user = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE assigned_asset_id IN (
+        SELECT id FROM assets WHERE LOWER(TRIM(asset_type)) NOT IN ('desktop', 'laptop')
+      );
+      UPDATE assets
+      SET quick_heal_key_id = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE LOWER(TRIM(asset_type)) NOT IN ('desktop', 'laptop') AND quick_heal_key_id IS NOT NULL;
+    `);
+  } catch (e) {
+    console.warn('Migration non-workstation key cleanup warning:', e.message);
   }
 }
 
@@ -523,6 +551,54 @@ function seedEmployeesFromAssets() {
   }
 }
 
+// Seed Department Master
+function seedDepartments() {
+  try {
+    const defaultDepts = [
+      { name: 'Orders', code: 'ORD', description: 'Order Processing, Picking & Fulfillment', location: 'Orders Floor' },
+      { name: 'Dispatch', code: 'DISP', description: 'Packaging, Shipping & Logistics Dispatch', location: 'Dispatch Area' },
+      { name: 'Listings', code: 'LIST', description: 'Product Cataloging & Marketplace Listings', location: 'Catalog Wing' },
+      { name: 'Company', code: 'COMP', description: 'Corporate Operations, Executive & Administration', location: 'Main Office' },
+      { name: 'Accounts', code: 'ACC', description: 'Finance, Invoicing, Taxation & Accounts', location: 'Accounts Cabin' },
+      { name: 'Data Analysis', code: 'DA', description: 'Business Intelligence, MIS & Analytics', location: 'Analytics Desk' },
+      { name: 'Return', code: 'RET', description: 'RTO & Customer Returns Processing', location: 'Returns Bay' },
+      { name: 'IT Infrastructure', code: 'IT', description: 'Information Technology, Systems, Servers & Networks', location: 'Server Room' },
+      { name: 'Warehouse', code: 'WH', description: 'Inventory Warehousing, Stocking & Storage', location: 'Main Warehouse' },
+      { name: 'HR', code: 'HR', description: 'Human Resources, Payroll & Recruitment', location: 'HR Office' },
+      { name: 'Sales', code: 'SALES', description: 'Customer Sales, Marketing & Business Growth', location: 'Sales Floor' }
+    ];
+
+    const insertDept = db.prepare(`
+      INSERT OR IGNORE INTO departments (name, code, description, location)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    for (const d of defaultDepts) {
+      insertDept.run(d.name, d.code, d.description, d.location);
+    }
+
+    // Also pull any distinct department existing in assets or employees table
+    const distinctDepts = db.prepare(`
+      SELECT DISTINCT TRIM(department) as name
+      FROM assets
+      WHERE department IS NOT NULL AND TRIM(department) != ''
+      UNION
+      SELECT DISTINCT TRIM(department) as name
+      FROM employees
+      WHERE department IS NOT NULL AND TRIM(department) != ''
+    `).all();
+
+    for (const d of distinctDepts) {
+      if (d.name) {
+        const code = d.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 5);
+        insertDept.run(d.name, code, `${d.name} Department`, '');
+      }
+    }
+  } catch (err) {
+    console.warn('seedDepartments warning:', err.message);
+  }
+}
+
 // Purge all operational records: Assets, Repairs, Quick Heal Keys, Accessories, and Expenses
 function purgeOperationalData() {
   const transaction = db.transaction(() => {
@@ -554,6 +630,7 @@ initSchema();
 seedUsers();
 seedFromSheet();
 seedEmployeesFromAssets();
+seedDepartments();
 patchAssignedQuantities();
 ensureAdityaAdmin();
 
@@ -566,6 +643,7 @@ module.exports = {
   db,
   initSchema,
   seedEmployeesFromAssets,
+  seedDepartments,
   purgeOperationalData
 };
 

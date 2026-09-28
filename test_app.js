@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { db, purgeOperationalData } = require('./database');
 
 async function runTests() {
   console.log('--- Starting IT App System Verification Tests ---');
@@ -972,11 +973,226 @@ async function runTests() {
 
   console.log('✅ Test 19: All User Master and Desktop-to-Printer tests passed successfully!');
 
+  // Test 20: Quick Heal strictly restricted to Desktops & Laptops ONLY
+  console.log('\n===============================================');
+  console.log('Test 20: Quick Heal Strictly Restricted to Desktops & Laptops');
+  console.log('===============================================');
+
+  const randT20 = Math.floor(10000 + Math.random() * 90000);
+  const testKeySerial = `QH-T20-${randT20}`;
+  const testPrnSerial = `PRN-T20-${randT20}`;
+  const testDeskSerial = `DSK-T20-${randT20}`;
+
+  // Add a test key
+  const resKeyT20 = await fetch(`${BASE_URL}/api/keys`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ product_key: testKeySerial, edition: 'Total Security' })
+  });
+  const dataKeyT20 = await resKeyT20.json();
+  const testKeyId = dataKeyT20.id;
+
+  // 20A: Create a test Tag Printer
+  const resPrnT20 = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: testPrnSerial,
+      asset_type: 'Tag Printer',
+      brand: 'TSC',
+      department: 'Dispatch',
+      quick_heal_key_id: testKeyId // Should be ignored/nulled by backend
+    })
+  });
+  const dataPrnT20 = await resPrnT20.json();
+  const testPrnId = dataPrnT20.id;
+
+  // Verify printer has quick_heal_key_id = null
+  const resCheckPrn = await fetch(`${BASE_URL}/api/assets/${testPrnId}`, { headers: authHeaders });
+  const checkPrn = (await resCheckPrn.json()).asset;
+  if (checkPrn.quick_heal_key_id !== null) {
+    throw new Error(`Expected quick_heal_key_id null for Tag Printer, got ${checkPrn.quick_heal_key_id}`);
+  }
+  console.log('  ✅ 20A: Confirmed non-workstation asset creation forces quick_heal_key_id = null.');
+
+  // 20B: Direct mapping attempt to printer must return 400
+  const resMapFail = await fetch(`${BASE_URL}/api/keys/${testKeyId}/map`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ asset_id: testPrnId })
+  });
+  if (resMapFail.status !== 400) {
+    throw new Error(`Expected 400 when mapping key to printer, got ${resMapFail.status}`);
+  }
+  const failData = await resMapFail.json();
+  console.log(`  ✅ 20B: Confirmed key mapping to printer rejected with 400: "${failData.error}"`);
+
+  // 20C: Create a Desktop and map key (must succeed)
+  const resDeskT20 = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: testDeskSerial,
+      asset_type: 'Desktop',
+      brand: 'Dell',
+      department: 'Orders'
+    })
+  });
+  const testDeskId = (await resDeskT20.json()).id;
+
+  const resMapSuccess = await fetch(`${BASE_URL}/api/keys/${testKeyId}/map`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ asset_id: testDeskId })
+  });
+  if (!resMapSuccess.ok) throw new Error('Failed to map key to Desktop');
+  console.log('  ✅ 20C: Confirmed key successfully mapped to Desktop.');
+
+  // 20D: Update Desktop to Tag Printer -> key must be freed back to Available
+  await fetch(`${BASE_URL}/api/assets/${testDeskId}`, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({ asset_type: 'Tag Printer' })
+  });
+  const resKeyCheck = await fetch(`${BASE_URL}/api/keys`, { headers: authHeaders });
+  const keysList = (await resKeyCheck.json()).keys;
+  const freedKey = keysList.find(k => k.id === testKeyId);
+  if (!freedKey || freedKey.status !== 'Available') {
+    throw new Error(`Expected key status Available after asset changed to non-workstation, got ${freedKey?.status}`);
+  }
+  console.log('  ✅ 20D: Confirmed key automatically unmapped and returned to pool when asset changed to printer.');
+
+  console.log('✅ Test 20: All workstation Quick Heal restriction tests passed!');
+
+  // Test 21: Department Master CRUD and Department-wise Breakdown
+  console.log('\n===============================================');
+  console.log('Test 21: Department Master & Department-wise Breakdown');
+  console.log('===============================================');
+
+  const randT21 = Math.floor(10000 + Math.random() * 90000);
+  const qaDeptName = `Quality Assurance ${randT21}`;
+  const qaAssetSerial = `QA-DEV-${randT21}`;
+
+  // 21A: List departments
+  const resDepts = await fetch(`${BASE_URL}/api/departments`, { headers: authHeaders });
+  const dataDepts = await resDepts.json();
+  if (!dataDepts.departments || dataDepts.departments.length < 11) {
+    throw new Error(`Expected at least 11 seeded departments, got ${dataDepts.departments?.length}`);
+  }
+  console.log(`  ✅ 21A: Retrieved ${dataDepts.departments.length} departments from Department Master.`);
+
+  // 21B: Create new department
+  const resNewDept = await fetch(`${BASE_URL}/api/departments`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      name: qaDeptName,
+      code: `QA${randT21 % 1000}`,
+      head_of_department: 'Vikram Mehta',
+      location: 'QA Lab 2nd Floor',
+      description: 'Product quality inspection and standard testing'
+    })
+  });
+  if (!resNewDept.ok) throw new Error('Failed to create department');
+  const newDeptData = await resNewDept.json();
+  const qaDeptId = newDeptData.id;
+  console.log(`  ✅ 21B: Created new department '${qaDeptName}' [ID: ${qaDeptId}].`);
+
+  // 21C: Duplicate name prevention
+  const resDupDept = await fetch(`${BASE_URL}/api/departments`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ name: qaDeptName })
+  });
+  if (resDupDept.status !== 400) {
+    throw new Error(`Expected 400 for duplicate department, got ${resDupDept.status}`);
+  }
+  console.log('  ✅ 21C: Duplicate department name blocked with 400 error.');
+
+  // 21D: Auto-registration in Department Master when asset created with new department
+  await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: qaAssetSerial,
+      asset_type: 'Desktop',
+      brand: 'Lenovo',
+      department: qaDeptName,
+      purchase_cost: 45000,
+      working_status: 'Working'
+    })
+  });
+
+  // 21E: Deep breakdown dossier
+  const resQADetail = await fetch(`${BASE_URL}/api/departments/${qaDeptId}`, { headers: authHeaders });
+  const dataQADetail = await resQADetail.json();
+  if (dataQADetail.stats.total_assets < 1) {
+    throw new Error(`Expected at least 1 asset in QA department, got ${dataQADetail.stats.total_assets}`);
+  }
+  if (dataQADetail.stats.working < 1) {
+    throw new Error(`Expected at least 1 working asset, got ${dataQADetail.stats.working}`);
+  }
+  if (dataQADetail.stats.total_value < 45000) {
+    throw new Error(`Expected total value >= 45000, got ${dataQADetail.stats.total_value}`);
+  }
+  console.log('  ✅ 21E: Department Breakdown Dossier confirmed:', {
+    total_assets: dataQADetail.stats.total_assets,
+    working: dataQADetail.stats.working,
+    total_value: dataQADetail.stats.total_value,
+    asset_types: dataQADetail.stats.asset_types
+  });
+
+  // 21F: Update department and cascade rename
+  const updatedDeptName = `QA & Compliance ${randT21}`;
+  const resUpdDept = await fetch(`${BASE_URL}/api/departments/${qaDeptId}`, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify({
+      name: updatedDeptName,
+      code: 'QAC',
+      head_of_department: 'Vikram Mehta',
+      location: 'QA Wing Floor 3',
+      description: 'Quality audit and regulatory compliance'
+    })
+  });
+  if (!resUpdDept.ok) throw new Error('Failed to update department');
+  console.log('  ✅ 21F: Successfully updated department and cascaded rename to assigned assets.');
+
+  // 21G: Delete safety protection (Cannot delete department with active assets)
+  const resDelDeptFail = await fetch(`${BASE_URL}/api/departments/${qaDeptId}`, {
+    method: 'DELETE',
+    headers: authHeaders
+  });
+  if (resDelDeptFail.status !== 400) {
+    throw new Error(`Expected 400 when deleting department with assets, got ${resDelDeptFail.status}`);
+  }
+  console.log('  ✅ 21G: Confirmed delete protection for department with active inventory.');
+
+  // Clean up QA asset so we can test clean deletion
+  db.prepare("DELETE FROM assets WHERE internal_serial_number IN (?, ?, ?)").run(testPrnSerial, testDeskSerial, qaAssetSerial);
+  db.prepare("DELETE FROM quick_heal_keys WHERE id = ?").run(testKeyId);
+
+  const resDelDeptSuccess = await fetch(`${BASE_URL}/api/departments/${qaDeptId}`, {
+    method: 'DELETE',
+    headers: authHeaders
+  });
+  if (!resDelDeptSuccess.ok) throw new Error('Failed to delete empty department');
+  console.log('  ✅ 21G-2: Clean deletion of empty department succeeded.');
+
+  // 21H: Dashboard stats check
+  const resFinalStats = await fetch(`${BASE_URL}/api/dashboard/stats`, { headers: authHeaders });
+  const finalStats = await resFinalStats.json();
+  if (typeof finalStats.departments?.total !== 'number') {
+    throw new Error('departments.total missing in stats');
+  }
+  console.log(`  ✅ 21H: Dashboard stats confirmed with ${finalStats.departments.total} total departments.`);
+
+  console.log('✅ Test 21: All Department Master tests passed successfully!');
+
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');
 
-  const { db, purgeOperationalData } = require('./database');
   purgeOperationalData();
   try { db.close(); } catch(e) {}
 

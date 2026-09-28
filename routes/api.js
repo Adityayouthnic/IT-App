@@ -122,6 +122,11 @@ router.get('/dashboard/stats', (req, res) => {
       FROM employees
     `).get();
 
+    // Department Master Count
+    const departmentStats = db.prepare(`
+      SELECT COUNT(*) as total FROM departments
+    `).get();
+
     res.json({
       assets: assetStats,
       unprotectedWorkstations,
@@ -129,6 +134,7 @@ router.get('/dashboard/stats', (req, res) => {
       repairs: repairStats,
       accessories: accStats,
       employees: employeeStats,
+      departments: departmentStats,
       deptBreakdown,
       typeBreakdown,
       brandBreakdown,
@@ -192,6 +198,33 @@ function computeAssetLifecycle(asset, repairCount = 0, totalRepairCost = 0) {
   return { ageString, ageYears, healthScore, healthClass, eolReason };
 }
 
+// Helper to automatically sync Department Master on asset creation / import / assignment
+function ensureDepartmentExists(deptName, location = '') {
+  if (!deptName) return null;
+  const cleanName = String(deptName).trim();
+  const ignored = ['unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '', 'all', 'other'];
+  if (ignored.includes(cleanName.toLowerCase())) return null;
+
+  try {
+    const existing = db.prepare('SELECT id, location FROM departments WHERE name = ? COLLATE NOCASE').get(cleanName);
+    if (!existing) {
+      const code = cleanName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 5);
+      const res = db.prepare(`
+        INSERT INTO departments (name, code, description, location)
+        VALUES (?, ?, ?, ?)
+      `).run(cleanName, code, `${cleanName} Department`, location ? location.trim() : '');
+      return res.lastInsertRowid;
+    } else if (!existing.location && location) {
+      db.prepare(`UPDATE departments SET location = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(location.trim(), existing.id);
+      return existing.id;
+    }
+    return existing.id;
+  } catch (err) {
+    console.warn('ensureDepartmentExists warning:', err.message);
+    return null;
+  }
+}
+
 // Helper to automatically sync User Master (employees) on asset creation / import / assignment
 function ensureEmployeeExists(userName, department = '', location = '') {
   if (!userName) return null;
@@ -201,6 +234,9 @@ function ensureEmployeeExists(userName, department = '', location = '') {
   if (ignored.includes(lower)) return null;
 
   try {
+    if (department) {
+      ensureDepartmentExists(department, location);
+    }
     const existing = db.prepare('SELECT id, department, location FROM employees WHERE name = ? COLLATE NOCASE').get(cleanName);
     if (!existing) {
       const res = db.prepare(`
@@ -468,6 +504,10 @@ router.post('/assets', requireRoles('admin', 'technician'), (req, res) => {
 
     internal_serial_number = String(internal_serial_number).trim();
 
+    // Quick Heal antivirus protection is strictly for Desktops and Laptops ONLY
+    const isWorkstation = ['desktop', 'laptop'].includes(String(asset_type || '').trim().toLowerCase());
+    const finalKeyId = isWorkstation && quick_heal_key_id ? Number(quick_heal_key_id) : null;
+
     // Check duplicate
     const existing = db.prepare('SELECT id FROM assets WHERE internal_serial_number = ?').get(internal_serial_number);
     if (existing) {
@@ -495,7 +535,7 @@ router.post('/assets', requireRoles('admin', 'technician'), (req, res) => {
       department ? department.trim() : '',
       location ? location.trim() : '',
       assigned_user ? assigned_user.trim() : '',
-      quick_heal_key_id || null,
+      finalKeyId,
       working_status || 'Working',
       condition_rating || 'Good',
       is_repaired ? 1 : 0,
@@ -505,13 +545,18 @@ router.post('/assets', requireRoles('admin', 'technician'), (req, res) => {
 
     const newAssetId = result.lastInsertRowid;
 
-    // If Quick Heal Key was mapped, update key status and assigned asset
-    if (quick_heal_key_id) {
+    // If Quick Heal Key was mapped (Desktops/Laptops only), update key status and assigned asset
+    if (finalKeyId) {
       db.prepare(`
         UPDATE quick_heal_keys
         SET status = 'Assigned', assigned_asset_id = ?, assigned_user = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(newAssetId, assigned_user || '', quick_heal_key_id);
+      `).run(newAssetId, assigned_user || '', finalKeyId);
+    }
+
+    // Ensure department exists in Department Master
+    if (department) {
+      ensureDepartmentExists(department, location);
     }
 
     // Ensure assigned user exists in User Master (employees table)
@@ -564,9 +609,11 @@ router.put('/assets/:id', requireRoles('admin', 'technician'), (req, res) => {
       }
     }
 
-    // Handle Quick Heal key changes
+    // Handle Quick Heal key changes (strictly restricted to Desktops & Laptops)
+    const effectiveType = asset_type ? asset_type.trim() : existing.asset_type;
+    const isWorkstation = ['desktop', 'laptop'].includes(String(effectiveType || '').trim().toLowerCase());
     const oldKeyId = existing.quick_heal_key_id;
-    const newKeyId = quick_heal_key_id ? Number(quick_heal_key_id) : null;
+    const newKeyId = isWorkstation && quick_heal_key_id ? Number(quick_heal_key_id) : null;
 
     if (oldKeyId && oldKeyId !== newKeyId) {
       // Unlink old key
@@ -630,10 +677,13 @@ router.put('/assets/:id', requireRoles('admin', 'technician'), (req, res) => {
       assetId
     );
 
-    // Ensure assigned user exists in User Master (employees table)
+    // Ensure assigned user exists in User Master (employees table) and department exists
     const updatedUser = assigned_user !== undefined ? assigned_user.trim() : existing.assigned_user;
     const updatedDept = department !== undefined ? department.trim() : existing.department;
     const updatedLoc = location !== undefined ? location.trim() : existing.location;
+    if (updatedDept) {
+      ensureDepartmentExists(updatedDept, updatedLoc);
+    }
     if (updatedUser) {
       ensureEmployeeExists(updatedUser, updatedDept, updatedLoc);
     }
@@ -738,7 +788,8 @@ async function generateAssetExcelTemplate() {
     'Other'
   ];
 
-  const departments = [
+  const deptRows = db.prepare('SELECT name FROM departments ORDER BY name ASC').all();
+  const departments = deptRows.length > 0 ? deptRows.map(d => d.name) : [
     'Orders',
     'Dispatch',
     'Listings',
@@ -1834,6 +1885,11 @@ router.post('/keys/:id/map', requireRoles('admin', 'technician'), (req, res) => 
       return res.status(404).json({ error: 'Asset not found.' });
     }
 
+    const isWorkstation = ['desktop', 'laptop'].includes((asset.asset_type || '').trim().toLowerCase());
+    if (!isWorkstation) {
+      return res.status(400).json({ error: `Quick Heal antivirus keys can only be assigned to Desktops and Laptops (this device is a '${asset.asset_type}').` });
+    }
+
     const transaction = db.transaction(() => {
       // If asset already had an old key, unmap that old key
       if (asset.quick_heal_key_id && asset.quick_heal_key_id !== Number(keyId)) {
@@ -2739,6 +2795,277 @@ router.delete('/employees/:id', requireRoles('admin'), (req, res) => {
     logAudit(req.user.id, req.user.username, 'DELETE_EMPLOYEE', 'employee', empId, `Deleted user ${existing.name}`);
 
     res.json({ message: `User '${existing.name}' removed from User Master.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 5.6 DEPARTMENT MASTER & BREAKDOWN
+// ==========================================
+
+// GET /api/departments - List all departments with comprehensive breakdown statistics
+router.get('/departments', (req, res) => {
+  try {
+    const { search } = req.query;
+    let query = 'SELECT * FROM departments WHERE 1=1';
+    const params = [];
+    if (search && search.trim()) {
+      query += ' AND (name LIKE ? OR code LIKE ? OR head_of_department LIKE ? OR location LIKE ?)';
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+    query += ' ORDER BY name ASC';
+    const departments = db.prepare(query).all(...params);
+
+    // Fetch all assets & employees to compute rich breakdown stats for each department
+    const allAssets = db.prepare(`
+      SELECT id, internal_serial_number, asset_type, brand, model_name, department, location, assigned_user, working_status, condition_rating, purchase_cost
+      FROM assets
+    `).all();
+
+    const allEmployees = db.prepare(`
+      SELECT id, name, department, designation, location, phone, email, status
+      FROM employees
+    `).all();
+
+    const enriched = departments.map(d => {
+      const dNameNorm = (d.name || '').trim().toLowerCase();
+      const deptAssets = allAssets.filter(a => (a.department || '').trim().toLowerCase() === dNameNorm);
+      const deptEmployees = allEmployees.filter(e => (e.department || '').trim().toLowerCase() === dNameNorm);
+
+      // Asset working status counts
+      const working = deptAssets.filter(a => a.working_status === 'Working').length;
+      const in_repair = deptAssets.filter(a => a.working_status === 'In Repair').length;
+      const not_working = deptAssets.filter(a => a.working_status === 'Not Working').length;
+      const retired = deptAssets.filter(a => a.working_status === 'Retired').length;
+
+      // Asset types breakdown
+      const assetTypesMap = {};
+      deptAssets.forEach(a => {
+        const type = a.asset_type || 'Unknown';
+        assetTypesMap[type] = (assetTypesMap[type] || 0) + 1;
+      });
+
+      // Total asset inventory purchase value
+      const totalValue = deptAssets.reduce((sum, a) => sum + (Number(a.purchase_cost) || 0), 0);
+
+      // Unique active custodians in this department
+      const activeCustodians = [...new Set(deptAssets.map(a => a.assigned_user).filter(u => u && !['unassigned', 'free', 'none', 'n/a'].includes(u.toLowerCase())))];
+
+      return {
+        ...d,
+        stats: {
+          total_assets: deptAssets.length,
+          working,
+          in_repair,
+          not_working,
+          retired,
+          total_personnel: deptEmployees.length,
+          active_custodians_count: activeCustodians.length,
+          total_value: totalValue,
+          asset_types: assetTypesMap
+        }
+      };
+    });
+
+    res.json({
+      departments: enriched,
+      stats: {
+        total_departments: departments.length,
+        total_department_assets: allAssets.filter(a => a.department && a.department.trim()).length,
+        total_department_personnel: allEmployees.filter(e => e.department && e.department.trim()).length,
+        total_department_value: allAssets.filter(a => a.department && a.department.trim()).reduce((s, a) => s + (Number(a.purchase_cost) || 0), 0)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/departments/:id - Single department profile with full asset & personnel breakdown
+router.get('/departments/:id', (req, res) => {
+  try {
+    const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(req.params.id);
+    if (!dept) {
+      return res.status(404).json({ error: 'Department not found' });
+    }
+
+    const dNameNorm = dept.name.trim().toLowerCase();
+
+    // Assets in this department
+    const assets = db.prepare(`
+      SELECT a.*, k.product_key as quick_heal_key_str
+      FROM assets a
+      LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
+      WHERE LOWER(TRIM(a.department)) = ?
+      ORDER BY a.internal_serial_number ASC
+    `).all(dNameNorm);
+
+    // Employees in this department
+    const employees = db.prepare(`
+      SELECT *
+      FROM employees
+      WHERE LOWER(TRIM(department)) = ?
+      ORDER BY name ASC
+    `).all(dNameNorm);
+
+    // Compute breakdown summaries
+    const assetTypes = {};
+    let totalValue = 0;
+    let working = 0, inRepair = 0, notWorking = 0, retired = 0;
+
+    assets.forEach(a => {
+      assetTypes[a.asset_type] = (assetTypes[a.asset_type] || 0) + 1;
+      totalValue += Number(a.purchase_cost) || 0;
+      if (a.working_status === 'Working') working++;
+      else if (a.working_status === 'In Repair') inRepair++;
+      else if (a.working_status === 'Not Working') notWorking++;
+      else if (a.working_status === 'Retired') retired++;
+    });
+
+    res.json({
+      department: dept,
+      stats: {
+        total_assets: assets.length,
+        total_personnel: employees.length,
+        total_value: totalValue,
+        working,
+        in_repair: inRepair,
+        not_working: notWorking,
+        retired,
+        asset_types: assetTypes
+      },
+      assets,
+      employees
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/departments - Create new department in Department Master
+router.post('/departments', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const { name, code, description, head_of_department, location } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Department name is required.' });
+    }
+
+    const cleanName = name.trim();
+    const existing = db.prepare('SELECT id FROM departments WHERE name = ? COLLATE NOCASE').get(cleanName);
+    if (existing) {
+      return res.status(400).json({ error: `Department '${cleanName}' already exists in Department Master.` });
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO departments (name, code, description, head_of_department, location)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      cleanName,
+      code ? code.trim().toUpperCase() : '',
+      description ? description.trim() : '',
+      head_of_department ? head_of_department.trim() : '',
+      location ? location.trim() : ''
+    );
+
+    logAudit(req.user.id, req.user.username, 'CREATE_DEPARTMENT', 'department', String(result.lastInsertRowid), `Created department ${cleanName}`);
+
+    res.status(201).json({
+      message: `Department '${cleanName}' created successfully`,
+      id: Number(result.lastInsertRowid)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/departments/:id - Update department
+router.put('/departments/:id', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const deptId = req.params.id;
+    const existing = db.prepare('SELECT * FROM departments WHERE id = ?').get(deptId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Department not found.' });
+    }
+
+    const { name, code, description, head_of_department, location } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Department name is required.' });
+    }
+
+    const cleanName = name.trim();
+    const duplicate = db.prepare('SELECT id FROM departments WHERE name = ? COLLATE NOCASE AND id != ?').get(cleanName, deptId);
+    if (duplicate) {
+      return res.status(400).json({ error: `Another department with name '${cleanName}' already exists.` });
+    }
+
+    const oldName = existing.name;
+
+    const stmt = db.prepare(`
+      UPDATE departments
+      SET name = ?, code = ?, description = ?, head_of_department = ?, location = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+
+    stmt.run(
+      cleanName,
+      code ? code.trim().toUpperCase() : '',
+      description ? description.trim() : '',
+      head_of_department ? head_of_department.trim() : '',
+      location ? location.trim() : '',
+      deptId
+    );
+
+    // If department name was changed, sync assets & employees assigned to the old name
+    if (oldName.toLowerCase() !== cleanName.toLowerCase()) {
+      db.prepare(`
+        UPDATE assets SET department = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE LOWER(TRIM(department)) = ?
+      `).run(cleanName, oldName.toLowerCase());
+
+      db.prepare(`
+        UPDATE employees SET department = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE LOWER(TRIM(department)) = ?
+      `).run(cleanName, oldName.toLowerCase());
+    }
+
+    logAudit(req.user.id, req.user.username, 'UPDATE_DEPARTMENT', 'department', String(deptId), `Updated department ${cleanName}`);
+
+    res.json({ message: `Department '${cleanName}' updated successfully.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/departments/:id - Delete department
+router.delete('/departments/:id', requireRoles('admin'), (req, res) => {
+  try {
+    const deptId = req.params.id;
+    const existing = db.prepare('SELECT * FROM departments WHERE id = ?').get(deptId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Department not found.' });
+    }
+
+    const dNameNorm = existing.name.trim().toLowerCase();
+
+    // Check if department has assigned assets or personnel
+    const assetCount = db.prepare('SELECT COUNT(*) as count FROM assets WHERE LOWER(TRIM(department)) = ?').get(dNameNorm).count;
+    const empCount = db.prepare('SELECT COUNT(*) as count FROM employees WHERE LOWER(TRIM(department)) = ?').get(dNameNorm).count;
+
+    if (assetCount > 0 || empCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete department '${existing.name}' because it currently has ${assetCount} asset(s) and ${empCount} user(s) assigned. Please reassign them first.`
+      });
+    }
+
+    db.prepare('DELETE FROM departments WHERE id = ?').run(deptId);
+
+    logAudit(req.user.id, req.user.username, 'DELETE_DEPARTMENT', 'department', String(deptId), `Deleted department ${existing.name}`);
+
+    res.json({ message: `Department '${existing.name}' deleted successfully.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
