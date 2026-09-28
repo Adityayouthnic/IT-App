@@ -1396,15 +1396,14 @@
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="block text-xs font-semibold text-slate-700">Assigned User *</label>
-              <button type="button" onclick="openQuickAddUserModal()" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline flex items-center gap-1">
+              <button type="button" onclick="openQuickAddUserModal()" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline flex items-center gap-1 cursor-pointer" title="Add new user to Master">
                 <i data-lucide="user-plus" class="w-3 h-3"></i>
                 <span>+ Quick Add User</span>
               </button>
             </div>
-            <input type="text" id="asset-user" list="user-master-datalist" placeholder="Select from Master or type name..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 font-medium text-slate-800" autocomplete="off" required>
-            <datalist id="user-master-datalist">
-              <!-- Dynamically populated from /api/employees -->
-            </datalist>
+            <select id="asset-user" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 font-medium text-slate-800 cursor-pointer" required>
+              <option value="">-- Select Assigned User from Master --</option>
+            </select>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Working Status *</label>
@@ -1449,7 +1448,7 @@
   </div>
 
   <!-- QUICK ADD USER TO MASTER MODAL (Accessible from Asset Form) -->
-  <div id="modal-quick-add-user" class="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+  <div id="modal-quick-add-user" style="z-index: 9999;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm hidden">
     <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -2156,7 +2155,9 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Issue To Personnel *</label>
-            <input type="text" id="assign-acc-user" list="user-master-datalist" placeholder="Select from Master or type name..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500" required>
+            <select id="assign-acc-user" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800 cursor-pointer" required>
+              <option value="">-- Select Personnel from Master --</option>
+            </select>
           </div>
         </div>
 

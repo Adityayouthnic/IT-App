@@ -1141,9 +1141,10 @@ async function openNewAssetModal() {
   document.getElementById('asset-serial').value = '';
 
   try {
-    await fetchUserMasterList();
+    await populateUserSelect('');
     await populateKeySelector();
     openModal('modal-asset-form');
+    lucide.createIcons();
   } catch (err) {
     console.error('Error opening new asset modal:', err);
   }
@@ -1153,7 +1154,7 @@ async function openNewAssetModal() {
 async function openNewAssetModalWithPrefill(prefill = {}) {
   await openNewAssetModal();
   if (prefill.asset_type) document.getElementById('asset-type').value = prefill.asset_type;
-  if (prefill.assigned_user) document.getElementById('asset-user').value = prefill.assigned_user;
+  if (prefill.assigned_user) await populateUserSelect(prefill.assigned_user);
   if (prefill.department) document.getElementById('asset-department').value = prefill.department;
   if (prefill.location) document.getElementById('asset-location').value = prefill.location;
 }
@@ -1177,15 +1178,15 @@ async function openEditAssetModal(assetId) {
     document.getElementById('asset-cost').value = asset.purchase_cost || 0;
     document.getElementById('asset-department').value = asset.department || 'Orders';
     document.getElementById('asset-location').value = asset.location || '';
-    document.getElementById('asset-user').value = asset.assigned_user || '';
     document.getElementById('asset-status').value = asset.working_status || 'Working';
     document.getElementById('asset-condition').value = asset.condition_rating || 'Good';
     document.getElementById('asset-parts').value = asset.parts_added_summary || '';
     document.getElementById('asset-remarks').value = asset.remarks || '';
 
-    await fetchUserMasterList();
+    await populateUserSelect(asset.assigned_user || '');
     await populateKeySelector(asset.quick_heal_key_id);
     openModal('modal-asset-form');
+    lucide.createIcons();
   } catch (err) {
     console.error('Error opening edit asset modal:', err);
   }
@@ -2551,7 +2552,7 @@ async function deleteAccessory(id) {
 }
 
 // Issue Accessory to Staff Modal Handlers
-function openAssignAccessoryModal(accId) {
+async function openAssignAccessoryModal(accId) {
   const item = (window._cachedAccessories || []).find(a => a.id === accId);
   if (!item) return;
 
@@ -2570,11 +2571,12 @@ function openAssignAccessoryModal(accId) {
     maxHint.textContent = `Max: ${item.quantity}`;
   }
 
-  document.getElementById('assign-acc-user').value = '';
+  await populateAccessoryUserSelect();
   document.getElementById('assign-acc-location').value = item.location || '';
   document.getElementById('assign-acc-remarks').value = '';
 
   openModal('modal-assign-accessory');
+  lucide.createIcons();
 }
 
 async function submitAssignAccessory(e) {
@@ -3908,31 +3910,6 @@ async function fetchUserMasterList() {
     const data = await res.json();
     cachedEmployeesList = data.employees || [];
 
-    // Populate datalist #user-master-datalist
-    const datalist = document.getElementById('user-master-datalist');
-    if (datalist) {
-      datalist.innerHTML = cachedEmployeesList.map(e => `
-        <option value="${escapeHtml(e.name)}">${escapeHtml(e.department || '')} • ${escapeHtml(e.location || '')}${e.designation ? ' • ' + escapeHtml(e.designation) : ''}</option>
-      `).join('');
-    }
-
-    // Auto-fill listener on #asset-user to auto-fill department and location
-    const assetUserInput = document.getElementById('asset-user');
-    if (assetUserInput && !assetUserInput._boundUserMasterChange) {
-      assetUserInput._boundUserMasterChange = true;
-      assetUserInput.addEventListener('change', () => {
-        const val = assetUserInput.value.trim().toLowerCase();
-        if (!val) return;
-        const matched = cachedEmployeesList.find(e => (e.name || '').toLowerCase() === val);
-        if (matched) {
-          const deptEl = document.getElementById('asset-department');
-          const locEl = document.getElementById('asset-location');
-          if (deptEl && matched.department) deptEl.value = matched.department;
-          if (locEl && matched.location && !locEl.value) locEl.value = matched.location;
-        }
-      });
-    }
-
     // Update sidebar User Master badge
     const badge = document.getElementById('sidebar-user-master-count');
     if (badge && data.stats) {
@@ -3943,6 +3920,114 @@ async function fetchUserMasterList() {
   } catch (err) {
     console.error('Error fetching user master list:', err);
     return [];
+  }
+}
+
+// Populate the Assigned User dropdown select in Asset Form
+async function populateUserSelect(selectedUserName = '') {
+  const select = document.getElementById('asset-user');
+  if (!select) return;
+
+  const employees = await fetchUserMasterList();
+
+  select.innerHTML = '<option value="">-- Select Assigned User from Master --</option>';
+
+  let found = false;
+  const selNorm = (selectedUserName || '').trim().toLowerCase();
+
+  // Sort employees alphabetically by name
+  const sorted = employees.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  sorted.forEach(emp => {
+    const opt = document.createElement('option');
+    opt.value = emp.name;
+    const parts = [];
+    if (emp.department) parts.push(emp.department);
+    if (emp.location) parts.push(emp.location);
+    if (emp.designation) parts.push(emp.designation);
+    opt.textContent = parts.length > 0 ? `${emp.name} (${parts.join(' • ')})` : emp.name;
+    if (selNorm && emp.name.trim().toLowerCase() === selNorm) {
+      opt.selected = true;
+      found = true;
+    }
+    select.appendChild(opt);
+  });
+
+  // If current asset has a user that's not in the employees list yet, keep it so it's not lost!
+  if (selectedUserName && !found && selectedUserName !== '__NEW_USER__') {
+    const opt = document.createElement('option');
+    opt.value = selectedUserName;
+    opt.textContent = `${selectedUserName} (Current User)`;
+    opt.selected = true;
+    select.insertBefore(opt, select.children[1] || null);
+  }
+
+  // Add the Quick Add option at the bottom
+  const quickAddOpt = document.createElement('option');
+  quickAddOpt.value = '__NEW_USER__';
+  quickAddOpt.textContent = '➕ + Quick Add New User to Master...';
+  quickAddOpt.className = 'font-bold text-brand-600 bg-brand-50';
+  select.appendChild(quickAddOpt);
+
+  if (selectedUserName) {
+    select.value = selectedUserName;
+  }
+
+  // Bind change handler once
+  if (!select._boundUserChange) {
+    select._boundUserChange = true;
+    select.addEventListener('change', () => {
+      if (select.value === '__NEW_USER__') {
+        select.value = select._lastSelectedUser || '';
+        openQuickAddUserModal();
+        return;
+      }
+      select._lastSelectedUser = select.value;
+      const val = select.value.trim().toLowerCase();
+      if (!val) return;
+      const matched = (cachedEmployeesList || []).find(e => (e.name || '').trim().toLowerCase() === val);
+      if (matched) {
+        const deptEl = document.getElementById('asset-department');
+        const locEl = document.getElementById('asset-location');
+        if (deptEl && matched.department) deptEl.value = matched.department;
+        if (locEl && matched.location) locEl.value = matched.location;
+      }
+    });
+  }
+
+  select._lastSelectedUser = select.value;
+}
+
+// Populate the Assigned User dropdown select in Accessory Form
+async function populateAccessoryUserSelect(selectedUser = '') {
+  const select = document.getElementById('assign-acc-user');
+  if (!select) return;
+  const employees = await fetchUserMasterList();
+  select.innerHTML = '<option value="">-- Select Personnel from Master --</option>';
+  const sorted = employees.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  sorted.forEach(emp => {
+    const opt = document.createElement('option');
+    opt.value = emp.name;
+    const parts = [emp.department, emp.location].filter(Boolean).join(' • ');
+    opt.textContent = parts ? `${emp.name} (${parts})` : emp.name;
+    if (selectedUser && emp.name.trim().toLowerCase() === selectedUser.trim().toLowerCase()) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  });
+  if (selectedUser) {
+    select.value = selectedUser;
+  }
+  if (!select._boundLocChange) {
+    select._boundLocChange = true;
+    select.addEventListener('change', () => {
+      const val = select.value.trim().toLowerCase();
+      const matched = (cachedEmployeesList || []).find(e => (e.name || '').trim().toLowerCase() === val);
+      if (matched && matched.location) {
+        const locInput = document.getElementById('assign-acc-location');
+        if (locInput) locInput.value = matched.location;
+      }
+    });
   }
 }
 
@@ -3960,6 +4045,10 @@ function openQuickAddUserModal() {
     if (quickLoc) quickLoc.value = currentAssetLoc;
   }
   openModal('modal-quick-add-user');
+  setTimeout(() => {
+    document.getElementById('quick-user-name')?.focus();
+    lucide.createIcons();
+  }, 60);
 }
 
 async function handleQuickAddUserSubmit(e) {
@@ -3974,6 +4063,12 @@ async function handleQuickAddUserSubmit(e) {
   if (!name) {
     showToast('User name is required', 'error');
     return;
+  }
+
+  const btn = e.target.querySelector('button[type=submit]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
   }
 
   try {
@@ -3992,28 +4087,34 @@ async function handleQuickAddUserSubmit(e) {
 
     const data = await res.json();
     if (res.ok) {
-      showToast(`User '${name}' added to Master!`, 'success');
+      showToast(`User '${name}' added to Master and selected!`, 'success');
       closeModal('modal-quick-add-user');
-      await fetchUserMasterList();
 
-      // Auto-fill into the asset form inputs
-      const userInput = document.getElementById('asset-user');
-      if (userInput) userInput.value = name;
+      // Refresh master list and re-populate the dropdown with new user selected
+      await fetchUserMasterList();
+      await populateUserSelect(name);
+
+      // Auto-fill department & location into asset form
       const deptInput = document.getElementById('asset-department');
       if (deptInput && department) deptInput.value = department;
       const locInput = document.getElementById('asset-location');
-      if (locInput && location && !locInput.value) locInput.value = location;
+      if (locInput && location) locInput.value = location;
 
-      // Also if assign-acc-user is open, set it
-      const accUserInput = document.getElementById('assign-acc-user');
-      if (accUserInput && accUserInput.offsetParent !== null) {
-        accUserInput.value = name;
+      // Also if assign-acc-user modal is open, re-populate and select
+      const accSelect = document.getElementById('assign-acc-user');
+      if (accSelect && accSelect.offsetParent !== null) {
+        await populateAccessoryUserSelect(name);
       }
     } else {
       showToast(data.error || 'Failed to add user', 'error');
     }
   } catch (err) {
     showToast(err.message || 'Network error', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Add to Master & Select';
+    }
   }
 }
 
@@ -4508,4 +4609,6 @@ window.handleEmployeeSubmit = handleEmployeeSubmit;
 window.deleteEmployee = deleteEmployee;
 window.viewUserAssets = viewUserAssets;
 window.resetEmployeeFilterUI = resetEmployeeFilterUI;
+window.populateUserSelect = populateUserSelect;
+window.populateAccessoryUserSelect = populateAccessoryUserSelect;
 
