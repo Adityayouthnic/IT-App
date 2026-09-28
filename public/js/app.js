@@ -169,6 +169,13 @@ async function updateGlobalSidebarCounters() {
 
 let isProgrammaticNav = false;
 
+function isFreeAsset(user) {
+  if (!user) return true;
+  const cleaned = String(user).trim().toLowerCase();
+  const placeholders = ['unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned'];
+  return cleaned === '' || placeholders.includes(cleaned);
+}
+
 function resetAssetFilterUI(overrides = {}) {
   const s = document.getElementById('asset-filter-search');
   const t = document.getElementById('asset-filter-type');
@@ -176,12 +183,14 @@ function resetAssetFilterUI(overrides = {}) {
   const st = document.getElementById('asset-filter-status');
   const k = document.getElementById('asset-filter-key');
   const p = document.getElementById('asset-filter-printer');
+  const occ = document.getElementById('asset-filter-occupancy');
   if (s) s.value = overrides.search || '';
   if (t) t.value = overrides.type || '';
   if (d) d.value = overrides.department || '';
   if (st) st.value = overrides.status || '';
   if (k) k.value = overrides.quick_heal || '';
   if (p) p.value = overrides.has_printer || '';
+  if (occ) occ.value = overrides.occupancy || '';
 }
 
 function resetEmployeeFilterUI(overrides = {}) {
@@ -479,6 +488,7 @@ async function loadDashboard() {
 
     // KPI Numbers
     const totalAssets = data.assets?.total || 0;
+    const freeAssets = data.assets?.free_assets ?? 0;
     const workingAssets = data.assets?.working || 0;
     const repairAssets = data.assets?.in_repair || 0;
     const openTickets = data.repairs?.open_tickets || 0;
@@ -491,6 +501,13 @@ async function loadDashboard() {
 
     document.getElementById('kpi-total-assets').textContent = totalAssets;
     document.getElementById('sidebar-asset-count').textContent = totalAssets;
+
+    const freeAssetsEl = document.getElementById('kpi-free-assets');
+    if (freeAssetsEl) freeAssetsEl.textContent = freeAssets;
+    const freeSubEl = document.getElementById('kpi-free-sub');
+    if (freeSubEl) {
+      freeSubEl.textContent = freeAssets > 0 ? `${freeAssets} ready to assign →` : 'All assets occupied';
+    }
 
     document.getElementById('kpi-working-assets').textContent = workingAssets;
     const workingPct = totalAssets > 0 ? Math.round((workingAssets / totalAssets) * 100) : 100;
@@ -595,6 +612,35 @@ async function loadDashboard() {
       });
     }
 
+    // Render Available Free Fleet Breakdown
+    const freeContainer = document.getElementById('free-breakdown-container');
+    if (freeContainer) {
+      freeContainer.innerHTML = '';
+      const freeList = data.freeTypeBreakdown || [];
+      if (freeList.length === 0) {
+        freeContainer.innerHTML = `
+          <div class="py-6 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-1.5">
+            <i data-lucide="check-circle" class="w-5 h-5 text-emerald-500"></i>
+            <span>All hardware currently deployed & occupied!</span>
+          </div>
+        `;
+      } else {
+        freeList.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between p-2 rounded-xl bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-100 cursor-pointer text-xs font-semibold text-slate-700 transition-colors';
+          row.onclick = () => navigate('assets', { type: item.asset_type, occupancy: 'free' });
+          row.innerHTML = `
+            <div class="flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>${escapeHtml(item.asset_type)}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">${item.count} free</span>
+          `;
+          freeContainer.appendChild(row);
+        });
+      }
+    }
+
     // Render Recent Repairs
     const repairsTbody = document.getElementById('dashboard-recent-repairs');
     repairsTbody.innerHTML = '';
@@ -664,6 +710,7 @@ function resetAssetFilters() {
   document.getElementById('asset-filter-status').value = '';
   document.getElementById('asset-filter-key').value = '';
   if (document.getElementById('asset-filter-printer')) document.getElementById('asset-filter-printer').value = '';
+  if (document.getElementById('asset-filter-occupancy')) document.getElementById('asset-filter-occupancy').value = '';
   loadAssets();
 }
 
@@ -675,6 +722,7 @@ async function loadAssets(filterParams = {}) {
     const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('asset-filter-status')?.value || '';
     const key = filterParams.quick_heal !== undefined ? filterParams.quick_heal : document.getElementById('asset-filter-key')?.value || '';
     const printer = filterParams.has_printer !== undefined ? filterParams.has_printer : document.getElementById('asset-filter-printer')?.value || '';
+    const occupancy = filterParams.occupancy !== undefined ? filterParams.occupancy : document.getElementById('asset-filter-occupancy')?.value || '';
 
     if (filterParams.search && document.getElementById('asset-filter-search')) document.getElementById('asset-filter-search').value = filterParams.search;
     if (filterParams.type && document.getElementById('asset-filter-type')) document.getElementById('asset-filter-type').value = filterParams.type;
@@ -682,6 +730,7 @@ async function loadAssets(filterParams = {}) {
     if (filterParams.status && document.getElementById('asset-filter-status')) document.getElementById('asset-filter-status').value = filterParams.status;
     if (filterParams.quick_heal && document.getElementById('asset-filter-key')) document.getElementById('asset-filter-key').value = filterParams.quick_heal;
     if (filterParams.has_printer && document.getElementById('asset-filter-printer')) document.getElementById('asset-filter-printer').value = filterParams.has_printer;
+    if (filterParams.occupancy && document.getElementById('asset-filter-occupancy')) document.getElementById('asset-filter-occupancy').value = filterParams.occupancy;
 
     const params = new URLSearchParams();
     if (search && search.trim()) params.append('search', search.trim());
@@ -690,6 +739,7 @@ async function loadAssets(filterParams = {}) {
     if (status && status !== 'all') params.append('status', status);
     if (key && key !== 'all') params.append('quick_heal', key);
     if (printer && printer !== 'all') params.append('has_printer', printer);
+    if (occupancy && occupancy !== 'all') params.append('occupancy', occupancy);
 
     const res = await apiFetch(`/api/assets?${params.toString()}`);
     if (!res.ok) return;
@@ -701,7 +751,7 @@ async function loadAssets(filterParams = {}) {
     tbody.innerHTML = '';
 
     document.getElementById('assets-count-label').textContent = `Showing ${data.total} assets`;
-    if (!search && !type && !dept && !status && !key) {
+    if (!search && !type && !dept && !status && !key && !occupancy) {
       const assetBadge = document.getElementById('sidebar-asset-count');
       if (assetBadge) assetBadge.textContent = data.total;
     }
@@ -753,6 +803,7 @@ async function loadAssets(filterParams = {}) {
 
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
+      const isFree = a.is_free !== undefined ? a.is_free : isFreeAsset(a.assigned_user);
 
       tr.innerHTML = `
         <td class="py-3 px-4 font-mono font-bold text-brand-600">#${escapeHtml(a.internal_serial_number)}</td>
@@ -764,18 +815,44 @@ async function loadAssets(filterParams = {}) {
         <td class="py-3 px-4 text-slate-600 font-medium">${escapeHtml(a.department || '—')}</td>
         <td class="py-3 px-4 text-slate-500 text-[11px]">${escapeHtml(a.location || '—')}</td>
         <td class="py-3 px-4 font-semibold text-slate-800">
-          <div>${escapeHtml(a.assigned_user || 'Unassigned')}</div>
           ${(() => {
-            const isRealUser = a.assigned_user && !['unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock'].includes(a.assigned_user.toLowerCase().trim());
-            if (isWorkstation && isRealUser && a.has_printer && a.primary_printer) {
+            if (isFree) {
               return `
-                <div class="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60" title="Printer: ${escapeHtml(a.primary_printer)}">
-                  <i data-lucide="printer" class="w-2.5 h-2.5 text-amber-600"></i>
-                  <span>${escapeHtml(a.primary_printer)}</span>
+                <div>
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Free / In Stock</span>
+                  </span>
                 </div>
+                ${!isViewer ? `
+                  <button onclick="openAssignCustodianModal(${a.id})" class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 shadow-xs transition-colors" title="Assign this free hardware to an employee">
+                    <i data-lucide="user-plus" class="w-3 h-3 text-brand-600"></i>
+                    <span>+ Assign User</span>
+                  </button>
+                ` : ''}
+              `;
+            } else {
+              let printerHtml = '';
+              if (isWorkstation && a.has_printer && a.primary_printer) {
+                printerHtml = `
+                  <div class="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60" title="Printer: ${escapeHtml(a.primary_printer)}">
+                    <i data-lucide="printer" class="w-2.5 h-2.5 text-amber-600"></i>
+                    <span>${escapeHtml(a.primary_printer)}</span>
+                  </div>
+                `;
+              }
+              return `
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-slate-800">${escapeHtml(a.assigned_user)}</span>
+                  ${!isViewer ? `
+                    <button onclick="openAssignCustodianModal(${a.id})" title="Change / Reassign User" class="p-0.5 text-slate-400 hover:text-brand-600 rounded transition-colors">
+                      <i data-lucide="user-cog" class="w-3.5 h-3.5"></i>
+                    </button>
+                  ` : ''}
+                </div>
+                ${printerHtml}
               `;
             }
-            return '';
           })()}
         </td>
         <td class="py-3 px-4">${keyBadge}</td>
@@ -786,6 +863,11 @@ async function loadAssets(filterParams = {}) {
             <button onclick="viewAssetDetail(${a.id})" title="View Dossier" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors">
               <i data-lucide="eye" class="w-4 h-4"></i>
             </button>
+            ${!isViewer && isFree ? `
+              <button onclick="openAssignCustodianModal(${a.id})" title="Assign Custodian" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
             ${!isViewer ? `
               <button onclick="openEditAssetModal(${a.id})" title="Edit Details" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors">
                 <i data-lucide="pencil" class="w-4 h-4"></i>
@@ -885,6 +967,59 @@ async function viewAssetDetail(assetId) {
           <div class="text-sm font-bold text-indigo-300 mt-0.5">${escapeHtml(asset.healthScore)}</div>
         </div>
       </div>
+
+      <!-- Free vs Occupied Deployment Banner -->
+      ${(() => {
+        const isFree = asset.is_free !== undefined ? asset.is_free : isFreeAsset(asset.assigned_user);
+        if (isFree) {
+          return `
+            <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                  <i data-lucide="sparkles" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                    <span>🟢 Free & In Stock</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-200 text-emerald-900 font-extrabold uppercase">Unoccupied</span>
+                  </div>
+                  <p class="text-[11px] text-emerald-800 mt-0.5">This hardware is not currently assigned to anyone and is available for immediate deployment.</p>
+                </div>
+              </div>
+              <button onclick="closeModal('modal-asset-detail'); openAssignCustodianModal(${asset.id});" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/20 flex-shrink-0 transition-all">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                <span>Assign Custodian</span>
+              </button>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                  <i data-lucide="user-check" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-900">
+                    Occupied by: <strong>${escapeHtml(asset.assigned_user)}</strong>
+                  </div>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Dept: <strong>${escapeHtml(asset.department || '—')}</strong> • Location: <strong>${escapeHtml(asset.location || '—')}</strong></p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button onclick="closeModal('modal-asset-detail'); openAssignCustodianModal(${asset.id});" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 shadow-xs transition-colors">
+                  <i data-lucide="user-cog" class="w-3.5 h-3.5 text-indigo-600"></i>
+                  <span>Change Custodian</span>
+                </button>
+                <button onclick="unassignAssetFromDossier(${asset.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 shadow-xs transition-colors">
+                  <i data-lucide="user-x" class="w-3.5 h-3.5 text-rose-600"></i>
+                  <span>Mark Free</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }
+      })()}
 
       <!-- Lifecycle Evaluation Banner -->
       <div class="p-4 rounded-2xl border ${asset.healthClass === 'danger' ? 'bg-rose-50/80 border-rose-200 text-rose-800' : asset.healthClass === 'warning' ? 'bg-amber-50/80 border-amber-200 text-amber-800' : 'bg-emerald-50/80 border-emerald-200 text-emerald-800'} flex items-center gap-3">
@@ -4147,6 +4282,12 @@ async function handleQuickAddUserSubmit(e) {
       if (accSelect && accSelect.offsetParent !== null) {
         await populateAccessoryUserSelect(name);
       }
+
+      // If assignUserPendingCallback was set by assign custodian modal
+      if (typeof assignUserPendingCallback === 'function') {
+        assignUserPendingCallback(name, department, location);
+        assignUserPendingCallback = null;
+      }
     } else {
       showToast(data.error || 'Failed to add user', 'error');
     }
@@ -4157,6 +4298,264 @@ async function handleQuickAddUserSubmit(e) {
       btn.disabled = false;
       btn.textContent = 'Add to Master & Select';
     }
+  }
+}
+
+// ==========================================
+// ASSIGN CUSTODIAN TO IT ASSET
+// ==========================================
+
+let currentAssignAsset = null;
+let assignUserPendingCallback = null;
+
+async function unassignAssetFromDossier(assetId) {
+  if (!confirm('Are you sure you want to unassign this asset and release it back to Free stock?')) return;
+  try {
+    const res = await apiFetch(`/api/assets/${assetId}/unassign`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Asset unassigned and marked Free / In Stock', 'success');
+      await viewAssetDetail(assetId);
+      loadAssets();
+      loadDashboard();
+    } else {
+      showToast(data.error || 'Failed to unassign asset', 'error');
+    }
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function openAssignCustodianModal(assetId) {
+  try {
+    let asset = (cachedAssets || []).find(a => a.id === Number(assetId));
+    if (!asset) {
+      const res = await apiFetch(`/api/assets/${assetId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      asset = data.asset;
+    }
+    if (!asset) return;
+
+    currentAssignAsset = asset;
+    document.getElementById('assign-custodian-asset-id').value = asset.id;
+
+    // Set summary badge
+    const serialEl = document.getElementById('assign-asset-badge-serial');
+    if (serialEl) serialEl.textContent = `#${asset.internal_serial_number}`;
+    const typeEl = document.getElementById('assign-asset-badge-type');
+    if (typeEl) typeEl.textContent = asset.asset_type;
+    const brandEl = document.getElementById('assign-asset-badge-brand');
+    if (brandEl) brandEl.textContent = asset.brand || '';
+    const modelEl = document.getElementById('assign-asset-badge-model');
+    if (modelEl) modelEl.textContent = `${asset.model_name || 'Standard Model'} • Loc: ${asset.location || 'Head Office'}`;
+
+    const isFree = asset.is_free !== undefined ? asset.is_free : isFreeAsset(asset.assigned_user);
+    const statusEl = document.getElementById('assign-asset-badge-status');
+    if (statusEl) {
+      if (isFree) {
+        statusEl.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200';
+        statusEl.textContent = '🟢 Free / In Stock';
+      } else {
+        statusEl.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200';
+        statusEl.textContent = `👤 In Use: ${asset.assigned_user}`;
+      }
+    }
+
+    // Toggle unassign button
+    const unassignBtn = document.getElementById('btn-unassign-asset');
+    if (unassignBtn) {
+      if (!isFree) {
+        unassignBtn.classList.remove('hidden');
+      } else {
+        unassignBtn.classList.add('hidden');
+      }
+    }
+
+    // Populate user select dropdown
+    const select = document.getElementById('assign-custodian-user-select');
+    select.innerHTML = '<option value="">-- Choose Person from User Master --</option>';
+
+    const employees = await fetchUserMasterList();
+    const sorted = (employees || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    let foundCurrent = false;
+    const currUserNorm = (asset.assigned_user || '').trim().toLowerCase();
+
+    sorted.forEach(emp => {
+      const opt = document.createElement('option');
+      opt.value = emp.name;
+      const meta = [emp.department, emp.location].filter(Boolean).join(' • ');
+      opt.textContent = meta ? `${emp.name} (${meta})` : emp.name;
+      if (!isFree && currUserNorm && emp.name.trim().toLowerCase() === currUserNorm) {
+        opt.selected = true;
+        foundCurrent = true;
+      }
+      select.appendChild(opt);
+    });
+
+    if (!isFree && asset.assigned_user && !foundCurrent) {
+      const opt = document.createElement('option');
+      opt.value = asset.assigned_user;
+      opt.textContent = `${asset.assigned_user} (Current Custodian)`;
+      opt.selected = true;
+      select.insertBefore(opt, select.children[1] || null);
+    }
+
+    // Add + Quick Add option
+    const quickOpt = document.createElement('option');
+    quickOpt.value = '__QUICK_ADD__';
+    quickOpt.textContent = '➕ + Quick Add New User to Master...';
+    quickOpt.className = 'font-bold text-brand-600 bg-brand-50';
+    select.appendChild(quickOpt);
+
+    // Fill department & location
+    const deptSelect = document.getElementById('assign-custodian-department');
+    if (deptSelect) {
+      deptSelect.value = asset.department || '';
+    }
+    const locInput = document.getElementById('assign-custodian-location');
+    if (locInput) {
+      locInput.value = asset.location || '';
+    }
+
+    // Bind change listener on select
+    if (!select._boundAssignChange) {
+      select._boundAssignChange = true;
+      select.addEventListener('change', () => {
+        if (select.value === '__QUICK_ADD__' || select.value === '__NEW_USER__') {
+          select.value = select._lastVal || '';
+          openQuickAddUserForAssign();
+          return;
+        }
+        select._lastVal = select.value;
+        const selVal = select.value.trim().toLowerCase();
+        if (!selVal) return;
+        const matched = (cachedEmployeesList || []).find(e => (e.name || '').trim().toLowerCase() === selVal);
+        if (matched) {
+          const dEl = document.getElementById('assign-custodian-department');
+          const lEl = document.getElementById('assign-custodian-location');
+          if (dEl && matched.department) dEl.value = matched.department;
+          if (lEl && matched.location) lEl.value = matched.location;
+        }
+      });
+    }
+    select._lastVal = select.value;
+
+    openModal('modal-assign-custodian');
+    lucide.createIcons();
+  } catch (e) {
+    console.error('Error opening assign modal:', e);
+    showToast(e.message, 'error');
+  }
+}
+
+function openQuickAddUserForAssign() {
+  const currentDept = document.getElementById('assign-custodian-department')?.value;
+  const currentLoc = document.getElementById('assign-custodian-location')?.value;
+
+  const quickDept = document.getElementById('quick-user-dept');
+  if (quickDept && currentDept) quickDept.value = currentDept;
+  const quickLoc = document.getElementById('quick-user-location');
+  if (quickLoc && currentLoc) quickLoc.value = currentLoc;
+
+  assignUserPendingCallback = (newUserName, newDept, newLoc) => {
+    const select = document.getElementById('assign-custodian-user-select');
+    if (select) {
+      let opt = Array.from(select.options).find(o => o.value.toLowerCase() === newUserName.toLowerCase());
+      if (!opt) {
+        opt = document.createElement('option');
+        opt.value = newUserName;
+        const meta = [newDept, newLoc].filter(Boolean).join(' • ');
+        opt.textContent = meta ? `${newUserName} (${meta})` : newUserName;
+        select.insertBefore(opt, select.lastElementChild);
+      }
+      select.value = newUserName;
+      select._lastVal = newUserName;
+    }
+    const dEl = document.getElementById('assign-custodian-department');
+    if (dEl && newDept) dEl.value = newDept;
+    const lEl = document.getElementById('assign-custodian-location');
+    if (lEl && newLoc) lEl.value = newLoc;
+  };
+
+  openQuickAddUserModal();
+}
+
+async function handleAssignCustodianSubmit(e) {
+  e.preventDefault();
+  const assetId = document.getElementById('assign-custodian-asset-id').value;
+  const assigned_user = document.getElementById('assign-custodian-user-select').value.trim();
+  const department = document.getElementById('assign-custodian-department').value.trim();
+  const location = document.getElementById('assign-custodian-location').value.trim();
+
+  if (!assigned_user || assigned_user === '__QUICK_ADD__' || assigned_user === '__NEW_USER__') {
+    showToast('Please select a valid person from User Master', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-confirm-assign-custodian');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Assigning...</span>`;
+    lucide.createIcons();
+  }
+
+  try {
+    const res = await apiFetch(`/api/assets/${assetId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ assigned_user, department, location })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || `Asset successfully assigned to ${assigned_user}!`, 'success');
+      closeModal('modal-assign-custodian');
+      await loadAssets();
+      await loadDashboard();
+      await fetchUserMasterList();
+
+      // If dossier modal was open for this asset, refresh it
+      const dossierModal = document.getElementById('modal-asset-detail');
+      if (dossierModal && !dossierModal.classList.contains('hidden')) {
+        await viewAssetDetail(assetId);
+      }
+    } else {
+      showToast(data.error || 'Failed to assign asset', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span>Confirm & Link Asset</span>`;
+      lucide.createIcons();
+    }
+  }
+}
+
+async function handleUnassignCustodianClick() {
+  const assetId = document.getElementById('assign-custodian-asset-id').value;
+  if (!assetId) return;
+  if (!confirm('Are you sure you want to unassign this asset and mark it as Free / In Stock?')) return;
+
+  try {
+    const res = await apiFetch(`/api/assets/${assetId}/unassign`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Asset unassigned and marked Free / In Stock', 'success');
+      closeModal('modal-assign-custodian');
+      await loadAssets();
+      await loadDashboard();
+
+      const dossierModal = document.getElementById('modal-asset-detail');
+      if (dossierModal && !dossierModal.classList.contains('hidden')) {
+        await viewAssetDetail(assetId);
+      }
+    } else {
+      showToast(data.error || 'Failed to unassign asset', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }
 
@@ -5269,5 +5668,10 @@ window.deleteDepartment = deleteDepartment;
 window.exportAssetsExcel = exportAssetsExcel;
 window.downloadAssetTemplate = downloadAssetTemplate;
 window.handleBulkFileSelect = handleBulkFileSelect;
+window.openAssignCustodianModal = openAssignCustodianModal;
+window.handleAssignCustodianSubmit = handleAssignCustodianSubmit;
+window.handleUnassignCustodianClick = handleUnassignCustodianClick;
+window.openQuickAddUserForAssign = openQuickAddUserForAssign;
+window.unassignAssetFromDossier = unassignAssetFromDossier;
 
 

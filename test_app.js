@@ -1334,6 +1334,129 @@ async function runTests() {
 
   console.log('✅ Test 22: All Department filter, Printer precision, and Excel tests passed successfully!');
 
+  // ==========================================
+  // Test 23: Free vs Occupied Assets & Assignment Workflow
+  // ==========================================
+  console.log('\nTest 23: Free vs Occupied Assets & Assignment Workflow');
+
+  // 23A: Dashboard Stats & Breakdown verification
+  const resStats23 = await fetch(`${BASE_URL}/api/dashboard/stats`, { headers: authHeaders });
+  const dataStats23 = await resStats23.json();
+  console.log('  23A: free_assets:', dataStats23.assets.free_assets, '| occupied_assets:', dataStats23.assets.occupied_assets);
+  if (typeof dataStats23.assets.free_assets !== 'number' || typeof dataStats23.assets.occupied_assets !== 'number') {
+    throw new Error('free_assets or occupied_assets missing in asset stats');
+  }
+  if (!Array.isArray(dataStats23.freeTypeBreakdown)) {
+    throw new Error('freeTypeBreakdown array missing in dashboard stats');
+  }
+  console.log('  ✅ 23A: Dashboard returns free_assets, occupied_assets, and freeTypeBreakdown correctly.');
+
+  // 23B: Create a dedicated free test asset and an occupied test asset
+  const sFreeTest = 'FREE-TEST-9901';
+  const sOccupiedTest = 'OCC-TEST-9902';
+  const testPersonName = 'Kavita Joshi TestUser';
+
+  const resCreateFree = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: sFreeTest,
+      asset_type: 'Desktop',
+      brand: 'Lenovo',
+      model_name: 'M70q Gen 3',
+      assigned_user: '', // free
+      department: 'Orders',
+      location: '1st Floor'
+    })
+  });
+  const freeAssetId = (await resCreateFree.json()).id;
+
+  const resCreateOcc = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: sOccupiedTest,
+      asset_type: 'Laptop',
+      brand: 'Dell',
+      model_name: 'Latitude 3420',
+      assigned_user: 'Existing User One',
+      department: 'Dispatch',
+      location: '2nd Floor'
+    })
+  });
+  const occAssetId = (await resCreateOcc.json()).id;
+
+  // 23C: Verify occupancy filter 'free'
+  const resFilterFree = await fetch(`${BASE_URL}/api/assets?occupancy=free&search=${sFreeTest}`, { headers: authHeaders });
+  const dataFilterFree = await resFilterFree.json();
+  const foundFree = dataFilterFree.assets.find(a => a.internal_serial_number === sFreeTest);
+  if (!foundFree || !foundFree.is_free || foundFree.is_occupied) {
+    throw new Error(`Expected free test asset to be found with is_free=true, got: ${JSON.stringify(foundFree)}`);
+  }
+
+  // Ensure occupied test asset is NOT in occupancy=free
+  const resFilterFreeCheck = await fetch(`${BASE_URL}/api/assets?occupancy=free&search=${sOccupiedTest}`, { headers: authHeaders });
+  const dataFilterFreeCheck = await resFilterFreeCheck.json();
+  if (dataFilterFreeCheck.assets.some(a => a.internal_serial_number === sOccupiedTest)) {
+    throw new Error('Occupied asset incorrectly found in occupancy=free filter!');
+  }
+  console.log('  ✅ 23C: Occupancy filter "free" correctly isolates unoccupied hardware.');
+
+  // 23D: Verify occupancy filter 'occupied'
+  const resFilterOcc = await fetch(`${BASE_URL}/api/assets?occupancy=occupied&search=${sOccupiedTest}`, { headers: authHeaders });
+  const dataFilterOcc = await resFilterOcc.json();
+  const foundOcc = dataFilterOcc.assets.find(a => a.internal_serial_number === sOccupiedTest);
+  if (!foundOcc || foundOcc.is_free || !foundOcc.is_occupied) {
+    throw new Error(`Expected occupied asset to have is_occupied=true, got: ${JSON.stringify(foundOcc)}`);
+  }
+  console.log('  ✅ 23D: Occupancy filter "occupied" correctly isolates deployed hardware.');
+
+  // 23E: Assign Free Asset to person via POST /api/assets/:id/assign
+  console.log(`  23E: Assigning asset #${sFreeTest} to ${testPersonName}...`);
+  const resAssign = await fetch(`${BASE_URL}/api/assets/${freeAssetId}/assign`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      assigned_user: testPersonName,
+      department: 'Listings',
+      location: 'Listings Desk 5'
+    })
+  });
+  if (!resAssign.ok) {
+    throw new Error(`Assign API failed with status ${resAssign.status}: ${await resAssign.text()}`);
+  }
+  const dataAssign = await resAssign.json();
+  console.log('  Assign response:', dataAssign.message);
+  if (dataAssign.asset.assigned_user !== testPersonName || dataAssign.asset.is_free !== false || dataAssign.asset.is_occupied !== true) {
+    throw new Error('Assign API did not correctly update assigned_user or flags');
+  }
+
+  // Verify User Master (employees table) automatically registered the person
+  const empRecord = db.prepare('SELECT * FROM employees WHERE name = ?').get(testPersonName);
+  if (!empRecord || empRecord.department !== 'Listings') {
+    throw new Error(`Expected employee record in User Master for ${testPersonName}, got: ${JSON.stringify(empRecord)}`);
+  }
+  console.log(`  ✅ 23E: Asset assigned successfully and User Master automatically synced for ${testPersonName}.`);
+
+  // 23F: Unassign asset via POST /api/assets/:id/unassign
+  const resUnassign = await fetch(`${BASE_URL}/api/assets/${freeAssetId}/unassign`, {
+    method: 'POST',
+    headers: authHeaders
+  });
+  if (!resUnassign.ok) {
+    throw new Error('Unassign API failed');
+  }
+  const dataUnassign = await resUnassign.json();
+  console.log('  Unassign response:', dataUnassign.message);
+  if (dataUnassign.asset.is_free !== true || dataUnassign.asset.is_occupied !== false) {
+    throw new Error('Unassign API did not mark asset free');
+  }
+
+  // Cleanup Test 23 data
+  db.prepare("DELETE FROM assets WHERE internal_serial_number IN (?, ?)").run(sFreeTest, sOccupiedTest);
+  db.prepare("DELETE FROM employees WHERE name = ?").run(testPersonName);
+  console.log('✅ Test 23: Free vs Occupied assets & assignment lifecycle passed with 100% precision!');
+
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');

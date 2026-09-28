@@ -13,11 +13,25 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 router.use(authenticateToken);
 
 // ==========================================
+// FREE & OCCUPIED ASSET HELPERS
+// ==========================================
+const FREE_USER_CONDITIONS = ['unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned'];
+
+function isFreeAsset(assignedUser) {
+  if (!assignedUser) return true;
+  const cleaned = String(assignedUser).trim().toLowerCase();
+  return cleaned === '' || FREE_USER_CONDITIONS.includes(cleaned);
+}
+
+const FREE_ASSET_SQL = `(a.assigned_user IS NULL OR TRIM(a.assigned_user) = '' OR LOWER(TRIM(a.assigned_user)) IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned'))`;
+const OCCUPIED_ASSET_SQL = `(a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '' AND LOWER(TRIM(a.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned'))`;
+
+// ==========================================
 // 1. DASHBOARD & KPIS
 // ==========================================
 router.get('/dashboard/stats', (req, res) => {
   try {
-    // Asset counts
+    // Asset counts (including Free / In Stock vs Occupied)
     const assetStats = db.prepare(`
       SELECT
         COUNT(*) as total,
@@ -25,7 +39,9 @@ router.get('/dashboard/stats', (req, res) => {
         SUM(CASE WHEN working_status = 'In Repair' THEN 1 ELSE 0 END) as in_repair,
         SUM(CASE WHEN working_status = 'Not Working' THEN 1 ELSE 0 END) as not_working,
         SUM(CASE WHEN working_status = 'Retired' THEN 1 ELSE 0 END) as retired,
-        SUM(CASE WHEN is_repaired = 1 THEN 1 ELSE 0 END) as repaired_count
+        SUM(CASE WHEN is_repaired = 1 THEN 1 ELSE 0 END) as repaired_count,
+        SUM(CASE WHEN assigned_user IS NULL OR TRIM(assigned_user) = '' OR LOWER(TRIM(assigned_user)) IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned') THEN 1 ELSE 0 END) as free_assets,
+        SUM(CASE WHEN assigned_user IS NOT NULL AND TRIM(assigned_user) != '' AND LOWER(TRIM(assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned') THEN 1 ELSE 0 END) as occupied_assets
       FROM assets
     `).get();
 
@@ -127,6 +143,15 @@ router.get('/dashboard/stats', (req, res) => {
       SELECT COUNT(*) as total FROM departments
     `).get();
 
+    // Breakdown of Free / Unoccupied Assets by Asset Type
+    const freeTypeBreakdown = db.prepare(`
+      SELECT asset_type, COUNT(*) as count
+      FROM assets
+      WHERE assigned_user IS NULL OR TRIM(assigned_user) = '' OR LOWER(TRIM(assigned_user)) IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock', 'available', 'not assigned')
+      GROUP BY asset_type
+      ORDER BY count DESC
+    `).all();
+
     res.json({
       assets: assetStats,
       unprotectedWorkstations,
@@ -138,6 +163,7 @@ router.get('/dashboard/stats', (req, res) => {
       deptBreakdown,
       typeBreakdown,
       brandBreakdown,
+      freeTypeBreakdown,
       recentRepairs,
       eolWarnings
     });
@@ -265,7 +291,7 @@ function ensureEmployeeExists(userName, department = '', location = '') {
 // GET /api/assets - List all assets with search & filters
 router.get('/assets', (req, res) => {
   try {
-    const { search, type, department, brand, status, quick_heal, has_printer, page = 1, limit = 100 } = req.query;
+    const { search, type, department, brand, status, quick_heal, has_printer, occupancy, page = 1, limit = 100 } = req.query;
 
     let query = `
       SELECT a.*,
@@ -399,6 +425,12 @@ router.get('/assets', (req, res) => {
       )`;
     }
 
+    if (occupancy === 'free' || occupancy === 'unoccupied') {
+      query += ` AND ${FREE_ASSET_SQL}`;
+    } else if (occupancy === 'occupied') {
+      query += ` AND ${OCCUPIED_ASSET_SQL}`;
+    }
+
     // Relevance ordering: visible columns prioritized first
     if (searchTokens.length > 0) {
       const fullSearch = `%${search.trim().toLowerCase()}%`;
@@ -418,12 +450,15 @@ router.get('/assets', (req, res) => {
 
     const assets = db.prepare(query).all(...params);
 
-    // Enrich with lifecycle info
+    // Enrich with lifecycle info & free/occupancy status
     const enriched = assets.map(asset => {
       const lifecycle = computeAssetLifecycle(asset, asset.repair_count, asset.total_repair_cost);
+      const isFree = isFreeAsset(asset.assigned_user);
       return {
         ...asset,
         ...lifecycle,
+        is_free: isFree,
+        is_occupied: !isFree,
         has_printer: Number(asset.printer_count || 0) > 0,
         primary_printer: asset.primary_printer || null
       };
@@ -521,11 +556,14 @@ router.get('/assets/:id', (req, res) => {
 
     const totalRepairCost = repairs.reduce((sum, r) => sum + (Number(r.repair_cost) || 0), 0);
     const lifecycle = computeAssetLifecycle(asset, repairs.length, totalRepairCost);
+    const isFree = isFreeAsset(asset.assigned_user);
 
     res.json({
       asset: {
         ...asset,
         ...lifecycle,
+        is_free: isFree,
+        is_occupied: !isFree,
         repair_count: repairs.length,
         total_repair_cost: totalRepairCost,
         repairs,
@@ -756,6 +794,120 @@ router.put('/assets/:id', requireRoles('admin', 'technician'), (req, res) => {
     logAudit(req.user.id, req.user.username, 'UPDATE_ASSET', 'asset', assetId, `Updated asset ${finalSerial}`);
 
     res.json({ message: 'Asset updated successfully', asset: { ...existing, internal_serial_number: finalSerial } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/assets/:id/assign - Quick assign / reassign asset to user or mark free
+router.post('/assets/:id/assign', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const assetId = req.params.id;
+    const existing = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Asset not found.' });
+    }
+
+    let { assigned_user, department, location } = req.body;
+    assigned_user = (assigned_user || '').trim();
+    const finalDept = department !== undefined ? department.trim() : (existing.department || '');
+    const finalLoc = location !== undefined ? location.trim() : (existing.location || '');
+
+    const becomesFree = isFreeAsset(assigned_user);
+    const finalUser = becomesFree ? '' : assigned_user;
+
+    db.prepare(`
+      UPDATE assets SET
+        assigned_user = ?,
+        department = ?,
+        location = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(finalUser, finalDept, finalLoc, assetId);
+
+    // If workstation has a mapped Quick Heal key, keep key user in sync
+    if (existing.quick_heal_key_id) {
+      db.prepare(`
+        UPDATE quick_heal_keys
+        SET assigned_user = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(finalUser, existing.quick_heal_key_id);
+    }
+
+    if (!becomesFree) {
+      if (finalDept) ensureDepartmentExists(finalDept, finalLoc);
+      ensureEmployeeExists(finalUser, finalDept, finalLoc);
+    }
+
+    logAudit(
+      req.user.id,
+      req.user.username,
+      'ASSIGN_ASSET',
+      'asset',
+      assetId,
+      becomesFree
+        ? `Unassigned asset #${existing.internal_serial_number} (marked free/in stock)`
+        : `Assigned asset #${existing.internal_serial_number} to ${finalUser}`
+    );
+
+    const updated = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId);
+    res.json({
+      message: becomesFree
+        ? `Asset #${existing.internal_serial_number} marked as Free / In Stock`
+        : `Asset #${existing.internal_serial_number} successfully assigned to ${finalUser}`,
+      asset: {
+        ...updated,
+        is_free: becomesFree,
+        is_occupied: !becomesFree
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/assets/:id/unassign - Unassign asset and release it back to Free stock
+router.post('/assets/:id/unassign', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const assetId = req.params.id;
+    const existing = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Asset not found.' });
+    }
+
+    db.prepare(`
+      UPDATE assets SET
+        assigned_user = '',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(assetId);
+
+    if (existing.quick_heal_key_id) {
+      db.prepare(`
+        UPDATE quick_heal_keys
+        SET assigned_user = '', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(existing.quick_heal_key_id);
+    }
+
+    logAudit(
+      req.user.id,
+      req.user.username,
+      'UNASSIGN_ASSET',
+      'asset',
+      assetId,
+      `Unassigned asset #${existing.internal_serial_number} (marked free/in stock)`
+    );
+
+    const updated = db.prepare('SELECT * FROM assets WHERE id = ?').get(assetId);
+    res.json({
+      message: `Asset #${existing.internal_serial_number} unassigned and marked Free / In Stock.`,
+      asset: {
+        ...updated,
+        is_free: true,
+        is_occupied: false
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
