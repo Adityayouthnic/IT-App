@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
   setupGlobalEvents();
   updateGlobalSidebarCounters();
+  fetchUserMasterList();
   handleRoute();
 });
 
@@ -141,6 +142,11 @@ async function updateGlobalSidebarCounters() {
       accBadge.textContent = data.accessories?.total ?? 0;
     }
 
+    const userMasterBadge = document.getElementById('sidebar-user-master-count');
+    if (userMasterBadge) {
+      userMasterBadge.textContent = data.employees?.total ?? 0;
+    }
+
     const expBadge = document.getElementById('sidebar-expense-total');
     if (expBadge) {
       const totalRepairCost = data.repairs?.total_cost || 0;
@@ -163,11 +169,22 @@ function resetAssetFilterUI(overrides = {}) {
   const d = document.getElementById('asset-filter-dept');
   const st = document.getElementById('asset-filter-status');
   const k = document.getElementById('asset-filter-key');
+  const p = document.getElementById('asset-filter-printer');
   if (s) s.value = overrides.search || '';
   if (t) t.value = overrides.type || '';
   if (d) d.value = overrides.department || '';
   if (st) st.value = overrides.status || '';
   if (k) k.value = overrides.quick_heal || '';
+  if (p) p.value = overrides.has_printer || '';
+}
+
+function resetEmployeeFilterUI(overrides = {}) {
+  const s = document.getElementById('employee-search-input');
+  const d = document.getElementById('employee-filter-dept');
+  const p = document.getElementById('employee-filter-printer');
+  if (s) s.value = overrides.search || '';
+  if (d) d.value = overrides.department || 'all';
+  if (p) p.value = overrides.has_printer || 'all';
 }
 
 function resetRepairFilterUI(overrides = {}) {
@@ -284,6 +301,10 @@ function navigate(viewName, params = {}, updateHash = true) {
     case 'expenses':
       resetExpensesFilterUI(params);
       loadExpenses(params);
+      break;
+    case 'employees':
+      resetEmployeeFilterUI(params);
+      loadEmployees(params);
       break;
     case 'search':
       resetSearchUI(params);
@@ -484,6 +505,11 @@ async function loadDashboard() {
       accBadge.textContent = totalAcc;
     }
 
+    const userMasterBadge = document.getElementById('sidebar-user-master-count');
+    if (userMasterBadge && data.employees) {
+      userMasterBadge.textContent = data.employees.total ?? 0;
+    }
+
     document.getElementById('kpi-repair-cost').textContent = `₹${totalRepairCost.toLocaleString('en-IN')}`;
     const expBadge = document.getElementById('sidebar-expense-total');
     if (expBadge) {
@@ -621,6 +647,7 @@ function resetAssetFilters() {
   document.getElementById('asset-filter-dept').value = '';
   document.getElementById('asset-filter-status').value = '';
   document.getElementById('asset-filter-key').value = '';
+  if (document.getElementById('asset-filter-printer')) document.getElementById('asset-filter-printer').value = '';
   loadAssets();
 }
 
@@ -631,12 +658,14 @@ async function loadAssets(filterParams = {}) {
     const dept = filterParams.department !== undefined ? filterParams.department : document.getElementById('asset-filter-dept')?.value || '';
     const status = filterParams.status !== undefined ? filterParams.status : document.getElementById('asset-filter-status')?.value || '';
     const key = filterParams.quick_heal !== undefined ? filterParams.quick_heal : document.getElementById('asset-filter-key')?.value || '';
+    const printer = filterParams.has_printer !== undefined ? filterParams.has_printer : document.getElementById('asset-filter-printer')?.value || '';
 
     if (filterParams.search && document.getElementById('asset-filter-search')) document.getElementById('asset-filter-search').value = filterParams.search;
     if (filterParams.type && document.getElementById('asset-filter-type')) document.getElementById('asset-filter-type').value = filterParams.type;
     if (filterParams.department && document.getElementById('asset-filter-dept')) document.getElementById('asset-filter-dept').value = filterParams.department;
     if (filterParams.status && document.getElementById('asset-filter-status')) document.getElementById('asset-filter-status').value = filterParams.status;
     if (filterParams.quick_heal && document.getElementById('asset-filter-key')) document.getElementById('asset-filter-key').value = filterParams.quick_heal;
+    if (filterParams.has_printer && document.getElementById('asset-filter-printer')) document.getElementById('asset-filter-printer').value = filterParams.has_printer;
 
     const params = new URLSearchParams();
     if (search) params.append('search', search);
@@ -644,6 +673,7 @@ async function loadAssets(filterParams = {}) {
     if (dept) params.append('department', dept);
     if (status) params.append('status', status);
     if (key) params.append('quick_heal', key);
+    if (printer) params.append('has_printer', printer);
 
     const res = await apiFetch(`/api/assets?${params.toString()}`);
     if (!res.ok) return;
@@ -717,6 +747,16 @@ async function loadAssets(filterParams = {}) {
         <td class="py-3 px-4 text-slate-500 text-[11px]">${escapeHtml(a.location || '—')}</td>
         <td class="py-3 px-4 font-semibold text-slate-800">
           <div>${escapeHtml(a.assigned_user || 'Unassigned')}</div>
+          ${a.has_printer ? `
+            <div class="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60" title="Printer: ${escapeHtml(a.primary_printer || 'Assigned')}">
+              <i data-lucide="printer" class="w-2.5 h-2.5 text-amber-600"></i>
+              <span>${escapeHtml(a.primary_printer || 'Printer')}</span>
+            </div>
+          ` : (isWorkstation && a.assigned_user && !['unassigned', 'free'].includes(a.assigned_user.toLowerCase()) ? `
+            <div class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-slate-400 font-medium" title="No printer assigned to this user">
+              <span>(No Printer)</span>
+            </div>
+          ` : '')}
         </td>
         <td class="py-3 px-4">${keyBadge}</td>
         <td class="py-3 px-4">${statusBadge}</td>
@@ -906,6 +946,120 @@ async function viewAssetDetail(assetId) {
         <p class="text-xs text-slate-700 mt-1 font-medium leading-relaxed">${escapeHtml(asset.remarks || 'No usage notes recorded.')}</p>
       </div>
 
+      <!-- Linked Printers & Hardware Breakdown -->
+      ${(() => {
+        const isPrinter = ['normal printer', 'tag printer', 'label printer', 'scanner'].includes(String(asset.asset_type || '').toLowerCase()) || String(asset.asset_type || '').toLowerCase().includes('printer');
+        const userStr = escapeHtml(asset.assigned_user || 'this user');
+
+        if (isPrinter) {
+          const ws = asset.linked_workstations || [];
+          return `
+            <div class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/90">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="monitor" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-950">Linked User Workstation (${ws.length})</h4>
+                    <p class="text-[11px] text-amber-800">Desktops/Laptops operated by <strong>${userStr}</strong></p>
+                  </div>
+                </div>
+              </div>
+              ${ws.length > 0 ? `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  ${ws.map(w => `
+                    <div class="p-3 rounded-xl bg-white border border-amber-100 shadow-sm flex items-center justify-between">
+                      <div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-asset-detail'); viewAssetDetail(${w.id});">#${escapeHtml(w.internal_serial_number)}</span>
+                          <span class="font-bold text-xs text-slate-900">${escapeHtml(w.brand || '')} ${escapeHtml(w.model_name || w.asset_type)}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(w.asset_type)} • ${escapeHtml(w.location || 'Office Floor')}</div>
+                      </div>
+                      <button onclick="closeModal('modal-asset-detail'); viewAssetDetail(${w.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline">
+                        View Dossier &rarr;
+                      </button>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <div class="p-3 bg-white/70 border border-amber-100 rounded-xl text-center text-xs text-amber-800 font-medium">
+                  🖨️ Standalone printer device without dedicated workstation assigned to ${userStr}.
+                </div>
+              `}
+            </div>
+          `;
+        }
+
+        // For Workstations (Desktop, Laptop, etc)
+        const printers = asset.linked_printers || [];
+        const hasPrinter = printers.length > 0;
+
+        return `
+          <div class="p-4 rounded-2xl ${hasPrinter ? 'bg-amber-50/70 border-amber-200/90' : 'bg-slate-50/80 border-slate-200/80'} border">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-xl ${hasPrinter ? 'bg-amber-600 text-white' : 'bg-slate-400 text-white'} flex items-center justify-center shadow-sm">
+                  <i data-lucide="printer" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold uppercase tracking-wider ${hasPrinter ? 'text-amber-950' : 'text-slate-700'}">Linked Printers & Hardware Breakdown (${printers.length})</h4>
+                  <p class="text-[11px] ${hasPrinter ? 'text-amber-800' : 'text-slate-500'}">Printers configured for <strong>${userStr}</strong></p>
+                </div>
+              </div>
+              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${hasPrinter ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600 border border-slate-200'}">
+                <i data-lucide="${hasPrinter ? 'check-circle' : 'info'}" class="w-3 h-3"></i>
+                <span>${hasPrinter ? `${printers.length} Printer${printers.length === 1 ? '' : 's'} Linked` : 'No Printer Assigned'}</span>
+              </span>
+            </div>
+
+            ${hasPrinter ? `
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                ${printers.map(p => `
+                  <div class="p-3 rounded-xl bg-white border border-amber-200/80 shadow-sm flex flex-col justify-between hover:border-amber-400 transition-colors">
+                    <div>
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-asset-detail'); viewAssetDetail(${p.id});">
+                            #${escapeHtml(p.internal_serial_number)}
+                          </span>
+                          <span class="font-bold text-xs text-slate-900">${escapeHtml(p.brand || '')} ${escapeHtml(p.model_name || '')}</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${p.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                          ${escapeHtml(p.working_status)}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300/60">${escapeHtml(p.asset_type)}</span>
+                        ${p.serial_number ? `<span class="text-[10px] font-mono text-slate-500">S/N: ${escapeHtml(p.serial_number)}</span>` : ''}
+                      </div>
+                      ${p.remarks ? `<p class="text-[11px] text-slate-600 mt-1.5 italic line-clamp-2">“${escapeHtml(p.remarks)}”</p>` : ''}
+                    </div>
+                    <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                      <span class="text-slate-400 text-[10px]">${escapeHtml(p.location || asset.location || 'Same desk')}</span>
+                      <button onclick="closeModal('modal-asset-detail'); viewAssetDetail(${p.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline flex items-center gap-1">
+                        View Printer Dossier &rarr;
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="p-3 bg-white/80 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                <div class="text-xs text-slate-700">
+                  <span class="font-semibold text-slate-800">Standalone Workstation:</span>
+                  <span class="text-slate-500 block text-[11px] mt-0.5">${userStr} does not have any dedicated printer (Tag, Label, or Normal printer) assigned.</span>
+                </div>
+                <button onclick="closeModal('modal-asset-detail'); openNewAssetModalWithPrefill({ asset_type: 'Tag Printer', assigned_user: '${escapeHtml(asset.assigned_user || '')}', department: '${escapeHtml(asset.department || '')}', location: '${escapeHtml(asset.location || '')}' })" class="tech-action px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 flex-shrink-0 transition-colors">
+                  + Assign Printer
+                </button>
+              </div>
+            `}
+          </div>
+        `;
+      })()}
+
       <!-- Issued Accessories & Peripherals for User/Asset -->
       <div class="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200/80">
         <div class="flex items-center justify-between mb-3">
@@ -987,11 +1141,21 @@ async function openNewAssetModal() {
   document.getElementById('asset-serial').value = '';
 
   try {
+    await fetchUserMasterList();
     await populateKeySelector();
     openModal('modal-asset-form');
   } catch (err) {
     console.error('Error opening new asset modal:', err);
   }
+}
+
+// Open New Asset Modal with prefilled fields
+async function openNewAssetModalWithPrefill(prefill = {}) {
+  await openNewAssetModal();
+  if (prefill.asset_type) document.getElementById('asset-type').value = prefill.asset_type;
+  if (prefill.assigned_user) document.getElementById('asset-user').value = prefill.assigned_user;
+  if (prefill.department) document.getElementById('asset-department').value = prefill.department;
+  if (prefill.location) document.getElementById('asset-location').value = prefill.location;
 }
 
 // Edit Asset Modal
@@ -1019,6 +1183,7 @@ async function openEditAssetModal(assetId) {
     document.getElementById('asset-parts').value = asset.parts_added_summary || '';
     document.getElementById('asset-remarks').value = asset.remarks || '';
 
+    await fetchUserMasterList();
     await populateKeySelector(asset.quick_heal_key_id);
     openModal('modal-asset-form');
   } catch (err) {
@@ -1087,6 +1252,7 @@ async function handleAssetSubmit(e) {
       closeModal('modal-asset-form');
       loadAssets();
       loadDashboard();
+      fetchUserMasterList();
     } else {
       showToast(data.error || 'Failed to save asset', 'error');
     }
@@ -3347,13 +3513,41 @@ async function executeMasterSearch(query, targetContainerId, isModal = false) {
       `;
     }
 
-    // 5. Users
+    // 5. User Master Directory (Employees & Custodians)
+    if (data.employees && data.employees.length > 0) {
+      html += `
+        <div class="space-y-2 mb-4">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="users" class="w-3.5 h-3.5 text-violet-500"></i>
+            <span>User Master Directory (${data.employees.length})</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            ${data.employees.map(emp => `
+              <div onclick="if(${isModal}){closeModal('modal-master-search');} navigate('employees', { search: '${escapeHtml(emp.name)}' })" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
+                <div>
+                  <div class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <span>${escapeHtml(emp.name)}</span>
+                    ${emp.designation ? `<span class="text-[11px] font-normal text-slate-500">• ${escapeHtml(emp.designation)}</span>` : ''}
+                  </div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">Dept: ${escapeHtml(emp.department || '—')} • Location: ${escapeHtml(emp.location || 'Head Office')}</div>
+                </div>
+                <div class="text-right">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${emp.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}">${escapeHtml(emp.status || 'Active')}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // 6. System Users (Login Accounts)
     if (data.users && data.users.length > 0) {
       html += `
         <div class="space-y-2 mb-4">
           <div class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-            <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-500"></i>
-            <span>Staff & Users (${data.users.length})</span>
+            <i data-lucide="shield" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span>System Users & Admins (${data.users.length})</span>
           </div>
           <div class="grid grid-cols-1 gap-2">
             ${data.users.map(u => `
@@ -3700,4 +3894,618 @@ async function confirmPurgeInventory() {
     showToast('Purge error: ' + err.message, 'error');
   }
 }
+
+// ==========================================
+// 11. VIEW: USER MASTER (EMPLOYEE & CUSTODIAN DIRECTORY)
+// ==========================================
+
+let cachedEmployeesList = [];
+
+async function fetchUserMasterList() {
+  try {
+    const res = await apiFetch('/api/employees');
+    if (!res.ok) return [];
+    const data = await res.json();
+    cachedEmployeesList = data.employees || [];
+
+    // Populate datalist #user-master-datalist
+    const datalist = document.getElementById('user-master-datalist');
+    if (datalist) {
+      datalist.innerHTML = cachedEmployeesList.map(e => `
+        <option value="${escapeHtml(e.name)}">${escapeHtml(e.department || '')} • ${escapeHtml(e.location || '')}${e.designation ? ' • ' + escapeHtml(e.designation) : ''}</option>
+      `).join('');
+    }
+
+    // Auto-fill listener on #asset-user to auto-fill department and location
+    const assetUserInput = document.getElementById('asset-user');
+    if (assetUserInput && !assetUserInput._boundUserMasterChange) {
+      assetUserInput._boundUserMasterChange = true;
+      assetUserInput.addEventListener('change', () => {
+        const val = assetUserInput.value.trim().toLowerCase();
+        if (!val) return;
+        const matched = cachedEmployeesList.find(e => (e.name || '').toLowerCase() === val);
+        if (matched) {
+          const deptEl = document.getElementById('asset-department');
+          const locEl = document.getElementById('asset-location');
+          if (deptEl && matched.department) deptEl.value = matched.department;
+          if (locEl && matched.location && !locEl.value) locEl.value = matched.location;
+        }
+      });
+    }
+
+    // Update sidebar User Master badge
+    const badge = document.getElementById('sidebar-user-master-count');
+    if (badge && data.stats) {
+      badge.textContent = data.stats.total ?? cachedEmployeesList.length;
+    }
+
+    return cachedEmployeesList;
+  } catch (err) {
+    console.error('Error fetching user master list:', err);
+    return [];
+  }
+}
+
+function openQuickAddUserModal() {
+  const form = document.getElementById('form-quick-add-user');
+  if (form) form.reset();
+  const currentAssetDept = document.getElementById('asset-department')?.value;
+  if (currentAssetDept) {
+    const quickDept = document.getElementById('quick-user-dept');
+    if (quickDept) quickDept.value = currentAssetDept;
+  }
+  const currentAssetLoc = document.getElementById('asset-location')?.value;
+  if (currentAssetLoc) {
+    const quickLoc = document.getElementById('quick-user-location');
+    if (quickLoc) quickLoc.value = currentAssetLoc;
+  }
+  openModal('modal-quick-add-user');
+}
+
+async function handleQuickAddUserSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('quick-user-name').value.trim();
+  const department = document.getElementById('quick-user-dept').value;
+  const designation = document.getElementById('quick-user-role').value.trim();
+  const location = document.getElementById('quick-user-location').value.trim();
+  const email = document.getElementById('quick-user-email').value.trim();
+  const phone = document.getElementById('quick-user-phone').value.trim();
+
+  if (!name) {
+    showToast('User name is required', 'error');
+    return;
+  }
+
+  try {
+    const res = await apiFetch('/api/employees', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        department,
+        designation,
+        location,
+        email,
+        phone,
+        status: 'Active'
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`User '${name}' added to Master!`, 'success');
+      closeModal('modal-quick-add-user');
+      await fetchUserMasterList();
+
+      // Auto-fill into the asset form inputs
+      const userInput = document.getElementById('asset-user');
+      if (userInput) userInput.value = name;
+      const deptInput = document.getElementById('asset-department');
+      if (deptInput && department) deptInput.value = department;
+      const locInput = document.getElementById('asset-location');
+      if (locInput && location && !locInput.value) locInput.value = location;
+
+      // Also if assign-acc-user is open, set it
+      const accUserInput = document.getElementById('assign-acc-user');
+      if (accUserInput && accUserInput.offsetParent !== null) {
+        accUserInput.value = name;
+      }
+    } else {
+      showToast(data.error || 'Failed to add user', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Network error', 'error');
+  }
+}
+
+let employeeSearchTimeout = null;
+function debounceEmployeeSearch() {
+  clearTimeout(employeeSearchTimeout);
+  employeeSearchTimeout = setTimeout(() => loadEmployees(), 250);
+}
+
+function filterEmployeesByPrinter(printerStatus) {
+  const filterEl = document.getElementById('employee-filter-printer');
+  if (filterEl) {
+    filterEl.value = printerStatus || 'all';
+  }
+  loadEmployees();
+}
+
+function resetEmployeeFilterUI(params = {}) {
+  const searchInput = document.getElementById('employee-search-input');
+  const deptFilter = document.getElementById('employee-filter-dept');
+  const printerFilter = document.getElementById('employee-filter-printer');
+  if (searchInput) searchInput.value = params.search || '';
+  if (deptFilter) deptFilter.value = params.department || 'all';
+  if (printerFilter) printerFilter.value = params.printer || params.has_printer || 'all';
+}
+
+async function loadEmployees(filterParams = {}) {
+  try {
+    const search = filterParams.search !== undefined ? filterParams.search : document.getElementById('employee-search-input')?.value || '';
+    const dept = filterParams.department !== undefined ? filterParams.department : document.getElementById('employee-filter-dept')?.value || 'all';
+    const printer = filterParams.has_printer !== undefined ? filterParams.has_printer : document.getElementById('employee-filter-printer')?.value || 'all';
+
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (dept && dept !== 'all') params.append('department', dept);
+    if (printer && printer !== 'all') params.append('has_printer', printer);
+
+    const res = await apiFetch(`/api/employees?${params.toString()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Update KPI metric cards
+    if (data.stats) {
+      const totalEl = document.getElementById('emp-stat-total');
+      const withPrintersEl = document.getElementById('emp-stat-with-printers');
+      const withoutPrintersEl = document.getElementById('emp-stat-without-printers');
+      const workstationsEl = document.getElementById('emp-stat-workstations');
+      if (totalEl) totalEl.textContent = data.stats.total ?? 0;
+      if (withPrintersEl) withPrintersEl.textContent = data.stats.with_printers ?? 0;
+      if (withoutPrintersEl) withoutPrintersEl.textContent = data.stats.without_printers ?? 0;
+      if (workstationsEl) workstationsEl.textContent = data.stats.workstations_assigned ?? 0;
+
+      const sidebarUserMasterEl = document.getElementById('sidebar-user-master-count');
+      if (sidebarUserMasterEl) sidebarUserMasterEl.textContent = data.stats.total ?? 0;
+    }
+
+    renderEmployeesTable(data.employees || []);
+  } catch (err) {
+    console.error('Error loading employees:', err);
+  }
+}
+
+function renderEmployeesTable(employees) {
+  const tbody = document.getElementById('employees-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (!employees || employees.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-400">No personnel found matching the filter criteria.</td></tr>`;
+    return;
+  }
+
+  const isViewer = currentUser?.role === 'viewer';
+  const isAdmin = currentUser?.role === 'admin';
+
+  employees.forEach(emp => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-slate-50/80 transition-colors';
+
+    // Workstations list / chips
+    const wsList = emp.workstations || [];
+    let wsDisplay = '';
+    if (emp.workstation_count > 0) {
+      wsDisplay = `
+        <div class="space-y-1">
+          <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+            <i data-lucide="monitor" class="w-3 h-3"></i>
+            <span>${emp.workstation_count} Workstation${emp.workstation_count > 1 ? 's' : ''}</span>
+          </div>
+          <div class="flex flex-wrap gap-1 max-w-xs">
+            ${wsList.map(w => `
+              <span onclick="viewAssetDetail(${w.id})" class="cursor-pointer font-mono font-bold text-[11px] text-brand-600 hover:underline bg-brand-50/60 px-1.5 py-0.5 rounded border border-brand-100" title="${escapeHtml(w.brand || '')} ${escapeHtml(w.asset_type)}">
+                #${escapeHtml(w.internal_serial_number)}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      wsDisplay = `<span class="text-slate-400 text-xs">— No PC —</span>`;
+    }
+
+    // Printers list / breakdown
+    const prList = emp.printers || [];
+    let prDisplay = '';
+    if (emp.has_printer) {
+      prDisplay = `
+        <div class="space-y-1">
+          <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+            <i data-lucide="printer" class="w-3 h-3 text-amber-600"></i>
+            <span>${emp.printer_count} Printer${emp.printer_count > 1 ? 's' : ''}</span>
+          </div>
+          <div class="flex flex-wrap gap-1 max-w-xs">
+            ${prList.map(p => `
+              <span onclick="viewAssetDetail(${p.id})" class="cursor-pointer font-medium text-[11px] text-amber-900 bg-amber-100/70 hover:bg-amber-200/80 px-1.5 py-0.5 rounded border border-amber-300/80 transition-colors" title="${escapeHtml(p.brand || '')} ${escapeHtml(p.model_name || '')}">
+                #${escapeHtml(p.internal_serial_number)} (${escapeHtml(p.asset_type)})
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      prDisplay = `<span class="inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium"><i data-lucide="minus" class="w-3 h-3"></i>Standalone</span>`;
+    }
+
+    // Accessories
+    const accCount = emp.accessories_count || 0;
+    const accDisplay = accCount > 0
+      ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">${accCount} Issued</span>`
+      : `<span class="text-slate-400 text-xs">0</span>`;
+
+    // Status badge
+    const statusBadge = emp.status === 'Active'
+      ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Active</span>`
+      : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Inactive</span>`;
+
+    tr.innerHTML = `
+      <td class="py-3 px-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs flex-shrink-0">
+            ${escapeHtml((emp.name || 'U').charAt(0).toUpperCase())}
+          </div>
+          <div>
+            <div class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+              <span>${escapeHtml(emp.name)}</span>
+              ${emp.designation ? `<span class="text-[10px] font-semibold text-slate-500">• ${escapeHtml(emp.designation)}</span>` : ''}
+            </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">
+              ${emp.phone ? `📞 ${escapeHtml(emp.phone)}` : ''}
+              ${emp.email ? `✉️ ${escapeHtml(emp.email)}` : ''}
+              ${!emp.phone && !emp.email ? 'No contact recorded' : ''}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td class="py-3 px-4">
+        <div class="font-semibold text-slate-800 text-xs">${escapeHtml(emp.department || '—')}</div>
+        <div class="text-[11px] text-slate-400">${escapeHtml(emp.location || '—')}</div>
+      </td>
+      <td class="py-3 px-4">${wsDisplay}</td>
+      <td class="py-3 px-4">${prDisplay}</td>
+      <td class="py-3 px-4">${accDisplay}</td>
+      <td class="py-3 px-4">${statusBadge}</td>
+      <td class="py-3 px-4 text-right">
+        <div class="flex items-center justify-end gap-1">
+          <button onclick="viewUserAssets(${emp.id})" title="View Hardware Profile & Dossier" class="p-1.5 text-violet-600 hover:text-violet-700 hover:bg-violet-50 rounded-lg transition-colors">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>
+          ${!isViewer ? `
+            <button onclick="openEmployeeModal(${emp.id})" title="Edit User Details" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+          ` : ''}
+          ${isAdmin ? `
+            <button onclick="deleteEmployee(${emp.id}, '${escapeHtml(emp.name)}')" title="Delete from Master" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          ` : ''}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  lucide.createIcons();
+}
+
+async function openEmployeeModal(empId = null) {
+  const form = document.getElementById('form-employee');
+  if (form) form.reset();
+  document.getElementById('employee-form-id').value = '';
+  document.getElementById('employee-status').value = 'Active';
+
+  if (!empId) {
+    document.getElementById('employee-form-title').textContent = 'Add User to Master';
+    openModal('modal-employee-form');
+    return;
+  }
+
+  try {
+    const res = await apiFetch(`/api/employees/${empId}`);
+    if (!res.ok) return;
+    const { employee } = await res.json();
+
+    document.getElementById('employee-form-title').textContent = `Edit User: ${employee.name}`;
+    document.getElementById('employee-form-id').value = employee.id;
+    document.getElementById('employee-name').value = employee.name || '';
+    document.getElementById('employee-department').value = employee.department || 'Orders';
+    document.getElementById('employee-designation').value = employee.designation || '';
+    document.getElementById('employee-location').value = employee.location || '';
+    document.getElementById('employee-status').value = employee.status || 'Active';
+    document.getElementById('employee-email').value = employee.email || '';
+    document.getElementById('employee-phone').value = employee.phone || '';
+    document.getElementById('employee-notes').value = employee.notes || '';
+
+    openModal('modal-employee-form');
+  } catch (err) {
+    console.error('Error opening employee modal:', err);
+  }
+}
+
+async function handleEmployeeSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('employee-form-id').value;
+  const btn = document.getElementById('btn-save-employee');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const payload = {
+    name: document.getElementById('employee-name').value.trim(),
+    department: document.getElementById('employee-department').value,
+    designation: document.getElementById('employee-designation').value.trim(),
+    location: document.getElementById('employee-location').value.trim(),
+    status: document.getElementById('employee-status').value,
+    email: document.getElementById('employee-email').value.trim(),
+    phone: document.getElementById('employee-phone').value.trim(),
+    notes: document.getElementById('employee-notes').value.trim()
+  };
+
+  try {
+    const url = id ? `/api/employees/${id}` : '/api/employees';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await apiFetch(url, {
+      method,
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'User saved to Master!', 'success');
+      closeModal('modal-employee-form');
+      loadEmployees();
+      fetchUserMasterList();
+      updateGlobalSidebarCounters();
+    } else {
+      showToast(data.error || 'Failed to save user', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Network error', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save User Details';
+  }
+}
+
+async function deleteEmployee(empId, name) {
+  if (!confirm(`Are you sure you want to remove '${name}' from User Master?\n\nNote: If this user has assets assigned, you must reassign or unassign them first.`)) {
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/employees/${empId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'User deleted from Master', 'success');
+      loadEmployees();
+      fetchUserMasterList();
+      updateGlobalSidebarCounters();
+    } else {
+      showToast(data.error || 'Failed to delete user', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Network error', 'error');
+  }
+}
+
+async function viewUserAssets(empId) {
+  try {
+    const res = await apiFetch(`/api/employees/${empId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const { employee: emp, assigned_workstations: ws, assigned_printers: pr, assigned_accessories: acc, assigned_keys: keys } = data;
+
+    document.getElementById('user-assets-avatar').textContent = (emp.name || 'U').charAt(0).toUpperCase();
+    document.getElementById('user-assets-name').textContent = emp.name;
+    document.getElementById('user-assets-sub').textContent = `${emp.designation || 'Personnel'} • Dept: ${emp.department || 'N/A'} • Location: ${emp.location || 'Main Office'}`;
+
+    const body = document.getElementById('user-assets-body');
+    body.innerHTML = `
+      <!-- User Profile Header Card -->
+      <div class="p-4 rounded-2xl bg-violet-50/70 border border-violet-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="text-sm font-bold text-violet-950">${escapeHtml(emp.name)}</h4>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${emp.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${escapeHtml(emp.status)}</span>
+            ${emp.designation ? `<span class="text-xs text-violet-800 font-semibold">• ${escapeHtml(emp.designation)}</span>` : ''}
+          </div>
+          <div class="text-xs text-violet-800 flex items-center gap-3 flex-wrap">
+            <span><strong>Dept:</strong> ${escapeHtml(emp.department || '—')}</span>
+            <span><strong>Location:</strong> ${escapeHtml(emp.location || '—')}</span>
+            ${emp.email ? `<span><strong>Email:</strong> ${escapeHtml(emp.email)}</span>` : ''}
+            ${emp.phone ? `<span><strong>Phone:</strong> ${escapeHtml(emp.phone)}</span>` : ''}
+          </div>
+          ${emp.notes ? `<p class="text-xs text-violet-700 italic mt-1">“${escapeHtml(emp.notes)}”</p>` : ''}
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button onclick="closeModal('modal-user-assets'); openEmployeeModal(${emp.id})" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-violet-700 bg-white hover:bg-violet-100 border border-violet-200 shadow-xs">
+            Edit Profile
+          </button>
+          <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 shadow-sm">
+            + Assign IT Asset
+          </button>
+        </div>
+      </div>
+
+      <!-- Workstations Breakdown -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs">
+              <i data-lucide="monitor" class="w-4 h-4"></i>
+            </div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Assigned Workstations (${ws.length})</h4>
+          </div>
+          <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ asset_type: 'Desktop', assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="text-xs text-sky-600 hover:text-sky-700 font-bold hover:underline">
+            + Add PC
+          </button>
+        </div>
+
+        ${ws.length > 0 ? `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ${ws.map(w => `
+              <div class="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs hover:border-sky-300 transition-colors flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-user-assets'); viewAssetDetail(${w.id});">
+                      #${escapeHtml(w.internal_serial_number)}
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${w.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                      ${escapeHtml(w.working_status)}
+                    </span>
+                  </div>
+                  <div class="font-bold text-xs text-slate-900 mt-1">${escapeHtml(w.brand || '')} ${escapeHtml(w.model_name || w.asset_type)}</div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(w.asset_type)} • Loc: ${escapeHtml(w.location || emp.location || 'Office Floor')}</div>
+                  ${w.quick_heal_key_str ? `
+                    <div class="mt-2 text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                      <i data-lucide="shield-check" class="w-3 h-3 text-purple-600"></i>
+                      <span>Key: ${escapeHtml(w.quick_heal_key_str)}</span>
+                    </div>
+                  ` : `
+                    <div class="mt-2 text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
+                      <i data-lucide="shield-alert" class="w-3 h-3 text-rose-600"></i>
+                      <span>Unprotected (No Quick Heal Key)</span>
+                    </div>
+                  `}
+                </div>
+                <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-end">
+                  <button onclick="closeModal('modal-user-assets'); viewAssetDetail(${w.id});" class="text-xs font-semibold text-sky-700 hover:text-sky-900 underline">
+                    View Asset Dossier &rarr;
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+            No PC or laptop workstation currently assigned to ${escapeHtml(emp.name)}.
+          </div>
+        `}
+      </div>
+
+      <!-- Printers & Scanners Breakdown -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+              <i data-lucide="printer" class="w-4 h-4"></i>
+            </div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Assigned Printers & Scanners (${pr.length})</h4>
+          </div>
+          <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ asset_type: 'Tag Printer', assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="text-xs text-amber-700 hover:text-amber-800 font-bold hover:underline">
+            + Add Printer
+          </button>
+        </div>
+
+        ${pr.length > 0 ? `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ${pr.map(p => `
+              <div class="p-3.5 rounded-xl bg-white border border-amber-200 shadow-xs hover:border-amber-400 transition-colors flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-user-assets'); viewAssetDetail(${p.id});">
+                      #${escapeHtml(p.internal_serial_number)}
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                      ${escapeHtml(p.working_status)}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300/60">${escapeHtml(p.asset_type)}</span>
+                    <span class="font-bold text-xs text-slate-900">${escapeHtml(p.brand || '')} ${escapeHtml(p.model_name || '')}</span>
+                  </div>
+                  ${p.serial_number ? `<div class="text-[10px] font-mono text-slate-500 mt-1">S/N: ${escapeHtml(p.serial_number)}</div>` : ''}
+                  ${p.remarks ? `<p class="text-[11px] text-slate-600 mt-1.5 italic line-clamp-2">“${escapeHtml(p.remarks)}”</p>` : ''}
+                </div>
+                <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <span class="text-slate-400 text-[10px]">${escapeHtml(p.location || emp.location || 'Same desk')}</span>
+                  <button onclick="closeModal('modal-user-assets'); viewAssetDetail(${p.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline">
+                    View Printer Dossier &rarr;
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+            <div class="text-xs text-slate-600">
+              <span class="font-semibold text-slate-800">Standalone User:</span> ${escapeHtml(emp.name)} does not have any dedicated printer assigned.
+            </div>
+            <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ asset_type: 'Tag Printer', assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 flex-shrink-0">
+              + Assign Printer
+            </button>
+          </div>
+        `}
+      </div>
+
+      <!-- Issued Accessories Breakdown -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+              <i data-lucide="mouse" class="w-4 h-4"></i>
+            </div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Issued Accessories & Peripherals (${acc.length})</h4>
+          </div>
+          <button onclick="closeModal('modal-user-assets'); navigate('accessories');" class="text-xs text-indigo-600 hover:text-indigo-700 font-bold hover:underline">
+            Manage Accessories &rarr;
+          </button>
+        </div>
+
+        ${acc.length > 0 ? `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            ${acc.map(a => `
+              <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(a.accessory_code || '')}</span>
+                    <span class="font-bold text-xs text-slate-900">${escapeHtml(a.name)}</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(a.category)} • Qty: <strong>${a.quantity}</strong> ${a.remarks ? '• ' + escapeHtml(a.remarks) : ''}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">${escapeHtml(a.status || 'Assigned')}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+            No peripherals or accessories specifically issued to ${escapeHtml(emp.name)}.
+          </div>
+        `}
+      </div>
+    `;
+
+    openModal('modal-user-assets');
+    lucide.createIcons();
+  } catch (err) {
+    console.error('Error viewing user assets:', err);
+  }
+}
+
+// Global window attachments
+window.fetchUserMasterList = fetchUserMasterList;
+window.openQuickAddUserModal = openQuickAddUserModal;
+window.handleQuickAddUserSubmit = handleQuickAddUserSubmit;
+window.openNewAssetModalWithPrefill = openNewAssetModalWithPrefill;
+window.loadEmployees = loadEmployees;
+window.filterEmployeesByPrinter = filterEmployeesByPrinter;
+window.debounceEmployeeSearch = debounceEmployeeSearch;
+window.renderEmployeesTable = renderEmployeesTable;
+window.openEmployeeModal = openEmployeeModal;
+window.handleEmployeeSubmit = handleEmployeeSubmit;
+window.deleteEmployee = deleteEmployee;
+window.viewUserAssets = viewUserAssets;
+window.resetEmployeeFilterUI = resetEmployeeFilterUI;
 

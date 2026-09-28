@@ -114,12 +114,21 @@ router.get('/dashboard/stats', (req, res) => {
       LIMIT 5
     `).all();
 
+    // User Master / Employees Count
+    const employeeStats = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        COALESCE(SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END), 0) as active
+      FROM employees
+    `).get();
+
     res.json({
       assets: assetStats,
       unprotectedWorkstations,
       keys: keyStats,
       repairs: repairStats,
       accessories: accStats,
+      employees: employeeStats,
       deptBreakdown,
       typeBreakdown,
       brandBreakdown,
@@ -183,17 +192,53 @@ function computeAssetLifecycle(asset, repairCount = 0, totalRepairCost = 0) {
   return { ageString, ageYears, healthScore, healthClass, eolReason };
 }
 
+// Helper to automatically sync User Master (employees) on asset creation / import / assignment
+function ensureEmployeeExists(userName, department = '', location = '') {
+  if (!userName) return null;
+  const cleanName = String(userName).trim();
+  const lower = cleanName.toLowerCase();
+  const ignored = ['unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '', 'available', 'not assigned'];
+  if (ignored.includes(lower)) return null;
+
+  try {
+    const existing = db.prepare('SELECT id, department, location FROM employees WHERE name = ? COLLATE NOCASE').get(cleanName);
+    if (!existing) {
+      const res = db.prepare(`
+        INSERT INTO employees (name, department, location, status)
+        VALUES (?, ?, ?, 'Active')
+      `).run(cleanName, department ? department.trim() : '', location ? location.trim() : '');
+      return res.lastInsertRowid;
+    } else {
+      if ((!existing.department && department) || (!existing.location && location)) {
+        db.prepare(`
+          UPDATE employees 
+          SET department = COALESCE(NULLIF(department, ''), ?),
+              location = COALESCE(NULLIF(location, ''), ?),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(department ? department.trim() : '', location ? location.trim() : '', existing.id);
+      }
+      return existing.id;
+    }
+  } catch (err) {
+    console.warn('ensureEmployeeExists warning:', err.message);
+    return null;
+  }
+}
+
 // GET /api/assets - List all assets with search & filters
 router.get('/assets', (req, res) => {
   try {
-    const { search, type, department, brand, status, quick_heal, page = 1, limit = 100 } = req.query;
+    const { search, type, department, brand, status, quick_heal, has_printer, page = 1, limit = 100 } = req.query;
 
     let query = `
       SELECT a.*,
              k.product_key as quick_heal_key_str,
              k.validity_date as quick_heal_validity,
              (SELECT COUNT(*) FROM repairs WHERE asset_id = a.id) as repair_count,
-             (SELECT COALESCE(SUM(repair_cost), 0) FROM repairs WHERE asset_id = a.id) as total_repair_cost
+             (SELECT COALESCE(SUM(repair_cost), 0) FROM repairs WHERE asset_id = a.id) as total_repair_cost,
+             (SELECT COUNT(*) FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '') as printer_count,
+             (SELECT p.asset_type || ' (' || COALESCE(p.brand, '') || ')' FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '' LIMIT 1) as primary_printer
       FROM assets a
       LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
       WHERE 1=1
@@ -247,6 +292,12 @@ router.get('/assets', (req, res) => {
       query += ` AND a.asset_type IN ('Laptop', 'Desktop') AND a.quick_heal_key_id IS NULL`;
     }
 
+    if (has_printer === 'yes') {
+      query += ` AND (SELECT COUNT(*) FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '') > 0`;
+    } else if (has_printer === 'no') {
+      query += ` AND (SELECT COUNT(*) FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '') = 0`;
+    }
+
     // Relevance ordering: visible columns prioritized first
     if (searchTokens.length > 0) {
       const fullSearch = `%${search.trim().toLowerCase()}%`;
@@ -271,7 +322,9 @@ router.get('/assets', (req, res) => {
       const lifecycle = computeAssetLifecycle(asset, asset.repair_count, asset.total_repair_cost);
       return {
         ...asset,
-        ...lifecycle
+        ...lifecycle,
+        has_printer: Number(asset.printer_count || 0) > 0,
+        primary_printer: asset.primary_printer || null
       };
     });
 
@@ -335,6 +388,36 @@ router.get('/assets/:id', (req, res) => {
       ORDER BY status ASC, id ASC
     `).all(asset.id, (asset.assigned_user || '').trim());
 
+    // Fetch linked printers & workstations for this user
+    let linkedPrinters = [];
+    let linkedWorkstations = [];
+    const cleanUser = (asset.assigned_user || '').trim();
+    if (cleanUser && !['unassigned', 'free', 'none', 'n/a', 'na'].includes(cleanUser.toLowerCase())) {
+      linkedPrinters = db.prepare(`
+        SELECT id, internal_serial_number, asset_type, brand, model_name, serial_number,
+               working_status, condition_rating, location, department, remarks
+        FROM assets
+        WHERE (
+          asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner')
+          OR LOWER(asset_type) LIKE '%printer%'
+          OR LOWER(asset_type) LIKE '%scanner%'
+        )
+        AND LOWER(TRIM(assigned_user)) = LOWER(?)
+        AND id != ?
+        ORDER BY id ASC
+      `).all(cleanUser, asset.id);
+
+      linkedWorkstations = db.prepare(`
+        SELECT id, internal_serial_number, asset_type, brand, model_name, serial_number,
+               working_status, condition_rating, location, department, remarks
+        FROM assets
+        WHERE asset_type IN ('Desktop', 'Laptop', 'Server')
+        AND LOWER(TRIM(assigned_user)) = LOWER(?)
+        AND id != ?
+        ORDER BY id ASC
+      `).all(cleanUser, asset.id);
+    }
+
     const totalRepairCost = repairs.reduce((sum, r) => sum + (Number(r.repair_cost) || 0), 0);
     const lifecycle = computeAssetLifecycle(asset, repairs.length, totalRepairCost);
 
@@ -345,7 +428,10 @@ router.get('/assets/:id', (req, res) => {
         repair_count: repairs.length,
         total_repair_cost: totalRepairCost,
         repairs,
-        accessories
+        accessories,
+        linked_printers: linkedPrinters,
+        linked_workstations: linkedWorkstations,
+        has_printer: linkedPrinters.length > 0
       }
     });
   } catch (err) {
@@ -428,9 +514,14 @@ router.post('/assets', requireRoles('admin', 'technician'), (req, res) => {
       `).run(newAssetId, assigned_user || '', quick_heal_key_id);
     }
 
+    // Ensure assigned user exists in User Master (employees table)
+    if (assigned_user) {
+      ensureEmployeeExists(assigned_user, department, location);
+    }
+
     logAudit(req.user.id, req.user.username, 'CREATE_ASSET', 'asset', newAssetId, `Created asset ${internal_serial_number}`);
 
-    res.status(201).json({ message: 'Asset created successfully', id: newAssetId });
+    res.status(201).json({ message: 'Asset created successfully', id: newAssetId, assetId: newAssetId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -538,6 +629,14 @@ router.put('/assets/:id', requireRoles('admin', 'technician'), (req, res) => {
       remarks !== undefined ? remarks.trim() : existing.remarks,
       assetId
     );
+
+    // Ensure assigned user exists in User Master (employees table)
+    const updatedUser = assigned_user !== undefined ? assigned_user.trim() : existing.assigned_user;
+    const updatedDept = department !== undefined ? department.trim() : existing.department;
+    const updatedLoc = location !== undefined ? location.trim() : existing.location;
+    if (updatedUser) {
+      ensureEmployeeExists(updatedUser, updatedDept, updatedLoc);
+    }
 
     logAudit(req.user.id, req.user.username, 'UPDATE_ASSET', 'asset', assetId, `Updated asset ${finalSerial}`);
 
@@ -867,6 +966,11 @@ router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.s
           parts,
           remarks
         );
+
+        // Auto-add or update user in User Master (employees)
+        if (user) {
+          ensureEmployeeExists(user, dept, location);
+        }
 
         results.imported++;
       }
@@ -1920,6 +2024,10 @@ router.post('/accessories', requireRoles('admin', 'technician'), (req, res) => {
       remarks ? remarks.trim() : ''
     );
 
+    if (assigned_user) {
+      ensureEmployeeExists(assigned_user, '', location);
+    }
+
     logAudit(req.user.id, req.user.username, 'CREATE_ACCESSORY', 'accessory', result.lastInsertRowid, `Created accessory ${code} - ${name}`);
 
     res.status(201).json({ message: 'Accessory added successfully', id: result.lastInsertRowid });
@@ -1974,6 +2082,11 @@ router.put('/accessories/:id', requireRoles('admin', 'technician'), (req, res) =
       remarks,
       accId
     );
+
+    const finalUser = assigned_user !== undefined ? assigned_user : existing.assigned_user;
+    if (finalUser) {
+      ensureEmployeeExists(finalUser, '', location || existing.location);
+    }
 
     logAudit(req.user.id, req.user.username, 'UPDATE_ACCESSORY', 'accessory', accId, `Updated accessory ${existing.accessory_code}`);
 
@@ -2067,6 +2180,10 @@ router.post('/accessories/:id/assign', requireRoles('admin', 'technician'), (req
     });
 
     transaction();
+
+    if (assigned_user) {
+      ensureEmployeeExists(assigned_user, '', location);
+    }
 
     logAudit(req.user.id, req.user.username, 'ASSIGN_ACCESSORY', 'accessory', accId, `Assigned ${assignQty} unit(s) of ${existing.name} (${existing.accessory_code}) to ${assigned_user}`);
 
@@ -2313,6 +2430,321 @@ router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upl
 });
 
 // ==========================================
+// 5.5 USER MASTER (EMPLOYEES / CUSTODIANS)
+// ==========================================
+
+// GET /api/employees - List all employees with comprehensive hardware & printer breakdown
+router.get('/employees', (req, res) => {
+  try {
+    const { search, department, has_printer, status = 'Active' } = req.query;
+
+    let query = `SELECT * FROM employees WHERE 1=1`;
+    const params = [];
+
+    if (status && status !== 'all') {
+      query += ` AND status = ?`;
+      params.push(status);
+    }
+
+    if (department && department.trim() && department !== 'all') {
+      query += ` AND LOWER(department) = LOWER(?)`;
+      params.push(department.trim());
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      query += ` AND (
+        LOWER(name) LIKE ? OR
+        LOWER(COALESCE(department, '')) LIKE ? OR
+        LOWER(COALESCE(designation, '')) LIKE ? OR
+        LOWER(COALESCE(location, '')) LIKE ? OR
+        LOWER(COALESCE(email, '')) LIKE ? OR
+        LOWER(COALESCE(phone, '')) LIKE ?
+      )`;
+      params.push(term, term, term, term, term, term);
+    }
+
+    query += ` ORDER BY name ASC`;
+
+    const employees = db.prepare(query).all(...params);
+
+    // Fetch all assigned assets and accessories to map to employees
+    const allAssets = db.prepare(`
+      SELECT a.*, k.product_key as quick_heal_key_str
+      FROM assets a
+      LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
+      WHERE a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != ''
+    `).all();
+
+    const allAccs = db.prepare(`
+      SELECT * FROM accessories
+      WHERE assigned_user IS NOT NULL AND TRIM(assigned_user) != ''
+    `).all();
+
+    const assetsByUser = {};
+    for (const a of allAssets) {
+      const u = a.assigned_user.trim().toLowerCase();
+      if (!assetsByUser[u]) assetsByUser[u] = [];
+      assetsByUser[u].push(a);
+    }
+
+    const accsByUser = {};
+    for (const acc of allAccs) {
+      const u = acc.assigned_user.trim().toLowerCase();
+      if (!accsByUser[u]) accsByUser[u] = [];
+      accsByUser[u].push(acc);
+    }
+
+    let totalWithPrinters = 0;
+    let totalWorkstations = 0;
+
+    const enriched = employees.map(emp => {
+      const uKey = emp.name.trim().toLowerCase();
+      const userAssets = assetsByUser[uKey] || [];
+      const userAccs = accsByUser[uKey] || [];
+
+      const workstations = userAssets.filter(a => {
+        const t = (a.asset_type || '').toLowerCase();
+        return t === 'desktop' || t === 'laptop' || t === 'server';
+      });
+
+      const printers = userAssets.filter(a => {
+        const t = (a.asset_type || '').toLowerCase();
+        return t.includes('printer') || t.includes('scanner') || ['normal printer', 'tag printer', 'label printer', 'scanner'].includes(t);
+      });
+
+      const otherAssets = userAssets.filter(a => !workstations.includes(a) && !printers.includes(a));
+
+      const hasPrinter = printers.length > 0;
+      if (hasPrinter) totalWithPrinters++;
+      totalWorkstations += workstations.length;
+
+      return {
+        ...emp,
+        workstations,
+        printers,
+        other_assets: otherAssets,
+        accessories: userAccs,
+        workstation_count: workstations.length,
+        printer_count: printers.length,
+        accessory_count: userAccs.length,
+        has_printer: hasPrinter
+      };
+    });
+
+    let filtered = enriched;
+    if (has_printer === 'yes') {
+      filtered = filtered.filter(e => e.has_printer);
+    } else if (has_printer === 'no') {
+      filtered = filtered.filter(e => !e.has_printer);
+    }
+
+    res.json({
+      employees: filtered,
+      stats: {
+        total: employees.length,
+        with_printers: totalWithPrinters,
+        without_printers: employees.length - totalWithPrinters,
+        total_workstations: totalWorkstations
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/employees/:id - Single employee profile with asset history
+router.get('/employees/:id', (req, res) => {
+  try {
+    const employee = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const uKey = employee.name.trim().toLowerCase();
+    const assets = db.prepare(`
+      SELECT a.*, k.product_key as quick_heal_key_str, k.validity_date as quick_heal_validity
+      FROM assets a
+      LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
+      WHERE LOWER(TRIM(a.assigned_user)) = ?
+      ORDER BY a.asset_type ASC, a.id ASC
+    `).all(uKey);
+
+    const accessories = db.prepare(`
+      SELECT * FROM accessories WHERE LOWER(TRIM(assigned_user)) = ? ORDER BY id ASC
+    `).all(uKey);
+
+    const workstations = assets.filter(a => ['desktop', 'laptop', 'server'].includes((a.asset_type || '').toLowerCase()));
+    const printers = assets.filter(a => {
+      const t = (a.asset_type || '').toLowerCase();
+      return t.includes('printer') || t.includes('scanner') || ['normal printer', 'tag printer', 'label printer', 'scanner'].includes(t);
+    });
+
+    res.json({
+      employee: {
+        ...employee,
+        workstations,
+        printers,
+        accessories,
+        workstation_count: workstations.length,
+        printer_count: printers.length,
+        accessory_count: accessories.length,
+        has_printer: printers.length > 0
+      },
+      assigned_workstations: workstations,
+      assigned_printers: printers,
+      assigned_accessories: accessories,
+      workstations,
+      printers,
+      accessories
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/employees - Create new employee in User Master
+router.post('/employees', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const { name, department, designation, email, phone, location, status, notes } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Employee name is required.' });
+    }
+
+    const cleanName = name.trim();
+    const existing = db.prepare('SELECT id FROM employees WHERE name = ? COLLATE NOCASE').get(cleanName);
+    if (existing) {
+      return res.status(400).json({ error: `User '${cleanName}' already exists in User Master.` });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO employees (name, department, designation, email, phone, location, status, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cleanName,
+      department ? department.trim() : '',
+      designation ? designation.trim() : '',
+      email ? email.trim() : '',
+      phone ? phone.trim() : '',
+      location ? location.trim() : '',
+      status || 'Active',
+      notes ? notes.trim() : ''
+    );
+
+    logAudit(req.user.id, req.user.username, 'CREATE_EMPLOYEE', 'employee', result.lastInsertRowid, `Created User Master entry for ${cleanName}`);
+
+    res.status(201).json({
+      message: `User '${cleanName}' successfully added to User Master.`,
+      id: result.lastInsertRowid,
+      employee: {
+        id: result.lastInsertRowid,
+        name: cleanName,
+        department: department || '',
+        location: location || ''
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/employees/:id - Update employee in User Master
+router.put('/employees/:id', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const empId = req.params.id;
+    const existing = db.prepare('SELECT * FROM employees WHERE id = ?').get(empId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Employee not found.' });
+    }
+
+    const { name, department, designation, email, phone, location, status, notes } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Employee name is required.' });
+    }
+
+    const cleanName = name.trim();
+    const dup = db.prepare('SELECT id FROM employees WHERE name = ? COLLATE NOCASE AND id != ?').get(cleanName, empId);
+    if (dup) {
+      return res.status(400).json({ error: `Another user with name '${cleanName}' already exists.` });
+    }
+
+    db.prepare(`
+      UPDATE employees
+      SET name = ?,
+          department = ?,
+          designation = ?,
+          email = ?,
+          phone = ?,
+          location = ?,
+          status = ?,
+          notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      cleanName,
+      department ? department.trim() : '',
+      designation ? designation.trim() : '',
+      email ? email.trim() : '',
+      phone ? phone.trim() : '',
+      location ? location.trim() : '',
+      status || existing.status || 'Active',
+      notes ? notes.trim() : '',
+      empId
+    );
+
+    // If name changed, cascade update to assigned_user across assets, keys, and accessories!
+    if (existing.name.toLowerCase() !== cleanName.toLowerCase()) {
+      db.prepare(`
+        UPDATE assets SET assigned_user = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE LOWER(TRIM(assigned_user)) = ?
+      `).run(cleanName, existing.name.trim().toLowerCase());
+
+      db.prepare(`
+        UPDATE quick_heal_keys SET assigned_user = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE LOWER(TRIM(assigned_user)) = ?
+      `).run(cleanName, existing.name.trim().toLowerCase());
+
+      db.prepare(`
+        UPDATE accessories SET assigned_user = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE LOWER(TRIM(assigned_user)) = ?
+      `).run(cleanName, existing.name.trim().toLowerCase());
+    }
+
+    logAudit(req.user.id, req.user.username, 'UPDATE_EMPLOYEE', 'employee', empId, `Updated User Master entry for ${cleanName}`);
+
+    res.json({ message: 'User updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/employees/:id - Delete employee
+router.delete('/employees/:id', requireRoles('admin'), (req, res) => {
+  try {
+    const empId = req.params.id;
+    const existing = db.prepare('SELECT * FROM employees WHERE id = ?').get(empId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Employee not found.' });
+    }
+
+    // Check if employee has assigned assets
+    const assignedAssets = db.prepare('SELECT COUNT(*) as count FROM assets WHERE LOWER(TRIM(assigned_user)) = ?').get(existing.name.trim().toLowerCase()).count;
+    if (assignedAssets > 0) {
+      return res.status(400).json({
+        error: `Cannot delete '${existing.name}' because ${assignedAssets} asset(s) are currently assigned to this user. Please reassign the assets first, or set status to Inactive.`
+      });
+    }
+
+    db.prepare('DELETE FROM employees WHERE id = ?').run(empId);
+    logAudit(req.user.id, req.user.username, 'DELETE_EMPLOYEE', 'employee', empId, `Deleted user ${existing.name}`);
+
+    res.json({ message: `User '${existing.name}' removed from User Master.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // 6. MASTER SEARCH ENDPOINT
 // ==========================================
 router.get('/search', (req, res) => {
@@ -2326,6 +2758,7 @@ router.get('/search', (req, res) => {
         repairs: [],
         keys: [],
         accessories: [],
+        employees: [],
         users: []
       });
     }
@@ -2438,7 +2871,23 @@ router.get('/search', (req, res) => {
     accQuery += ` ORDER BY acc.id ASC LIMIT 20`;
     const accessories = db.prepare(accQuery).all(...accParams);
 
-    // 5. Users Search (Admin and Technicians only)
+    // 5. User Master (Employees) Tokenized Search
+    let empQuery = `SELECT * FROM employees WHERE 1=1`;
+    const empParams = [];
+    tokens.forEach(tok => {
+      const term = `%${tok}%`;
+      empQuery += ` AND (
+        LOWER(name) LIKE ? OR
+        LOWER(COALESCE(department, '')) LIKE ? OR
+        LOWER(COALESCE(designation, '')) LIKE ? OR
+        LOWER(COALESCE(location, '')) LIKE ?
+      )`;
+      empParams.push(term, term, term, term);
+    });
+    empQuery += ` ORDER BY name ASC LIMIT 15`;
+    const employees = db.prepare(empQuery).all(...empParams);
+
+    // 6. Users Search (Admin and Technicians only)
     let users = [];
     if (['admin', 'technician'].includes(req.user.role)) {
       let userQuery = `SELECT id, username, full_name, email, role, status FROM users WHERE 1=1`;
@@ -2457,7 +2906,7 @@ router.get('/search', (req, res) => {
       users = db.prepare(userQuery).all(...userParams);
     }
 
-    const totalResults = assets.length + repairs.length + keys.length + accessories.length + users.length;
+    const totalResults = assets.length + repairs.length + keys.length + accessories.length + employees.length + users.length;
 
     res.json({
       query: q,
@@ -2466,6 +2915,7 @@ router.get('/search', (req, res) => {
       repairs,
       keys,
       accessories,
+      employees,
       users
     });
   } catch (err) {

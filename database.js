@@ -124,6 +124,20 @@ function initSchema() {
       value TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS employees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+      department TEXT,
+      designation TEXT,
+      email TEXT,
+      phone TEXT,
+      location TEXT,
+      status TEXT DEFAULT 'Active', -- 'Active', 'Inactive'
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_assets_serial ON assets(internal_serial_number);
     CREATE INDEX IF NOT EXISTS idx_assets_dept ON assets(department);
     CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(assigned_user);
@@ -132,6 +146,9 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_repairs_status ON repairs(status);
     CREATE INDEX IF NOT EXISTS idx_keys_code ON quick_heal_keys(product_key);
     CREATE INDEX IF NOT EXISTS idx_acc_status ON accessories(status);
+    CREATE INDEX IF NOT EXISTS idx_employees_name ON employees(name);
+    CREATE INDEX IF NOT EXISTS idx_employees_dept ON employees(department);
+    CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
   `);
 
   // Migration: Ensure due_date column exists in repairs
@@ -464,6 +481,48 @@ function ensureAdityaAdmin() {
   }
 }
 
+// Auto-seed User Master (Employees) from existing assets and accessories
+function seedEmployeesFromAssets() {
+  try {
+    const assetsUsers = db.prepare(`
+      SELECT DISTINCT TRIM(assigned_user) as name, department, location
+      FROM assets
+      WHERE assigned_user IS NOT NULL 
+        AND TRIM(assigned_user) != ''
+        AND LOWER(TRIM(assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil')
+      GROUP BY LOWER(TRIM(assigned_user))
+    `).all();
+
+    const insertEmp = db.prepare(`
+      INSERT OR IGNORE INTO employees (name, department, location, status)
+      VALUES (?, ?, ?, 'Active')
+    `);
+
+    for (const u of assetsUsers) {
+      if (u.name) {
+        insertEmp.run(u.name, u.department || '', u.location || '');
+      }
+    }
+
+    const accUsers = db.prepare(`
+      SELECT DISTINCT TRIM(assigned_user) as name, location
+      FROM accessories
+      WHERE assigned_user IS NOT NULL
+        AND TRIM(assigned_user) != ''
+        AND LOWER(TRIM(assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil')
+      GROUP BY LOWER(TRIM(assigned_user))
+    `).all();
+
+    for (const u of accUsers) {
+      if (u.name) {
+        insertEmp.run(u.name, '', u.location || '');
+      }
+    }
+  } catch (err) {
+    console.warn('seedEmployeesFromAssets warning:', err.message);
+  }
+}
+
 // Purge all operational records: Assets, Repairs, Quick Heal Keys, Accessories, and Expenses
 function purgeOperationalData() {
   const transaction = db.transaction(() => {
@@ -476,22 +535,25 @@ function purgeOperationalData() {
     db.prepare('DELETE FROM quick_heal_keys').run();
     // 4. Delete assets
     db.prepare('DELETE FROM assets').run();
+    // 5. Delete employees (User Master)
+    db.prepare('DELETE FROM employees').run();
 
-    // 5. Reset auto-increment sequence counters so new entries start cleanly from 1
-    db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('repairs', 'accessories', 'quick_heal_keys', 'assets')").run();
+    // 6. Reset auto-increment sequence counters so new entries start cleanly from 1
+    db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('repairs', 'accessories', 'quick_heal_keys', 'assets', 'employees')").run();
 
-    // 6. Ensure sample seeding is disabled permanently
+    // 7. Ensure sample seeding is disabled permanently
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('seed_completed', 'true')").run();
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('data_purged_at', datetime('now'))").run();
   });
   transaction();
-  console.log('Database purge completed: All IT assets, repairs, keys, accessories, and expenses cleared.');
+  console.log('Database purge completed: All IT assets, repairs, keys, accessories, employees, and expenses cleared.');
 }
 
 // Initialize tables and run seeding
 initSchema();
 seedUsers();
 seedFromSheet();
+seedEmployeesFromAssets();
 patchAssignedQuantities();
 ensureAdityaAdmin();
 
@@ -503,6 +565,7 @@ if (process.env.PURGE_DATA_ON_STARTUP === 'true') {
 module.exports = {
   db,
   initSchema,
+  seedEmployeesFromAssets,
   purgeOperationalData
 };
 

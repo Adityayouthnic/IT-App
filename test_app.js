@@ -806,6 +806,172 @@ async function runTests() {
   }
   console.log('✅ Favicon verified: /favicon.ico, /favicon.svg, and /apple-touch-icon.png serve 200 OK publicly!');
 
+  // Test 19: User Master Directory & Desktop-to-Printer Association
+  console.log('\nTest 19: User Master Directory & Desktop-to-Printer Association');
+
+  const rnd = Math.floor(Math.random() * 100000);
+  const testEmpName = 'Vikas TestUser ' + rnd;
+  const deskSerial = '5' + String(rnd).padStart(5, '0').slice(-4);
+  const printSerial = '6' + String(rnd).padStart(5, '0').slice(-4);
+  const autoCreatedName = 'AutoCreated User ' + rnd;
+
+  // 19A: User Master CRUD
+  console.log('  19A: Create employee in User Master...');
+  const resCreateEmp = await fetch(`${BASE_URL}/api/employees`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      name: testEmpName,
+      department: 'Orders',
+      designation: 'Operations Lead',
+      location: 'Floor 1 Desk 10',
+      email: `vikas.${rnd}@vbexports.co.in`,
+      phone: '9876543219',
+      status: 'Active',
+      notes: 'Test Custodian'
+    })
+  });
+  const dataCreateEmp = await resCreateEmp.json();
+  if (resCreateEmp.status !== 201) {
+    throw new Error('Failed to create employee in User Master: ' + JSON.stringify(dataCreateEmp));
+  }
+  const testEmpId = dataCreateEmp.employee.id;
+  console.log(`  Created Employee #${testEmpId} ('${dataCreateEmp.employee.name}')`);
+
+  // Verify duplicate name rejection
+  const resDupEmp = await fetch(`${BASE_URL}/api/employees`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ name: testEmpName.toLowerCase(), department: 'Orders' })
+  });
+  if (resDupEmp.status !== 400) {
+    throw new Error('Expected 400 duplicate error for case-insensitive duplicate employee name');
+  }
+
+  // 19B: Desktop-to-Printer Association
+  console.log('  19B: Testing Desktop-to-Printer Association...');
+  // Create Desktop workstation for testEmpName
+  const resDesk = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: deskSerial,
+      asset_type: 'Desktop',
+      brand: 'Lenovo',
+      model_name: 'ThinkCentre M70',
+      department: 'Orders',
+      location: 'Floor 1 Desk 10',
+      assigned_user: testEmpName,
+      working_status: 'Working'
+    })
+  });
+  const dataDesk = await resDesk.json();
+  if (!resDesk.ok) throw new Error('Failed to create desktop: ' + JSON.stringify(dataDesk));
+  const deskId = dataDesk.id || dataDesk.assetId;
+
+  // Create Tag Printer for testEmpName
+  const resPrint = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: printSerial,
+      asset_type: 'Tag Printer',
+      brand: 'Citizen',
+      model_name: 'CL-E321',
+      department: 'Orders',
+      location: 'Floor 1 Desk 10',
+      assigned_user: testEmpName,
+      working_status: 'Working',
+      remarks: 'Barcode label printing for dispatch'
+    })
+  });
+  const dataPrint = await resPrint.json();
+  if (!resPrint.ok) throw new Error('Failed to create printer: ' + JSON.stringify(dataPrint));
+  const printId = dataPrint.id || dataPrint.assetId;
+
+  // Verify Desktop detail dossier returns linked printer
+  const resDeskDetail = await fetch(`${BASE_URL}/api/assets/${deskId}`, { headers: authHeaders });
+  const dataDeskDetail = await resDeskDetail.json();
+  if (!dataDeskDetail.asset.linked_printers || dataDeskDetail.asset.linked_printers.length === 0) {
+    throw new Error('Desktop dossier failed to link to assigned printer!');
+  }
+  if (dataDeskDetail.asset.linked_printers[0].internal_serial_number !== printSerial) {
+    throw new Error(`Expected linked printer #${printSerial}, got #${dataDeskDetail.asset.linked_printers[0].internal_serial_number}`);
+  }
+  console.log(`  ✅ Desktop #${dataDeskDetail.asset.internal_serial_number} linked correctly to printer #${dataDeskDetail.asset.linked_printers[0].internal_serial_number} (${dataDeskDetail.asset.linked_printers[0].asset_type})`);
+
+  // Verify Printer detail dossier returns linked workstation
+  const resPrintDetail = await fetch(`${BASE_URL}/api/assets/${printId}`, { headers: authHeaders });
+  const dataPrintDetail = await resPrintDetail.json();
+  if (!dataPrintDetail.asset.linked_workstations || dataPrintDetail.asset.linked_workstations.length === 0) {
+    throw new Error('Printer dossier failed to link to operator workstation!');
+  }
+  if (dataPrintDetail.asset.linked_workstations[0].internal_serial_number !== deskSerial) {
+    throw new Error(`Expected linked workstation #${deskSerial}, got #${dataPrintDetail.asset.linked_workstations[0].internal_serial_number}`);
+  }
+  console.log(`  ✅ Printer #${dataPrintDetail.asset.internal_serial_number} linked correctly to operator workstation #${dataPrintDetail.asset.linked_workstations[0].internal_serial_number}`);
+
+  // Test has_printer filter
+  const resHasPrinter = await fetch(`${BASE_URL}/api/assets?has_printer=yes`, { headers: authHeaders });
+  const dataHasPrinter = await resHasPrinter.json();
+  const foundDeskWithPrinter = dataHasPrinter.assets.some(a => a.id === deskId);
+  if (!foundDeskWithPrinter) {
+    throw new Error('has_printer=yes filter did not return the desktop asset');
+  }
+  console.log('  ✅ Filter has_printer=yes verified.');
+
+  // 19C: User Master Hardware Profile
+  console.log(`  19C: Testing User Master Hardware Profile for ${testEmpName}...`);
+  const resEmpProfile = await fetch(`${BASE_URL}/api/employees/${testEmpId}`, { headers: authHeaders });
+  const dataEmpProfile = await resEmpProfile.json();
+  if (dataEmpProfile.assigned_workstations.length !== 1 || dataEmpProfile.assigned_printers.length !== 1) {
+    throw new Error(`Expected 1 workstation and 1 printer in User Master profile, got ${dataEmpProfile.assigned_workstations.length} WS and ${dataEmpProfile.assigned_printers.length} PR`);
+  }
+  console.log(`  ✅ User Master Profile verified: ${dataEmpProfile.assigned_workstations.length} Workstation, ${dataEmpProfile.assigned_printers.length} Printer linked.`);
+
+  // 19D: Auto User Creation on Asset Add
+  console.log('  19D: Testing Auto-creation of User in Master on Asset creation...');
+  const autoDeskSerial = '7' + String(rnd).padStart(5, '0').slice(-4);
+  const resNewUserAsset = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      internal_serial_number: autoDeskSerial,
+      asset_type: 'Desktop',
+      brand: 'HP',
+      model_name: 'ProDesk 400',
+      department: 'Listings',
+      location: 'Floor 2 Listings',
+      assigned_user: autoCreatedName,
+      working_status: 'Working'
+    })
+  });
+  if (!resNewUserAsset.ok) throw new Error('Failed to create asset with new user');
+
+  const resCheckEmp = await fetch(`${BASE_URL}/api/employees?search=${encodeURIComponent(autoCreatedName)}`, { headers: authHeaders });
+  const dataCheckEmp = await resCheckEmp.json();
+  const autoCreated = dataCheckEmp.employees.find(e => e.name.toLowerCase() === autoCreatedName.toLowerCase());
+  if (!autoCreated) {
+    throw new Error(`${autoCreatedName} was not automatically added to User Master!`);
+  }
+  if (autoCreated.department !== 'Listings') {
+    throw new Error(`Expected department Listings, got ${autoCreated.department}`);
+  }
+  console.log(`  ✅ Automatically created employee in User Master: '${autoCreated.name}' [${autoCreated.department}]`);
+
+  // 19E: Delete Protection (Cannot delete user who has assets assigned)
+  console.log('  19E: Testing Delete Safety Protection...');
+  const resDelFail = await fetch(`${BASE_URL}/api/employees/${testEmpId}`, {
+    method: 'DELETE',
+    headers: authHeaders
+  });
+  if (resDelFail.status !== 400) {
+    throw new Error(`Expected 400 when deleting user with assigned hardware, got ${resDelFail.status}`);
+  }
+  console.log('  ✅ Delete protection confirmed: blocked deletion of user with active assets.');
+
+  console.log('✅ Test 19: All User Master and Desktop-to-Printer tests passed successfully!');
+
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');
