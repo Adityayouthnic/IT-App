@@ -320,13 +320,18 @@ async function runTests() {
   console.log('✅ Accessories tracking verified: Stock counters, Partial quantity assignment, Return to stock merge!');
 
   // Test 9: Bulk Import IT Assets
-  console.log('\nTest 9: Bulk Import IT Assets Inventory');
-  // First download the CSV template
-  const resTemplate = await fetch(`${BASE_URL}/api/assets/template/csv`, { headers: authHeaders });
-  const templateCsv = await resTemplate.text();
-  console.log('CSV Template headers:', templateCsv.split('\n')[0]);
-  if (!templateCsv.includes('Internal Serial Number') || !templateCsv.includes('Asset Type')) {
-    throw new Error('CSV Template headers invalid');
+  console.log('\nTest 9: Bulk Import IT Assets Inventory via Excel');
+  // First download the Excel template
+  const resTemplate = await fetch(`${BASE_URL}/api/assets/template/excel`, { headers: authHeaders });
+  if (!resTemplate.ok) throw new Error('Failed to download Excel template');
+  const templateBuf = await resTemplate.arrayBuffer();
+  if (templateBuf.byteLength < 1000) throw new Error('Excel template too small, invalid');
+  console.log(`Excel Template downloaded successfully (${templateBuf.byteLength} bytes)`);
+
+  // Verify /api/assets/template/csv redirects
+  const resCsvTemplate = await fetch(`${BASE_URL}/api/assets/template/csv`, { headers: authHeaders, redirect: 'manual' });
+  if (resCsvTemplate.status !== 302 && resCsvTemplate.status !== 200) {
+    throw new Error(`Expected 302 redirect for deprecated CSV template, got ${resCsvTemplate.status}`);
   }
 
   // Clean up any previous test serials if present
@@ -343,18 +348,43 @@ async function runTests() {
   const s1 = '99' + Math.floor(100 + Math.random() * 900);
   const s2 = '99' + Math.floor(100 + Math.random() * 900);
 
-  // Generate a test CSV payload to import
-  const testCsvContent = [
-    'internal_serial_number,asset_type,brand,model_name,serial_number,purchase_date,purchase_vendor,purchase_cost,department,location,assigned_user,working_status,condition_rating,parts_added_summary,remarks',
-    `${s1},Laptop,HP,ProBook 440 G9,5CD29341AB,2026-05-10,HP India,58000,Accounts,Desk 10,Ritu Sharma,Working,Good,,Bulk imported asset 1`,
-    `${s2},Desktop,Dell,OptiPlex 3090,83KD291,2026-06-15,Dell Care,45000,Dispatch,Dispatch Desk,Mahesh Rao,Working,Good,,Bulk imported asset 2`
-  ].join('\n');
+  // Verify CSV upload is rejected with 400
+  const csvBoundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+  const csvRejectBody = Buffer.concat([
+    Buffer.from(`--${csvBoundary}\r\nContent-Disposition: form-data; name="file"; filename="assets.csv"\r\nContent-Type: text/csv\r\n\r\n`),
+    Buffer.from('serial\n123'),
+    Buffer.from(`\r\n--${csvBoundary}--\r\n`)
+  ]);
+  const resCsvReject = await fetch(`${BASE_URL}/api/assets/bulk-import`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': `multipart/form-data; boundary=${csvBoundary}`
+    },
+    body: csvRejectBody
+  });
+  if (resCsvReject.status !== 400) {
+    throw new Error(`Expected 400 for CSV upload attempt, got ${resCsvReject.status}`);
+  }
+  console.log('✅ CSV upload rejection confirmed: Backend strictly enforces Excel format!');
 
-  // Create multipart form data boundary manually
+  // Generate an Excel workbook buffer to import
+  const xlsxLib = require('xlsx');
+  const wbImport = xlsxLib.utils.book_new();
+  const wsRows = [
+    ['Internal Serial Number', 'Asset Type', 'Brand', 'Model Name', 'Manufacturer Serial', 'Purchase Date', 'Purchase Vendor', 'Purchase Cost', 'Department', 'Location', 'Assigned User', 'Working Status', 'Condition Rating', 'Parts Added', 'Remarks'],
+    [s1, 'Laptop', 'HP', 'ProBook 440 G9', '5CD29341AB', '2026-05-10', 'HP India', 58000, 'Accounts', 'Desk 10', 'Ritu Sharma', 'Working', 'Good', '', 'Bulk imported asset 1'],
+    [s2, 'Desktop', 'Dell', 'OptiPlex 3090', '83KD291', '2026-06-15', 'Dell Care', 45000, 'Dispatch', 'Dispatch Desk', 'Mahesh Rao', 'Working', 'Good', '', 'Bulk imported asset 2']
+  ];
+  const wsImport = xlsxLib.utils.aoa_to_sheet(wsRows);
+  xlsxLib.utils.book_append_sheet(wbImport, wsImport, 'it_assets_bulk_import_template');
+  const excelFileBuf = xlsxLib.write(wbImport, { type: 'buffer', bookType: 'xlsx' });
+
+  // Create multipart form data boundary for Excel
   const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
   const multipartBody = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="assets_bulk_test.csv"\r\nContent-Type: text/csv\r\n\r\n`),
-    Buffer.from(testCsvContent),
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="assets_bulk_test.xlsx"\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n`),
+    excelFileBuf,
     Buffer.from(`\r\n--${boundary}--\r\n`)
   ]);
 
@@ -1188,6 +1218,121 @@ async function runTests() {
   console.log(`  ✅ 21H: Dashboard stats confirmed with ${finalStats.departments.total} total departments.`);
 
   console.log('✅ Test 21: All Department Master tests passed successfully!');
+
+  // Test 22: All Departments filter, Only-Show-If-Linked Printer, and Excel Export
+  console.log('\n===============================================');
+  console.log('Test 22: All Departments Filter & Printer Association Precision');
+  console.log('===============================================');
+
+  const randT22 = Math.floor(10000 + Math.random() * 90000);
+  const sDept1 = `DEP-ORD-${randT22}`;
+  const sDept2 = `DEP-DSP-${randT22}`;
+  const sFreeDesk = `DSK-FREE-${randT22}`;
+  const sFreePrn = `PRN-FREE-${randT22}`;
+  const sRealDesk = `DSK-REAL-${randT22}`;
+  const sRealPrn = `PRN-REAL-${randT22}`;
+  const realUserName = `Kavita Joshi ${randT22}`;
+
+  // 22A: Create assets in different departments
+  await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ internal_serial_number: sDept1, asset_type: 'Desktop', department: 'Orders', assigned_user: 'UserA' })
+  });
+  await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ internal_serial_number: sDept2, asset_type: 'Desktop', department: 'Dispatch', assigned_user: 'UserB' })
+  });
+
+  // Query with department=all
+  const resAllDepts = await fetch(`${BASE_URL}/api/assets?department=all`, { headers: authHeaders });
+  const dataAllDepts = await resAllDepts.json();
+  if (!dataAllDepts.assets || dataAllDepts.assets.length < 2) {
+    throw new Error(`Expected at least 2 assets when department=all, got ${dataAllDepts.assets?.length}`);
+  }
+  console.log(`  ✅ 22A: 'department=all' returned ${dataAllDepts.assets.length} assets without filtering to zero.`);
+
+  // Query with specific department
+  const resOrdDept = await fetch(`${BASE_URL}/api/assets?department=Orders`, { headers: authHeaders });
+  const dataOrdDept = await resOrdDept.json();
+  const foundOrd = dataOrdDept.assets.find(a => a.internal_serial_number === sDept1);
+  const foundDspInOrd = dataOrdDept.assets.find(a => a.internal_serial_number === sDept2);
+  if (!foundOrd || foundDspInOrd) {
+    throw new Error(`Department filter failed: Orders filter returned invalid asset list`);
+  }
+  console.log('  ✅ 22A-2: Specific department filter (Orders) isolated matching department cleanly.');
+
+  // 22B: Unassigned / Free workstation printer isolation (Serial #3 & #14 scenario)
+  const resCreateFreeDesk = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ internal_serial_number: sFreeDesk, asset_type: 'Desktop', brand: 'Lenovo', assigned_user: 'Free', department: 'Other' })
+  });
+  const freeDeskId = (await resCreateFreeDesk.json()).id;
+
+  await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ internal_serial_number: sFreePrn, asset_type: 'Tag Printer', brand: 'Citizen', assigned_user: 'Free', department: 'Other' })
+  });
+
+  const resCheckFreeList = await fetch(`${BASE_URL}/api/assets?search=${sFreeDesk}`, { headers: authHeaders });
+  const freeDeskRow = (await resCheckFreeList.json()).assets.find(a => a.internal_serial_number === sFreeDesk);
+  if (freeDeskRow.has_printer === true || freeDeskRow.primary_printer !== null) {
+    throw new Error(`False-positive printer link detected on unassigned/Free workstation! has_printer: ${freeDeskRow.has_printer}, primary: ${freeDeskRow.primary_printer}`);
+  }
+  console.log('  ✅ 22B: Unassigned/Free workstation verified: has_printer=false, no printer linked false-positively.');
+
+  // Check Free workstation dossier
+  const resFreeDossier = await fetch(`${BASE_URL}/api/assets/${freeDeskId}`, { headers: authHeaders });
+  const freeDossier = (await resFreeDossier.json()).asset;
+  if (freeDossier.linked_printers.length !== 0) {
+    throw new Error(`Expected 0 linked printers in dossier for Free workstation, got ${freeDossier.linked_printers.length}`);
+  }
+  console.log('  ✅ 22B-2: Free workstation dossier confirmed 0 linked printers.');
+
+  // 22C: Real custodian workstation printer link
+  const resCreateRealDesk = await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ internal_serial_number: sRealDesk, asset_type: 'Desktop', brand: 'Dell', assigned_user: realUserName, department: 'Orders' })
+  });
+  const realDeskId = (await resCreateRealDesk.json()).id;
+
+  await fetch(`${BASE_URL}/api/assets`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ internal_serial_number: sRealPrn, asset_type: 'Tag Printer', brand: 'TSC', assigned_user: realUserName, department: 'Orders' })
+  });
+
+  const resCheckRealList = await fetch(`${BASE_URL}/api/assets?search=${sRealDesk}`, { headers: authHeaders });
+  const realDeskRow = (await resCheckRealList.json()).assets.find(a => a.internal_serial_number === sRealDesk);
+  if (!realDeskRow.has_printer || !realDeskRow.primary_printer?.includes('Tag Printer')) {
+    throw new Error(`Expected linked printer for real custodian, got has_printer: ${realDeskRow.has_printer}`);
+  }
+  console.log('  ✅ 22C: Real custodian workstation correctly links dedicated printer:', realDeskRow.primary_printer);
+
+  // Check real custodian dossier
+  const resRealDossier = await fetch(`${BASE_URL}/api/assets/${realDeskId}`, { headers: authHeaders });
+  const realDossier = (await resRealDossier.json()).asset;
+  if (realDossier.linked_printers.length !== 1) {
+    throw new Error(`Expected 1 linked printer in dossier, got ${realDossier.linked_printers.length}`);
+  }
+  console.log('  ✅ 22C-2: Real custodian dossier confirmed 1 linked printer.');
+
+  // 22D: Excel Export endpoint test
+  const resExportExcel = await fetch(`${BASE_URL}/api/export/excel`, { headers: authHeaders });
+  if (!resExportExcel.ok) throw new Error('Excel export endpoint failed');
+  const excelExportBuf = await resExportExcel.arrayBuffer();
+  if (excelExportBuf.byteLength < 1000) throw new Error('Excel export buffer too small');
+  console.log(`  ✅ 22D: Excel Export (/api/export/excel) verified successfully (${excelExportBuf.byteLength} bytes).`);
+
+  // Cleanup test assets
+  db.prepare("DELETE FROM assets WHERE internal_serial_number IN (?, ?, ?, ?, ?, ?)").run(sDept1, sDept2, sFreeDesk, sFreePrn, sRealDesk, sRealPrn);
+  db.prepare("DELETE FROM employees WHERE name = ?").run(realUserName);
+
+  console.log('✅ Test 22: All Department filter, Printer precision, and Excel tests passed successfully!');
 
   console.log('\n===============================================');
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');

@@ -273,8 +273,45 @@ router.get('/assets', (req, res) => {
              k.validity_date as quick_heal_validity,
              (SELECT COUNT(*) FROM repairs WHERE asset_id = a.id) as repair_count,
              (SELECT COALESCE(SUM(repair_cost), 0) FROM repairs WHERE asset_id = a.id) as total_repair_cost,
-             (SELECT COUNT(*) FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '') as printer_count,
-             (SELECT p.asset_type || ' (' || COALESCE(p.brand, '') || ')' FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '' LIMIT 1) as primary_printer
+             (
+               CASE
+                 WHEN LOWER(a.asset_type) IN ('desktop', 'laptop')
+                   AND a.assigned_user IS NOT NULL
+                   AND TRIM(a.assigned_user) != ''
+                   AND LOWER(TRIM(a.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+                 THEN (
+                   SELECT COUNT(*)
+                   FROM assets p
+                   WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%')
+                     AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user))
+                     AND p.id != a.id
+                     AND p.assigned_user IS NOT NULL
+                     AND TRIM(p.assigned_user) != ''
+                     AND LOWER(TRIM(p.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+                 )
+                 ELSE 0
+               END
+             ) as printer_count,
+             (
+               CASE
+                 WHEN LOWER(a.asset_type) IN ('desktop', 'laptop')
+                   AND a.assigned_user IS NOT NULL
+                   AND TRIM(a.assigned_user) != ''
+                   AND LOWER(TRIM(a.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+                 THEN (
+                   SELECT p.asset_type || ' (' || COALESCE(NULLIF(p.brand, ''), 'Printer') || ')'
+                   FROM assets p
+                   WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%')
+                     AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user))
+                     AND p.id != a.id
+                     AND p.assigned_user IS NOT NULL
+                     AND TRIM(p.assigned_user) != ''
+                     AND LOWER(TRIM(p.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+                   LIMIT 1
+                 )
+                 ELSE NULL
+               END
+             ) as primary_printer
       FROM assets a
       LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
       WHERE 1=1
@@ -308,9 +345,9 @@ router.get('/assets', (req, res) => {
       query += ` AND a.asset_type = ?`;
       params.push(type);
     }
-    if (department) {
-      query += ` AND a.department = ?`;
-      params.push(department);
+    if (department && department !== 'all' && department.trim() !== '') {
+      query += ` AND LOWER(TRIM(a.department)) = LOWER(TRIM(?))`;
+      params.push(department.trim());
     }
     if (brand) {
       query += ` AND a.brand = ?`;
@@ -329,9 +366,37 @@ router.get('/assets', (req, res) => {
     }
 
     if (has_printer === 'yes') {
-      query += ` AND (SELECT COUNT(*) FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '') > 0`;
+      query += ` AND LOWER(a.asset_type) IN ('desktop', 'laptop')
+        AND a.assigned_user IS NOT NULL
+        AND TRIM(a.assigned_user) != ''
+        AND LOWER(TRIM(a.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+        AND (
+          SELECT COUNT(*)
+          FROM assets p
+          WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%')
+            AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user))
+            AND p.id != a.id
+            AND p.assigned_user IS NOT NULL
+            AND TRIM(p.assigned_user) != ''
+            AND LOWER(TRIM(p.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+        ) > 0`;
     } else if (has_printer === 'no') {
-      query += ` AND (SELECT COUNT(*) FROM assets p WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%') AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user)) AND p.id != a.id AND a.assigned_user IS NOT NULL AND TRIM(a.assigned_user) != '') = 0`;
+      query += ` AND (
+        LOWER(a.asset_type) NOT IN ('desktop', 'laptop')
+        OR a.assigned_user IS NULL
+        OR TRIM(a.assigned_user) = ''
+        OR LOWER(TRIM(a.assigned_user)) IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+        OR (
+          SELECT COUNT(*)
+          FROM assets p
+          WHERE (p.asset_type IN ('Normal Printer', 'Tag Printer', 'Label Printer', 'Scanner') OR LOWER(p.asset_type) LIKE '%printer%' OR LOWER(p.asset_type) LIKE '%scanner%')
+            AND LOWER(TRIM(p.assigned_user)) = LOWER(TRIM(a.assigned_user))
+            AND p.id != a.id
+            AND p.assigned_user IS NOT NULL
+            AND TRIM(p.assigned_user) != ''
+            AND LOWER(TRIM(p.assigned_user)) NOT IN ('unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock')
+        ) = 0
+      )`;
     }
 
     // Relevance ordering: visible columns prioritized first
@@ -788,22 +853,42 @@ async function generateAssetExcelTemplate() {
     'Other'
   ];
 
-  const deptRows = db.prepare('SELECT name FROM departments ORDER BY name ASC').all();
-  const departments = deptRows.length > 0 ? deptRows.map(d => d.name) : [
-    'Orders',
-    'Dispatch',
-    'Listings',
-    'Company',
-    'Accounts',
-    'Data Analysis',
-    'Return',
-    'IT Infrastructure',
-    'Warehouse',
-    'HR',
-    'Sales',
-    'Management',
-    'Other'
-  ];
+  // Pull all distinct departments from Department Master, assets, and employees tables
+  const deptRows = db.prepare(`
+    SELECT DISTINCT TRIM(name) as name
+    FROM departments
+    WHERE name IS NOT NULL AND TRIM(name) != ''
+    UNION
+    SELECT DISTINCT TRIM(department) as name
+    FROM assets
+    WHERE department IS NOT NULL AND TRIM(department) != ''
+    UNION
+    SELECT DISTINCT TRIM(department) as name
+    FROM employees
+    WHERE department IS NOT NULL AND TRIM(department) != ''
+    ORDER BY name ASC
+  `).all();
+
+  let departments = deptRows.map(d => d.name).filter(Boolean);
+  if (departments.length === 0) {
+    departments = [
+      'Orders',
+      'Dispatch',
+      'Listings',
+      'Company',
+      'Accounts',
+      'Data Analysis',
+      'Return',
+      'IT Infrastructure',
+      'Warehouse',
+      'HR',
+      'Sales',
+      'Other'
+    ];
+  }
+  if (!departments.some(d => d.toLowerCase() === 'other')) {
+    departments.push('Other');
+  }
 
   const statuses = [
     'Working',
@@ -821,7 +906,7 @@ async function generateAssetExcelTemplate() {
 
   // 2. Reference sheet for reliable dropdown options in Excel
   const lookupWs = wb.addWorksheet('Lists');
-  lookupWs.state = 'veryHidden';
+  lookupWs.state = 'hidden';
 
   assetTypes.forEach((v, i) => { lookupWs.getCell(`A${i + 1}`).value = v; });
   departments.forEach((v, i) => { lookupWs.getCell(`B${i + 1}`).value = v; });
@@ -830,7 +915,7 @@ async function generateAssetExcelTemplate() {
 
   // Reference lists for dropdown menus
   const typeFormula = '"Desktop,Laptop,Normal Printer,Tag Printer,Label Printer,Scanner,WebCam,Server,Other"';
-  const deptFormula = '"Orders,Dispatch,Listings,Company,Accounts,Data Analysis,Return,IT Infrastructure,Warehouse,HR,Sales,Management,Other"';
+  const deptFormula = `"${departments.map(d => d.replace(/"/g, '""')).join(',')}"`;
   const statusFormula = '"Working,In Repair,Not Working,Retired"';
   const conditionFormula = '"Brand New,Good,Fair,Poor"';
 
@@ -893,34 +978,30 @@ router.get(['/assets/template/excel', '/assets/template'], async (req, res) => {
   }
 });
 
-// GET /api/assets/template/csv - Download Sample CSV Template for Bulk Import
+// GET /api/assets/template/csv - Deprecated, redirect to standardized Excel template
 router.get('/assets/template/csv', (req, res) => {
-  const templateContent = [
-    'Internal Serial Number,Asset Type,Brand,Model Name,Manufacturer Serial,Purchase Date,Purchase Vendor,Purchase Cost,Department,Location,Assigned User,Working Status,Condition Rating,Parts Added,Remarks',
-    '50060,Laptop,Lenovo,ThinkPad T14,PF-99901,2026-01-15,Lenovo Store,65000,Accounts,Head Office Floor 2,Rohan Gupta,Working,Good,,Standard office laptop',
-    '50061,Desktop,Dell,OptiPlex 3080,DL-44821,2025-11-20,Dell Direct,48000,Orders,Orders Floor Desk 4,Priya Patel,Working,Good,Upgraded 16GB RAM,For order processing',
-    '50062,Tag Printer,TSC,TE244,TSC-8812,2025-08-10,TSC Vendor,14500,Dispatch,Dispatch Bay,FREE,Working,Good,,Picklist label printing'
-  ].join('\r\n');
-
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="it_assets_bulk_import_template.csv"');
-  res.send(templateContent);
+  res.redirect(302, '/api/assets/template/excel');
 });
 
-// POST /api/assets/bulk-import - Bulk import assets via CSV/Excel or JSON
+// POST /api/assets/bulk-import - Bulk import assets via Excel (.xlsx) or JSON
 router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), (req, res) => {
   try {
     let rows = [];
 
     if (req.file) {
-      // Parse CSV or Excel from uploaded buffer
+      if (req.file.originalname && req.file.originalname.toLowerCase().endsWith('.csv')) {
+        return res.status(400).json({
+          error: 'CSV format is disabled. Please download and upload using the standardized Excel (.xlsx) template with dropdown data validation.'
+        });
+      }
+      // Parse Excel from uploaded buffer
       const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
       const sheetName = wb.SheetNames[0];
       rows = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
     } else if (req.body.assets && Array.isArray(req.body.assets)) {
       rows = req.body.assets;
     } else {
-      return res.status(400).json({ error: 'Please upload a CSV or Excel file, or provide asset rows in the request.' });
+      return res.status(400).json({ error: 'Please upload an Excel (.xlsx) file, or provide asset rows in the request.' });
     }
 
     if (!rows || rows.length === 0) {
@@ -1088,6 +1169,74 @@ router.get('/export/csv', (req, res) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="IT_Assets_Inventory.csv"');
     res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/export/excel or /api/assets/export/excel - Export All Assets to formatted Excel (.xlsx)
+router.get(['/export/excel', '/assets/export/excel'], async (req, res) => {
+  try {
+    const assets = db.prepare(`
+      SELECT a.internal_serial_number, a.asset_type, a.brand, a.model_name, a.serial_number,
+             a.purchase_date, a.purchase_vendor, a.purchase_cost, a.department, a.location,
+             a.assigned_user, k.product_key as quick_heal_key, a.working_status, a.is_repaired,
+             a.parts_added_summary, a.remarks
+      FROM assets a
+      LEFT JOIN quick_heal_keys k ON a.quick_heal_key_id = k.id
+      ORDER BY CAST(a.internal_serial_number AS INTEGER) ASC, a.id ASC
+    `).all();
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'VB EXPORTS IT Asset Hub';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('IT_Assets_Inventory', {
+      views: [{ state: 'frozen', ySplit: 1 }]
+    });
+
+    ws.columns = [
+      { header: 'Serial #', key: 'internal_serial_number', width: 14 },
+      { header: 'Asset Type', key: 'asset_type', width: 18 },
+      { header: 'Brand', key: 'brand', width: 16 },
+      { header: 'Model Name', key: 'model_name', width: 22 },
+      { header: 'Hardware Serial', key: 'serial_number', width: 20 },
+      { header: 'Purchase Date', key: 'purchase_date', width: 15 },
+      { header: 'Vendor', key: 'purchase_vendor', width: 20 },
+      { header: 'Cost (₹)', key: 'purchase_cost', width: 15 },
+      { header: 'Department', key: 'department', width: 18 },
+      { header: 'Location', key: 'location', width: 22 },
+      { header: 'Assigned Custodian', key: 'assigned_user', width: 22 },
+      { header: 'Antivirus Key', key: 'quick_heal_key', width: 24 },
+      { header: 'Working Status', key: 'working_status', width: 16 },
+      { header: 'Repaired?', key: 'is_repaired', width: 14 },
+      { header: 'Upgrades / Parts Added', key: 'parts_added_summary', width: 25 },
+      { header: 'Remarks / Notes', key: 'remarks', width: 30 }
+    ];
+
+    const headerRow = ws.getRow(1);
+    headerRow.height = 26;
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F46E5' }
+    };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    assets.forEach(row => {
+      const addedRow = ws.addRow({
+        ...row,
+        is_repaired: row.is_repaired ? 'Yes' : 'No'
+      });
+      addedRow.height = 20;
+      addedRow.alignment = { vertical: 'middle' };
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const filename = `IT_Assets_Inventory_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1435,8 +1584,8 @@ router.get('/expenses', (req, res) => {
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (department && department.trim()) {
-      whereClause += ' AND LOWER(a.department) = LOWER(?)';
+    if (department && department.trim() && department !== 'all') {
+      whereClause += ' AND LOWER(TRIM(a.department)) = LOWER(TRIM(?))';
       params.push(department.trim());
     }
 
@@ -1610,8 +1759,8 @@ router.get('/expenses/export/csv', (req, res) => {
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (department && department.trim()) {
-      whereClause += ' AND LOWER(a.department) = LOWER(?)';
+    if (department && department.trim() && department !== 'all') {
+      whereClause += ' AND LOWER(TRIM(a.department)) = LOWER(TRIM(?))';
       params.push(department.trim());
     }
     if (repair_type && repair_type.trim()) {

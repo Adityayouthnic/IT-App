@@ -565,7 +565,8 @@ function seedDepartments() {
       { name: 'IT Infrastructure', code: 'IT', description: 'Information Technology, Systems, Servers & Networks', location: 'Server Room' },
       { name: 'Warehouse', code: 'WH', description: 'Inventory Warehousing, Stocking & Storage', location: 'Main Warehouse' },
       { name: 'HR', code: 'HR', description: 'Human Resources, Payroll & Recruitment', location: 'HR Office' },
-      { name: 'Sales', code: 'SALES', description: 'Customer Sales, Marketing & Business Growth', location: 'Sales Floor' }
+      { name: 'Sales', code: 'SALES', description: 'Customer Sales, Marketing & Business Growth', location: 'Sales Floor' },
+      { name: 'Other', code: 'OTH', description: 'General & Other Operations', location: 'Office Floor' }
     ];
 
     const insertDept = db.prepare(`

@@ -684,12 +684,12 @@ async function loadAssets(filterParams = {}) {
     if (filterParams.has_printer && document.getElementById('asset-filter-printer')) document.getElementById('asset-filter-printer').value = filterParams.has_printer;
 
     const params = new URLSearchParams();
-    if (search) params.append('search', search);
-    if (type) params.append('type', type);
-    if (dept) params.append('department', dept);
-    if (status) params.append('status', status);
-    if (key) params.append('quick_heal', key);
-    if (printer) params.append('has_printer', printer);
+    if (search && search.trim()) params.append('search', search.trim());
+    if (type && type !== 'all') params.append('type', type);
+    if (dept && dept !== 'all' && dept.trim() !== '') params.append('department', dept.trim());
+    if (status && status !== 'all') params.append('status', status);
+    if (key && key !== 'all') params.append('quick_heal', key);
+    if (printer && printer !== 'all') params.append('has_printer', printer);
 
     const res = await apiFetch(`/api/assets?${params.toString()}`);
     if (!res.ok) return;
@@ -765,16 +765,18 @@ async function loadAssets(filterParams = {}) {
         <td class="py-3 px-4 text-slate-500 text-[11px]">${escapeHtml(a.location || '—')}</td>
         <td class="py-3 px-4 font-semibold text-slate-800">
           <div>${escapeHtml(a.assigned_user || 'Unassigned')}</div>
-          ${a.has_printer ? `
-            <div class="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60" title="Printer: ${escapeHtml(a.primary_printer || 'Assigned')}">
-              <i data-lucide="printer" class="w-2.5 h-2.5 text-amber-600"></i>
-              <span>${escapeHtml(a.primary_printer || 'Printer')}</span>
-            </div>
-          ` : (isWorkstation && a.assigned_user && !['unassigned', 'free'].includes(a.assigned_user.toLowerCase()) ? `
-            <div class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-slate-400 font-medium" title="No printer assigned to this user">
-              <span>(No Printer)</span>
-            </div>
-          ` : '')}
+          ${(() => {
+            const isRealUser = a.assigned_user && !['unassigned', 'free', 'none', 'n/a', 'na', 'null', 'nil', '-', '—', 'spare', 'stock'].includes(a.assigned_user.toLowerCase().trim());
+            if (isWorkstation && isRealUser && a.has_printer && a.primary_printer) {
+              return `
+                <div class="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60" title="Printer: ${escapeHtml(a.primary_printer)}">
+                  <i data-lucide="printer" class="w-2.5 h-2.5 text-amber-600"></i>
+                  <span>${escapeHtml(a.primary_printer)}</span>
+                </div>
+              `;
+            }
+            return '';
+          })()}
         </td>
         <td class="py-3 px-4">${keyBadge}</td>
         <td class="py-3 px-4">${statusBadge}</td>
@@ -973,6 +975,7 @@ async function viewAssetDetail(assetId) {
 
         if (isPrinter) {
           const ws = asset.linked_workstations || [];
+          if (ws.length === 0) return '';
           return `
             <div class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/90">
               <div class="flex items-center justify-between mb-3">
@@ -986,96 +989,78 @@ async function viewAssetDetail(assetId) {
                   </div>
                 </div>
               </div>
-              ${ws.length > 0 ? `
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  ${ws.map(w => `
-                    <div class="p-3 rounded-xl bg-white border border-amber-100 shadow-sm flex items-center justify-between">
-                      <div>
-                        <div class="flex items-center gap-1.5">
-                          <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-asset-detail'); viewAssetDetail(${w.id});">#${escapeHtml(w.internal_serial_number)}</span>
-                          <span class="font-bold text-xs text-slate-900">${escapeHtml(w.brand || '')} ${escapeHtml(w.model_name || w.asset_type)}</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(w.asset_type)} • ${escapeHtml(w.location || 'Office Floor')}</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                ${ws.map(w => `
+                  <div class="p-3 rounded-xl bg-white border border-amber-100 shadow-sm flex items-center justify-between">
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-asset-detail'); viewAssetDetail(${w.id});">#${escapeHtml(w.internal_serial_number)}</span>
+                        <span class="font-bold text-xs text-slate-900">${escapeHtml(w.brand || '')} ${escapeHtml(w.model_name || w.asset_type)}</span>
                       </div>
-                      <button onclick="closeModal('modal-asset-detail'); viewAssetDetail(${w.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline">
-                        View Dossier &rarr;
-                      </button>
+                      <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(w.asset_type)} • ${escapeHtml(w.location || 'Office Floor')}</div>
                     </div>
-                  `).join('')}
-                </div>
-              ` : `
-                <div class="p-3 bg-white/70 border border-amber-100 rounded-xl text-center text-xs text-amber-800 font-medium">
-                  🖨️ Standalone printer device without dedicated workstation assigned to ${userStr}.
-                </div>
-              `}
+                    <button onclick="closeModal('modal-asset-detail'); viewAssetDetail(${w.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline">
+                      View Dossier &rarr;
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           `;
         }
 
         // For Workstations (Desktop, Laptop, etc)
         const printers = asset.linked_printers || [];
-        const hasPrinter = printers.length > 0;
+        if (printers.length === 0) return '';
 
         return `
-          <div class="p-4 rounded-2xl ${hasPrinter ? 'bg-amber-50/70 border-amber-200/90' : 'bg-slate-50/80 border-slate-200/80'} border">
+          <div class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/90">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-xl ${hasPrinter ? 'bg-amber-600 text-white' : 'bg-slate-400 text-white'} flex items-center justify-center shadow-sm">
+                <div class="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-sm">
                   <i data-lucide="printer" class="w-4 h-4"></i>
                 </div>
                 <div>
-                  <h4 class="text-xs font-bold uppercase tracking-wider ${hasPrinter ? 'text-amber-950' : 'text-slate-700'}">Linked Printers & Hardware Breakdown (${printers.length})</h4>
-                  <p class="text-[11px] ${hasPrinter ? 'text-amber-800' : 'text-slate-500'}">Printers configured for <strong>${userStr}</strong></p>
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-amber-950">Linked Printers & Hardware Breakdown (${printers.length})</h4>
+                  <p class="text-[11px] text-amber-800">Printers configured for <strong>${userStr}</strong></p>
                 </div>
               </div>
-              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${hasPrinter ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600 border border-slate-200'}">
-                <i data-lucide="${hasPrinter ? 'check-circle' : 'info'}" class="w-3 h-3"></i>
-                <span>${hasPrinter ? `${printers.length} Printer${printers.length === 1 ? '' : 's'} Linked` : 'No Printer Assigned'}</span>
+              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                <i data-lucide="check-circle" class="w-3 h-3"></i>
+                <span>${printers.length} Printer${printers.length === 1 ? '' : 's'} Linked</span>
               </span>
             </div>
 
-            ${hasPrinter ? `
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                ${printers.map(p => `
-                  <div class="p-3 rounded-xl bg-white border border-amber-200/80 shadow-sm flex flex-col justify-between hover:border-amber-400 transition-colors">
-                    <div>
-                      <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                          <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-asset-detail'); viewAssetDetail(${p.id});">
-                            #${escapeHtml(p.internal_serial_number)}
-                          </span>
-                          <span class="font-bold text-xs text-slate-900">${escapeHtml(p.brand || '')} ${escapeHtml(p.model_name || '')}</span>
-                        </div>
-                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${p.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
-                          ${escapeHtml(p.working_status)}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              ${printers.map(p => `
+                <div class="p-3 rounded-xl bg-white border border-amber-200/80 shadow-sm flex flex-col justify-between hover:border-amber-400 transition-colors">
+                  <div>
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-mono font-bold text-brand-600 text-xs cursor-pointer hover:underline" onclick="closeModal('modal-asset-detail'); viewAssetDetail(${p.id});">
+                          #${escapeHtml(p.internal_serial_number)}
                         </span>
+                        <span class="font-bold text-xs text-slate-900">${escapeHtml(p.brand || '')} ${escapeHtml(p.model_name || '')}</span>
                       </div>
-                      <div class="flex items-center gap-2 mt-1">
-                        <span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300/60">${escapeHtml(p.asset_type)}</span>
-                        ${p.serial_number ? `<span class="text-[10px] font-mono text-slate-500">S/N: ${escapeHtml(p.serial_number)}</span>` : ''}
-                      </div>
-                      ${p.remarks ? `<p class="text-[11px] text-slate-600 mt-1.5 italic line-clamp-2">“${escapeHtml(p.remarks)}”</p>` : ''}
+                      <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${p.working_status === 'Working' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                        ${escapeHtml(p.working_status)}
+                      </span>
                     </div>
-                    <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                      <span class="text-slate-400 text-[10px]">${escapeHtml(p.location || asset.location || 'Same desk')}</span>
-                      <button onclick="closeModal('modal-asset-detail'); viewAssetDetail(${p.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline flex items-center gap-1">
-                        View Printer Dossier &rarr;
-                      </button>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300/60">${escapeHtml(p.asset_type)}</span>
+                      ${p.serial_number ? `<span class="text-[10px] font-mono text-slate-500">S/N: ${escapeHtml(p.serial_number)}</span>` : ''}
                     </div>
+                    ${p.remarks ? `<p class="text-[11px] text-slate-600 mt-1.5 italic line-clamp-2">“${escapeHtml(p.remarks)}”</p>` : ''}
                   </div>
-                `).join('')}
-              </div>
-            ` : `
-              <div class="p-3 bg-white/80 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
-                <div class="text-xs text-slate-700">
-                  <span class="font-semibold text-slate-800">Standalone Workstation:</span>
-                  <span class="text-slate-500 block text-[11px] mt-0.5">${userStr} does not have any dedicated printer (Tag, Label, or Normal printer) assigned.</span>
+                  <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <span class="text-slate-400 text-[10px]">${escapeHtml(p.location || asset.location || 'Same desk')}</span>
+                    <button onclick="closeModal('modal-asset-detail'); viewAssetDetail(${p.id});" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline flex items-center gap-1">
+                      View Printer Dossier &rarr;
+                    </button>
+                  </div>
                 </div>
-                <button onclick="closeModal('modal-asset-detail'); openNewAssetModalWithPrefill({ asset_type: 'Tag Printer', assigned_user: '${escapeHtml(asset.assigned_user || '')}', department: '${escapeHtml(asset.department || '')}', location: '${escapeHtml(asset.location || '')}' })" class="tech-action px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 flex-shrink-0 transition-colors">
-                  + Assign Printer
-                </button>
-              </div>
-            `}
+              `).join('')}
+            </div>
           </div>
         `;
       })()}
@@ -1330,8 +1315,12 @@ async function deleteAsset(assetId, serial) {
   }
 }
 
+function exportAssetsExcel() {
+  window.open('/api/export/excel', '_blank');
+}
+
 function exportAssetsCSV() {
-  window.open('/api/export/csv', '_blank');
+  window.open('/api/export/excel', '_blank');
 }
 
 function openMapKeyModalForAsset(assetId) {
@@ -2716,10 +2705,10 @@ async function downloadAssetTemplate(format = 'excel', event = null) {
     try { event.preventDefault(); } catch (e) {}
   }
 
-  const url = format === 'csv' ? '/api/assets/template/csv' : '/api/assets/template/excel';
-  const filename = format === 'csv' ? 'it_assets_bulk_import_template.csv' : 'it_assets_bulk_import_template.xlsx';
+  const url = '/api/assets/template/excel';
+  const filename = 'it_assets_bulk_import_template.xlsx';
 
-  showToast('Preparing ' + (format === 'csv' ? 'CSV' : 'Excel (.xlsx)') + ' template...', 'info');
+  showToast('Preparing Excel (.xlsx) template with dropdown data validation...', 'info');
 
   try {
     const res = await apiFetch(url);
@@ -2746,6 +2735,14 @@ async function downloadAssetTemplate(format = 'excel', event = null) {
 function handleBulkFileSelect(e) {
   const file = e.target.files?.[0];
   if (!file) return;
+
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    showToast('CSV upload is disabled. Please download and upload using the standard Excel (.xlsx) template.', 'error');
+    e.target.value = '';
+    selectedBulkFile = null;
+    return;
+  }
+
   selectedBulkFile = file;
 
   const label = document.getElementById('bulk-file-label');
@@ -4725,14 +4722,14 @@ async function populateDepartmentDropdowns(selectedDept = '') {
       const select = document.getElementById(id);
       if (!select) return;
 
-      const currentVal = select.value || 'all';
-      select.innerHTML = '<option value="all">All Departments</option>';
+      const currentVal = select.value || '';
+      select.innerHTML = '<option value="">All Departments</option>';
 
       sorted.forEach(d => {
         const opt = document.createElement('option');
         opt.value = d.name;
         opt.textContent = d.code ? `${d.name} [${d.code}]` : d.name;
-        if (currentVal && (d.name.trim().toLowerCase() === currentVal.trim().toLowerCase() || currentVal === d.name)) {
+        if (currentVal && currentVal !== 'all' && (d.name.trim().toLowerCase() === currentVal.trim().toLowerCase() || currentVal === d.name)) {
           opt.selected = true;
         }
         select.appendChild(opt);
@@ -5269,5 +5266,8 @@ window.openDepartmentModal = openDepartmentModal;
 window.openEditDepartmentModal = openEditDepartmentModal;
 window.handleDepartmentSubmit = handleDepartmentSubmit;
 window.deleteDepartment = deleteDepartment;
+window.exportAssetsExcel = exportAssetsExcel;
+window.downloadAssetTemplate = downloadAssetTemplate;
+window.handleBulkFileSelect = handleBulkFileSelect;
 
 
