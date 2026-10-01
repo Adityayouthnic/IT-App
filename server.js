@@ -97,8 +97,19 @@ app.get(['/login', '/login.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
+// Serve Help Desk page (Public - No login required)
+app.get(['/help', '/help.html'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'help.html'));
+});
+
 // Mount Public & Protected Auth Routes
 app.use('/api/auth', require('./routes/auth'));
+
+// Mount Public Help Desk Routes (No login required)
+app.use('/api/help', require('./routes/help'));
 
 // Mount Protected API Routes (All /api routes require authentication via authenticateToken)
 app.use('/api', require('./routes/api'));
@@ -106,10 +117,13 @@ app.use('/api', require('./routes/api'));
 // 7. Strict Server-Side Authentication Gatekeeper for Frontend Application
 // Unauthenticated visitors CANNOT access index.html, styles, or client scripts
 app.use((req, res, next) => {
-  // Allow public access to login page and branding/favicon assets
+  // Allow public access to login page, help portal, css styles, and branding/favicon assets
   if (
     req.path === '/login' ||
     req.path === '/login.html' ||
+    req.path === '/help' ||
+    req.path === '/help.html' ||
+    req.path.startsWith('/css/') ||
     req.path.startsWith('/favicon') ||
     req.path.startsWith('/apple-touch-icon')
   ) {
@@ -132,8 +146,24 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// Serve Main Application Dashboard (SPA root) for authenticated users
-app.get(['/', '/index.html'], (req, res) => {
+// Clean SPA routes (No hash required, e.g. /repairs, /assets, /dashboard)
+const SPA_ROUTES = [
+  '/',
+  '/index.html',
+  '/dashboard',
+  '/assets',
+  '/repairs',
+  '/keys',
+  '/accessories',
+  '/expenses',
+  '/employees',
+  '/departments',
+  '/settings',
+  '/search'
+];
+
+// Serve Main Application Dashboard & Clean SPA routes for authenticated users
+app.get(SPA_ROUTES, (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -145,6 +175,7 @@ app.use((req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'Endpoint Not Found' });
   }
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

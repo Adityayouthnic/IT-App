@@ -58,7 +58,7 @@ router.get('/dashboard/stats', (req, res) => {
         COUNT(*) as total,
         SUM(CASE WHEN status = 'Assigned' THEN 1 ELSE 0 END) as assigned,
         SUM(CASE WHEN status = 'Available' THEN 1 ELSE 0 END) as available,
-        SUM(CASE WHEN validity_date IS NOT NULL AND date(validity_date) <= date('now', '+90 days') THEN 1 ELSE 0 END) as expiring_soon
+        SUM(CASE WHEN validity_date IS NOT NULL AND date(validity_date) <= date('now', '+30 days') THEN 1 ELSE 0 END) as expiring_soon
       FROM quick_heal_keys
     `).get();
 
@@ -66,6 +66,7 @@ router.get('/dashboard/stats', (req, res) => {
     const repairStats = db.prepare(`
       SELECT
         COUNT(*) as total,
+        SUM(CASE WHEN status = 'Pending Approval' THEN 1 ELSE 0 END) as pending_approval,
         SUM(CASE WHEN status IN ('In Progress', 'Awaiting Parts', 'Diagnosing') THEN 1 ELSE 0 END) as open_tickets,
         SUM(CASE WHEN status IN ('Completed', 'Beyond Repair', 'Closed') THEN 1 ELSE 0 END) as closed_tickets,
         COALESCE(SUM(repair_cost), 0) as total_cost
@@ -1405,15 +1406,17 @@ router.get('/repairs', (req, res) => {
     let query = `
       SELECT r.*, a.internal_serial_number, a.brand, a.asset_type, a.assigned_user, a.department
       FROM repairs r
-      JOIN assets a ON r.asset_id = a.id
+      LEFT JOIN assets a ON r.asset_id = a.id
       WHERE 1=1
     `;
     const params = [];
 
     if (ticket_status === 'open') {
       query += ` AND r.status IN ('In Progress', 'Awaiting Parts', 'Diagnosing')`;
+    } else if (ticket_status === 'pending') {
+      query += ` AND r.status = 'Pending Approval'`;
     } else if (ticket_status === 'closed') {
-      query += ` AND r.status IN ('Completed', 'Beyond Repair', 'Closed')`;
+      query += ` AND r.status IN ('Completed', 'Beyond Repair', 'Closed', 'Rejected')`;
     } else if (status) {
       query += ` AND r.status = ?`;
       params.push(status);
@@ -1436,13 +1439,16 @@ router.get('/repairs', (req, res) => {
       query += ` AND (
         LOWER(r.ticket_number) LIKE ? OR
         LOWER(r.issue_description) LIKE ? OR
+        LOWER(COALESCE(r.requester_name, '')) LIKE ? OR
+        LOWER(COALESCE(r.requester_phone, '')) LIKE ? OR
+        LOWER(COALESCE(r.requester_department, '')) LIKE ? OR
         LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
         LOWER(COALESCE(r.technician_name, '')) LIKE ? OR
         LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
-        LOWER(a.internal_serial_number) LIKE ? OR
+        LOWER(COALESCE(a.internal_serial_number, '')) LIKE ? OR
         LOWER(COALESCE(a.assigned_user, '')) LIKE ?
       )`;
-      params.push(term, term, term, term, term, term, term);
+      params.push(term, term, term, term, term, term, term, term, term, term);
     }
 
     query += ` ORDER BY r.created_at DESC`;
@@ -1451,6 +1457,7 @@ router.get('/repairs', (req, res) => {
     const counts = db.prepare(`
       SELECT
         COUNT(*) as total,
+        COALESCE(SUM(CASE WHEN status = 'Pending Approval' THEN 1 ELSE 0 END), 0) as pending_count,
         COALESCE(SUM(CASE WHEN status IN ('In Progress', 'Awaiting Parts', 'Diagnosing') THEN 1 ELSE 0 END), 0) as open_count,
         COALESCE(SUM(CASE WHEN status IN ('Completed', 'Beyond Repair', 'Closed') THEN 1 ELSE 0 END), 0) as closed_count
       FROM repairs
@@ -1702,6 +1709,105 @@ router.post('/repairs/:id/close', requireRoles('admin', 'technician'), (req, res
     logAudit(req.user.id, req.user.username, 'CLOSE_REPAIR', 'repair', repairId, `Resolved and closed ticket ${existing.ticket_number}`);
 
     res.json({ message: `Ticket ${existing.ticket_number} successfully resolved and closed. Asset restored to ${asset_working_status}.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/repairs/:id/approve - Approve a pending public/internal request
+router.post('/repairs/:id/approve', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const repairId = req.params.id;
+    const existing = db.prepare('SELECT * FROM repairs WHERE id = ?').get(repairId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    const {
+      technician_name,
+      technician_contact,
+      repair_vendor,
+      due_date,
+      repair_type,
+      remarks
+    } = req.body;
+
+    const finalTech = (technician_name !== undefined && technician_name.trim()) ? technician_name.trim() : (existing.technician_name || req.user.full_name || req.user.username);
+    const finalDueDate = due_date || existing.due_date;
+    const finalType = repair_type || existing.repair_type || 'Software Installation / Service';
+    const finalRemarks = (remarks !== undefined && remarks.trim()) ? remarks.trim() : (existing.remarks || '');
+
+    const transaction = db.transaction(() => {
+      db.prepare(`
+        UPDATE repairs SET
+          status = 'In Progress',
+          technician_name = ?,
+          technician_contact = COALESCE(?, technician_contact),
+          repair_vendor = COALESCE(?, repair_vendor),
+          due_date = ?,
+          repair_type = ?,
+          approved_by = ?,
+          approved_at = CURRENT_TIMESTAMP,
+          remarks = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        finalTech,
+        technician_contact ? technician_contact.trim() : null,
+        repair_vendor ? repair_vendor.trim() : null,
+        finalDueDate,
+        finalType,
+        req.user.username,
+        finalRemarks,
+        repairId
+      );
+
+      // If linked asset is active and this is hardware repair, update asset status to In Repair
+      if (existing.asset_id && !['Software Installation / Service', 'General IT Support'].includes(finalType)) {
+        db.prepare(`UPDATE assets SET working_status = 'In Repair', is_repaired = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND working_status = 'Working'`).run(existing.asset_id);
+      }
+    });
+
+    transaction();
+
+    logAudit(req.user.id, req.user.username, 'APPROVE_REPAIR', 'repair', repairId, `Approved ticket ${existing.ticket_number} (Assigned to: ${finalTech})`);
+
+    const updated = db.prepare(`
+      SELECT r.*, a.internal_serial_number, a.brand, a.asset_type, a.assigned_user, a.department
+      FROM repairs r
+      LEFT JOIN assets a ON r.asset_id = a.id
+      WHERE r.id = ?
+    `).get(repairId);
+
+    res.json({ message: `Ticket ${existing.ticket_number} approved and moved to In Progress.`, ticket: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/repairs/:id/reject - Reject a ticket with reason
+router.post('/repairs/:id/reject', requireRoles('admin', 'technician'), (req, res) => {
+  try {
+    const repairId = req.params.id;
+    const existing = db.prepare('SELECT * FROM repairs WHERE id = ?').get(repairId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    const { rejection_reason, remarks } = req.body;
+    const reason = (rejection_reason && rejection_reason.trim()) ? rejection_reason.trim() : (remarks ? remarks.trim() : 'Declined by IT Administrator');
+
+    db.prepare(`
+      UPDATE repairs SET
+        status = 'Rejected',
+        rejection_reason = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(reason, repairId);
+
+    logAudit(req.user.id, req.user.username, 'REJECT_REPAIR', 'repair', repairId, `Rejected ticket ${existing.ticket_number}: ${reason}`);
+
+    res.json({ message: `Ticket ${existing.ticket_number} marked as Rejected.`, reason });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2068,7 +2174,7 @@ router.get('/keys', (req, res) => {
           daysRemaining = diffDays;
           if (diffDays < 0) {
             isExpired = true;
-          } else if (diffDays <= 90) {
+          } else if (diffDays <= 30) {
             isExpiringSoon = true;
           }
         }
@@ -2292,7 +2398,11 @@ router.get('/accessories', (req, res) => {
   try {
     const { category, status, search } = req.query;
     let query = `
-      SELECT acc.*, a.internal_serial_number as asset_serial, a.assigned_user as asset_user
+      SELECT acc.*,
+             COALESCE(acc.internal_serial_number, acc.accessory_code) as internal_serial_number,
+             COALESCE(acc.accessory_code, acc.internal_serial_number) as accessory_code,
+             a.internal_serial_number as asset_serial,
+             a.assigned_user as asset_user
       FROM accessories acc
       LEFT JOIN assets a ON acc.assigned_asset_id = a.id
       WHERE 1=1
@@ -2310,6 +2420,7 @@ router.get('/accessories', (req, res) => {
     if (search && search.trim()) {
       const term = `%${search.trim().toLowerCase()}%`;
       query += ` AND (
+        LOWER(COALESCE(acc.internal_serial_number, acc.accessory_code)) LIKE ? OR
         LOWER(acc.accessory_code) LIKE ? OR
         LOWER(acc.name) LIKE ? OR
         LOWER(acc.brand) LIKE ? OR
@@ -2317,7 +2428,7 @@ router.get('/accessories', (req, res) => {
         LOWER(COALESCE(acc.assigned_user, '')) LIKE ? OR
         LOWER(COALESCE(acc.location, '')) LIKE ?
       )`;
-      params.push(term, term, term, term, term, term);
+      params.push(term, term, term, term, term, term, term);
     }
 
     query += ` ORDER BY acc.id ASC`;
@@ -2343,28 +2454,38 @@ router.get('/accessories', (req, res) => {
 // POST /api/accessories - Add new accessory
 router.post('/accessories', requireRoles('admin', 'technician'), (req, res) => {
   try {
-    const { accessory_code, name, category, brand, model, serial_number, quantity, assigned_user, assigned_asset_id, location, status, purchase_date, cost, remarks } = req.body;
+    const {
+      accessory_code, internal_serial_number, name, category, brand, model,
+      serial_number, quantity, assigned_user, assigned_asset_id, location,
+      status, purchase_date, cost, remarks
+    } = req.body;
 
     if (!name || !category) {
       return res.status(400).json({ error: 'Accessory name and category are required.' });
     }
 
-    // Auto-generate code if missing
-    let code = accessory_code ? accessory_code.trim() : '';
+    // Auto-generate internal serial number if missing
+    let code = (internal_serial_number || accessory_code || '').trim().replace(/^#/, '');
     if (!code) {
-      const count = db.prepare('SELECT COUNT(*) as c FROM accessories').get().c;
-      code = `ACC-${String(count + 1).padStart(3, '0')}`;
+      let maxId = db.prepare('SELECT MAX(id) as m FROM accessories').get().m || 0;
+      let nextNum = maxId + 1;
+      code = `ACC-${String(nextNum).padStart(3, '0')}`;
+      while (db.prepare('SELECT id FROM accessories WHERE accessory_code = ? OR internal_serial_number = ?').get(code, code)) {
+        nextNum++;
+        code = `ACC-${String(nextNum).padStart(3, '0')}`;
+      }
     }
 
     const insert = db.prepare(`
       INSERT INTO accessories (
-        accessory_code, name, category, brand, model, serial_number,
+        accessory_code, internal_serial_number, name, category, brand, model, serial_number,
         quantity, assigned_user, assigned_asset_id, location, status,
         purchase_date, cost, remarks
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = insert.run(
+      code,
       code,
       name.trim(),
       category.trim(),
@@ -2385,9 +2506,9 @@ router.post('/accessories', requireRoles('admin', 'technician'), (req, res) => {
       ensureEmployeeExists(assigned_user, '', location);
     }
 
-    logAudit(req.user.id, req.user.username, 'CREATE_ACCESSORY', 'accessory', result.lastInsertRowid, `Created accessory ${code} - ${name}`);
+    logAudit(req.user.id, req.user.username, 'CREATE_ACCESSORY', 'accessory', result.lastInsertRowid, `Created accessory #${code} - ${name}`);
 
-    res.status(201).json({ message: 'Accessory added successfully', id: result.lastInsertRowid });
+    res.status(201).json({ message: 'Accessory added successfully', id: result.lastInsertRowid, internal_serial_number: code, accessory_code: code });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2402,11 +2523,19 @@ router.put('/accessories/:id', requireRoles('admin', 'technician'), (req, res) =
       return res.status(404).json({ error: 'Accessory not found.' });
     }
 
-    const { accessory_code, name, category, brand, model, serial_number, quantity, assigned_user, assigned_asset_id, location, status, purchase_date, cost, remarks } = req.body;
+    const {
+      accessory_code, internal_serial_number, name, category, brand, model,
+      serial_number, quantity, assigned_user, assigned_asset_id, location,
+      status, purchase_date, cost, remarks
+    } = req.body;
+
+    const serialIn = (internal_serial_number !== undefined ? internal_serial_number : accessory_code);
+    const serialToSave = (serialIn !== undefined && serialIn.trim()) ? serialIn.trim().replace(/^#/, '') : (existing.internal_serial_number || existing.accessory_code);
 
     db.prepare(`
       UPDATE accessories SET
-        accessory_code = COALESCE(?, accessory_code),
+        accessory_code = ?,
+        internal_serial_number = ?,
         name = COALESCE(?, name),
         category = COALESCE(?, category),
         brand = COALESCE(?, brand),
@@ -2423,7 +2552,8 @@ router.put('/accessories/:id', requireRoles('admin', 'technician'), (req, res) =
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
-      accessory_code,
+      serialToSave,
+      serialToSave,
       name,
       category,
       brand,
@@ -2638,7 +2768,7 @@ router.delete('/accessories/:id', requireRoles('admin'), (req, res) => {
 // GET /api/accessories/template/csv - Download Accessories CSV Template
 router.get('/accessories/template/csv', (req, res) => {
   const headers = [
-    'Accessory Code',
+    'Internal Serial Number',
     'Category',
     'Item Name',
     'Brand',
@@ -2668,6 +2798,50 @@ router.get('/accessories/template/csv', (req, res) => {
   res.status(200).send(csv);
 });
 
+// GET /api/accessories/template/excel - Download Accessories Excel (.xlsx) Template
+router.get('/accessories/template/excel', (req, res) => {
+  const headers = [
+    'Internal Serial Number',
+    'Category',
+    'Item Name',
+    'Brand',
+    'Model',
+    'Serial Number',
+    'Quantity',
+    'Location',
+    'Status',
+    'Remarks'
+  ];
+
+  const sampleData = [
+    { 'Internal Serial Number': 'ACC-010', 'Category': 'Mouse', 'Item Name': 'Logitech B100 USB Optical Mouse', 'Brand': 'Logitech', 'Model': 'B100', 'Serial Number': '', 'Quantity': 10, 'Location': 'IT Store Room', 'Status': 'In Stock', 'Remarks': 'Spare optical mice' },
+    { 'Internal Serial Number': 'ACC-011', 'Category': 'Keyboard', 'Item Name': 'Dell KB216 Wired Standard Keyboard', 'Brand': 'Dell', 'Model': 'KB216', 'Serial Number': '', 'Quantity': 5, 'Location': 'IT Store Room', 'Status': 'In Stock', 'Remarks': 'Standard desktop keyboards' },
+    { 'Internal Serial Number': 'ACC-012', 'Category': 'Scanner', 'Item Name': 'Zebra DS2208 Barcode Scanner', 'Brand': 'Zebra', 'Model': 'DS2208', 'Serial Number': '', 'Quantity': 2, 'Location': 'Dispatch Bay', 'Status': 'In Stock', 'Remarks': '2D Barcode scanner' }
+  ];
+
+  const ws = xlsx.utils.json_to_sheet(sampleData, { header: headers });
+  ws['!cols'] = [
+    { wch: 22 }, // Internal Serial Number
+    { wch: 15 }, // Category
+    { wch: 35 }, // Item Name
+    { wch: 15 }, // Brand
+    { wch: 15 }, // Model
+    { wch: 20 }, // Serial Number
+    { wch: 10 }, // Quantity
+    { wch: 18 }, // Location
+    { wch: 12 }, // Status
+    { wch: 30 }  // Remarks
+  ];
+
+  const wb = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(wb, ws, 'Accessories');
+  const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="accessories_import_template.xlsx"');
+  res.status(200).send(buffer);
+});
+
 // POST /api/accessories/bulk-import - Bulk import accessories from CSV or Excel
 router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), (req, res) => {
   try {
@@ -2686,13 +2860,13 @@ router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upl
       return res.status(400).json({ error: 'Spreadsheet contains no data rows.' });
     }
 
-    const validCategories = ['Mouse', 'Keyboard', 'Scanner', 'Print Head', 'Cable/Adapter', 'UPS', 'Other'];
+    const validCategories = ['Mouse', 'Keyboard', 'Scanner', 'Print Head', 'Cable/Adapter', 'UPS', 'Monitor', 'Other'];
     let importedCount = 0;
     let skippedCount = 0;
     const errors = [];
 
     // Get initial max code counter
-    const existingCodes = db.prepare('SELECT accessory_code FROM accessories').all().map(r => r.accessory_code);
+    const existingCodes = db.prepare('SELECT accessory_code, internal_serial_number FROM accessories').all().map(r => r.internal_serial_number || r.accessory_code);
     let nextNum = 1;
     existingCodes.forEach(c => {
       const match = c.match(/ACC-(\d+)/i);
@@ -2704,9 +2878,9 @@ router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upl
 
     const insertStmt = db.prepare(`
       INSERT INTO accessories (
-        accessory_code, name, category, brand, model, serial_number,
+        accessory_code, internal_serial_number, name, category, brand, model, serial_number,
         quantity, assigned_user, location, status, remarks
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const updateStockStmt = db.prepare(`
@@ -2745,28 +2919,41 @@ router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upl
         const user = cleanRow['assigned to'] || cleanRow['assigned_user'] || cleanRow['user'] || null;
         const remarks = cleanRow['remarks'] || cleanRow['notes'] || '';
 
-        let code = cleanRow['accessory code'] || cleanRow['accessory_code'] || cleanRow['code'] || '';
+        let code = cleanRow['internal serial number'] || cleanRow['internal_serial_number'] || cleanRow['internal serial'] || cleanRow['internal serial #'] || cleanRow['accessory code'] || cleanRow['accessory_code'] || cleanRow['code'] || '';
+        code = code.replace(/^#/, '').trim();
         if (!code) {
           code = `ACC-${String(nextNum).padStart(3, '0')}`;
           nextNum++;
         }
 
         // Check if code already exists
-        const existing = db.prepare('SELECT id, status FROM accessories WHERE accessory_code = ?').get(code);
+        const existing = db.prepare('SELECT id, status FROM accessories WHERE accessory_code = ? OR internal_serial_number = ?').get(code, code);
         if (existing) {
           if (existing.status === 'In Stock' && status === 'In Stock') {
             // Merge quantity into existing in-stock batch
             updateStockStmt.run(qty, existing.id);
             importedCount++;
-            return;
           } else {
-            // Generate a fresh unique code
-            code = `ACC-${String(nextNum).padStart(3, '0')}`;
-            nextNum++;
+            skippedCount++;
+            errors.push(`Row ${rowNum}: Accessory with Serial #${code} already exists and is not in stock.`);
           }
+          return;
         }
 
-        insertStmt.run(code, name, category, brand, model, serial, qty, user, location, status, remarks);
+        insertStmt.run(
+          code,
+          code,
+          name,
+          category,
+          brand,
+          model,
+          serial,
+          qty,
+          user,
+          location,
+          status,
+          remarks
+        );
         importedCount++;
       });
     });
@@ -3435,7 +3622,7 @@ router.get('/search', (req, res) => {
     let repairQuery = `
       SELECT r.*, a.internal_serial_number, a.brand, a.asset_type, a.assigned_user
       FROM repairs r
-      JOIN assets a ON r.asset_id = a.id
+      LEFT JOIN assets a ON r.asset_id = a.id
       WHERE 1=1
     `;
     const repairParams = [];
@@ -3444,13 +3631,15 @@ router.get('/search', (req, res) => {
       repairQuery += ` AND (
         LOWER(r.ticket_number) LIKE ? OR
         LOWER(r.issue_description) LIKE ? OR
+        LOWER(COALESCE(r.requester_name, '')) LIKE ? OR
+        LOWER(COALESCE(r.requester_phone, '')) LIKE ? OR
         LOWER(COALESCE(r.repair_vendor, '')) LIKE ? OR
         LOWER(COALESCE(r.technician_name, '')) LIKE ? OR
         LOWER(COALESCE(r.parts_added, '')) LIKE ? OR
-        LOWER(a.internal_serial_number) LIKE ? OR
+        LOWER(COALESCE(a.internal_serial_number, '')) LIKE ? OR
         LOWER(COALESCE(a.assigned_user, '')) LIKE ?
       )`;
-      repairParams.push(term, term, term, term, term, term, term);
+      repairParams.push(term, term, term, term, term, term, term, term, term);
     });
     repairQuery += ` ORDER BY r.created_at DESC LIMIT 20`;
     const repairs = db.prepare(repairQuery).all(...repairParams);
@@ -3477,7 +3666,10 @@ router.get('/search', (req, res) => {
 
     // 4. Accessories Tokenized Search
     let accQuery = `
-      SELECT acc.*, a.internal_serial_number as asset_serial
+      SELECT acc.*,
+             COALESCE(acc.internal_serial_number, acc.accessory_code) as internal_serial_number,
+             COALESCE(acc.accessory_code, acc.internal_serial_number) as accessory_code,
+             a.internal_serial_number as asset_serial
       FROM accessories acc
       LEFT JOIN assets a ON acc.assigned_asset_id = a.id
       WHERE 1=1
@@ -3486,6 +3678,7 @@ router.get('/search', (req, res) => {
     tokens.forEach(tok => {
       const term = `%${tok}%`;
       accQuery += ` AND (
+        LOWER(COALESCE(acc.internal_serial_number, acc.accessory_code)) LIKE ? OR
         LOWER(acc.accessory_code) LIKE ? OR
         LOWER(acc.name) LIKE ? OR
         LOWER(acc.category) LIKE ? OR
@@ -3494,7 +3687,7 @@ router.get('/search', (req, res) => {
         LOWER(COALESCE(acc.assigned_user, '')) LIKE ? OR
         LOWER(COALESCE(acc.location, '')) LIKE ?
       )`;
-      accParams.push(term, term, term, term, term, term, term);
+      accParams.push(term, term, term, term, term, term, term, term);
     });
     accQuery += ` ORDER BY acc.id ASC LIMIT 20`;
     const accessories = db.prepare(accQuery).all(...accParams);

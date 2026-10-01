@@ -91,6 +91,7 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS accessories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       accessory_code TEXT UNIQUE NOT NULL,
+      internal_serial_number TEXT,
       name TEXT NOT NULL,
       category TEXT NOT NULL, -- 'Mouse', 'Keyboard', 'Scanner', 'Monitor', 'Cable/Adapter', 'UPS', 'Print Head', 'Other'
       brand TEXT,
@@ -163,15 +164,47 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
   `);
 
+  // Migration: Ensure internal_serial_number column exists in accessories
+  try {
+    const accTableInfo = db.prepare("PRAGMA table_info(accessories)").all();
+    const hasInternalSerial = accTableInfo.some(col => col.name === 'internal_serial_number');
+    if (!hasInternalSerial) {
+      db.exec("ALTER TABLE accessories ADD COLUMN internal_serial_number TEXT");
+    }
+    db.exec(`
+      UPDATE accessories
+      SET internal_serial_number = accessory_code
+      WHERE internal_serial_number IS NULL OR internal_serial_number = '';
+      CREATE INDEX IF NOT EXISTS idx_acc_internal_serial ON accessories(internal_serial_number);
+    `);
+  } catch (e) {
+    console.warn('Migration accessories internal_serial_number check error:', e.message);
+  }
+
   // Migration: Ensure due_date column exists in repairs
   try {
     const tableInfo = db.prepare("PRAGMA table_info(repairs)").all();
-    const hasDueDate = tableInfo.some(col => col.name === 'due_date');
-    if (!hasDueDate) {
+    const colNames = tableInfo.map(c => c.name);
+    if (!colNames.includes('due_date')) {
       db.exec("ALTER TABLE repairs ADD COLUMN due_date TEXT");
     }
+    const additionalRepairCols = [
+      { name: 'requester_name', type: 'TEXT' },
+      { name: 'requester_email', type: 'TEXT' },
+      { name: 'requester_phone', type: 'TEXT' },
+      { name: 'requester_department', type: 'TEXT' },
+      { name: 'priority', type: 'TEXT DEFAULT "Normal"' },
+      { name: 'approved_by', type: 'TEXT' },
+      { name: 'approved_at', type: 'DATETIME' },
+      { name: 'rejection_reason', type: 'TEXT' }
+    ];
+    additionalRepairCols.forEach(col => {
+      if (!colNames.includes(col.name)) {
+        db.exec(`ALTER TABLE repairs ADD COLUMN ${col.name} ${col.type}`);
+      }
+    });
   } catch (e) {
-    console.warn('Migration due_date check error:', e.message);
+    console.warn('Migration repairs check error:', e.message);
   }
 
   // Migration: Ensure Quick Heal keys are unmapped from non-workstation assets (Printers, Scanners, Monitors, etc.)

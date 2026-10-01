@@ -245,22 +245,96 @@ function resetSearchUI(overrides = {}) {
   }
 }
 
-function handleRoute() {
-  if (isProgrammaticNav) return;
-  const hash = window.location.hash.replace('#', '') || 'dashboard';
-  navigate(hash, {}, false);
+const VALID_SPA_VIEWS = [
+  'dashboard',
+  'assets',
+  'repairs',
+  'keys',
+  'accessories',
+  'expenses',
+  'employees',
+  'departments',
+  'search',
+  'settings'
+];
+
+function getRouteFromUrl() {
+  const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '').trim().toLowerCase();
+  const rawHash = window.location.hash.replace(/^#\/?/, '').trim().toLowerCase();
+
+  let targetView = 'dashboard';
+  if (VALID_SPA_VIEWS.includes(rawPath)) {
+    targetView = rawPath;
+  } else if (VALID_SPA_VIEWS.includes(rawHash)) {
+    targetView = rawHash;
+  } else if (rawPath === '' || rawPath === 'index.html') {
+    targetView = 'dashboard';
+  }
+
+  // Parse query parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const routeParams = {};
+  for (const [k, v] of urlParams.entries()) {
+    routeParams[k] = v;
+  }
+
+  return { targetView, routeParams };
 }
 
-window.addEventListener('hashchange', handleRoute);
+function handleRoute() {
+  if (isProgrammaticNav) return;
+  const { targetView, routeParams } = getRouteFromUrl();
 
-function navigate(viewName, params = {}, updateHash = true) {
+  // If a hash exists in the URL, replace state cleanly without hash
+  if (window.location.hash) {
+    const cleanPath = targetView === 'dashboard' ? '/' : `/${targetView}`;
+    const searchStr = window.location.search || '';
+    history.replaceState({ view: targetView, params: routeParams }, '', `${cleanPath}${searchStr}`);
+  }
+
+  navigate(targetView, routeParams, false);
+}
+
+window.addEventListener('popstate', (e) => {
+  if (isProgrammaticNav) return;
+  const { targetView, routeParams } = getRouteFromUrl();
+  const mergedParams = (e.state && e.state.params) ? { ...routeParams, ...e.state.params } : routeParams;
+  navigate(targetView, mergedParams, false);
+});
+
+window.addEventListener('hashchange', () => {
+  handleRoute();
+});
+
+function navigate(viewName, params = {}, updateUrl = true) {
   currentView = viewName;
-  if (updateHash) {
+  if (updateUrl) {
     isProgrammaticNav = true;
-    window.location.hash = viewName;
+    const cleanPath = viewName === 'dashboard' ? '/' : `/${viewName}`;
+
+    // Optionally serialize params into query string if helpful
+    let searchStr = '';
+    if (params && Object.keys(params).length > 0) {
+      const qParams = new URLSearchParams();
+      for (const [key, val] of Object.entries(params)) {
+        if (val !== undefined && val !== null && val !== '') {
+          qParams.set(key, val);
+        }
+      }
+      const qs = qParams.toString();
+      if (qs) searchStr = `?${qs}`;
+    }
+
+    const targetUrl = `${cleanPath}${searchStr}`;
+    const currentFull = `${window.location.pathname}${window.location.search}`;
+
+    if (currentFull !== targetUrl || window.location.hash) {
+      history.pushState({ view: viewName, params }, '', targetUrl);
+    }
+
     setTimeout(() => {
       isProgrammaticNav = false;
-    }, 100);
+    }, 50);
   }
 
   // Update Nav links
@@ -1223,7 +1297,7 @@ async function viewAssetDetail(assetId) {
               <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-sm flex items-center justify-between">
                 <div>
                   <div class="flex items-center gap-1.5">
-                    <span class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(acc.accessory_code)}</span>
+                    <span class="font-mono font-bold text-brand-600 text-xs">#${escapeHtml((acc.internal_serial_number || acc.accessory_code || '').replace(/^#/, ''))}</span>
                     <span class="font-bold text-xs text-slate-900">${escapeHtml(acc.name)}</span>
                   </div>
                   <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(acc.category)} • ${escapeHtml(acc.brand || 'Standard')} ${escapeHtml(acc.model || '')} (Qty: ${acc.quantity})</div>
@@ -1673,13 +1747,21 @@ function debounceRepairSearch() {
 
 function filterRepairTab(tab) {
   activeRepairTab = tab;
-  ['all', 'open', 'closed'].forEach(t => {
+  ['all', 'pending', 'open', 'closed'].forEach(t => {
     const el = document.getElementById(`tab-repairs-${t}`);
     if (!el) return;
     if (t === tab) {
-      el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white shadow-sm flex items-center gap-1.5';
+      if (t === 'pending') {
+        el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-amber-600 text-white shadow-sm flex items-center gap-1.5 flex-shrink-0';
+      } else {
+        el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white shadow-sm flex items-center gap-1.5 flex-shrink-0';
+      }
     } else {
-      el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5';
+      if (t === 'pending') {
+        el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-amber-700 hover:bg-amber-50 border border-amber-300 flex items-center gap-1.5 flex-shrink-0';
+      } else {
+        el.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 flex-shrink-0';
+      }
     }
   });
   loadRepairs();
@@ -1724,13 +1806,15 @@ async function loadRepairs(filterParams = {}) {
     // Update Tab Counters
     if (data.counts) {
       const totalEl = document.getElementById('repairs-total-counter');
+      const pendingEl = document.getElementById('repairs-pending-counter');
       const openEl = document.getElementById('repairs-open-counter');
       const closedEl = document.getElementById('repairs-closed-counter');
       if (totalEl) totalEl.textContent = data.counts.total ?? 0;
+      if (pendingEl) pendingEl.textContent = data.counts.pending_count ?? 0;
       if (openEl) openEl.textContent = data.counts.open_count ?? 0;
       if (closedEl) closedEl.textContent = data.counts.closed_count ?? 0;
       const sidebarRepairEl = document.getElementById('sidebar-repair-count');
-      if (sidebarRepairEl) sidebarRepairEl.textContent = data.counts.open_count ?? 0;
+      if (sidebarRepairEl) sidebarRepairEl.textContent = (data.counts.open_count || 0) + (data.counts.pending_count || 0);
     }
 
     const tbody = document.getElementById('repairs-table-body');
@@ -1748,11 +1832,18 @@ async function loadRepairs(filterParams = {}) {
       tr.className = 'hover:bg-slate-50/80 transition-colors';
       const isViewer = currentUser?.role === 'viewer';
       const isAdmin = currentUser?.role === 'admin';
-      const isOpen = (r.status !== 'Completed' && r.status !== 'Beyond Repair');
+      const isOpen = (r.status !== 'Completed' && r.status !== 'Beyond Repair' && r.status !== 'Rejected');
 
       let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${escapeHtml(r.status)}</span>`;
-      if (r.status === 'Completed') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>`;
-      else if (r.status === 'Beyond Repair') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Beyond Repair</span>`;
+      if (r.status === 'Pending Approval') {
+        statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"><i data-lucide="bell" class="w-3 h-3 text-amber-600"></i>Pending Approval</span>`;
+      } else if (r.status === 'Completed') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>`;
+      } else if (r.status === 'Beyond Repair') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Beyond Repair</span>`;
+      } else if (r.status === 'Rejected') {
+        statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Rejected</span>`;
+      }
 
       let dueDateDisplay = '<span class="text-slate-400 text-xs">—</span>';
       if (r.due_date) {
@@ -1764,13 +1855,21 @@ async function loadRepairs(filterParams = {}) {
         }
       }
 
+      let requesterSub = '';
+      if (r.requester_name) {
+        requesterSub = `<div class="text-[10px] font-semibold text-amber-800 mt-1 flex items-center gap-1"><i data-lucide="user" class="w-3 h-3 text-amber-600 inline flex-shrink-0"></i><span>${escapeHtml(r.requester_name)}${r.requester_department ? ' (' + escapeHtml(r.requester_department) + ')' : ''}</span></div>`;
+      }
+
       tr.innerHTML = `
         <td class="py-3 px-4 font-mono font-bold text-brand-600">${escapeHtml(r.ticket_number)}</td>
         <td class="py-3 px-4">
-          <span onclick="viewAssetDetail(${r.asset_id})" class="cursor-pointer font-mono font-bold text-slate-900 hover:text-brand-600 hover:underline">#${escapeHtml(r.internal_serial_number)}</span>
-          <div class="text-[10px] text-slate-400">${escapeHtml(r.brand || '')} ${escapeHtml(r.asset_type)}</div>
+          <span onclick="viewAssetDetail(${r.asset_id})" class="cursor-pointer font-mono font-bold text-slate-900 hover:text-brand-600 hover:underline">#${escapeHtml(r.internal_serial_number || 'GEN-IT')}</span>
+          <div class="text-[10px] text-slate-400">${escapeHtml(r.brand || '')} ${escapeHtml(r.asset_type || '')}</div>
         </td>
-        <td class="py-3 px-4 font-medium text-slate-800 max-w-xs">${escapeHtml(r.issue_description)}</td>
+        <td class="py-3 px-4 font-medium text-slate-800 max-w-xs">
+          <div>${escapeHtml(r.issue_description)}</div>
+          ${requesterSub}
+        </td>
         <td class="py-3 px-4 font-semibold text-sky-600">${escapeHtml(r.parts_added || '— None —')}</td>
         <td class="py-3 px-4 text-slate-500">${escapeHtml(r.repair_vendor || r.technician_name || 'In-House')}</td>
         <td class="py-3 px-4 text-slate-500">${escapeHtml(r.repair_date)}</td>
@@ -1779,7 +1878,15 @@ async function loadRepairs(filterParams = {}) {
         <td class="py-3 px-4">${statusBadge}</td>
         <td class="py-3 px-4 text-right">
           <div class="flex items-center justify-end gap-1">
-            ${!isViewer && isOpen ? `
+            ${!isViewer && r.status === 'Pending Approval' ? `
+              <button onclick="openApproveTicketModal(${r.id})" title="Approve & Assign Ticket" class="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-lg transition-colors font-bold">
+                <i data-lucide="badge-check" class="w-4 h-4 text-amber-600"></i>
+              </button>
+              <button onclick="openRejectTicketModal(${r.id})" title="Reject Ticket" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors">
+                <i data-lucide="x-circle" class="w-4 h-4 text-rose-500"></i>
+              </button>
+            ` : ''}
+            ${!isViewer && isOpen && r.status !== 'Pending Approval' ? `
               <button onclick="openCloseTicketModal(${r.id})" title="Resolve & Close Ticket" class="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors">
                 <i data-lucide="check-circle-2" class="w-4 h-4"></i>
               </button>
@@ -2057,6 +2164,111 @@ async function submitCloseTicket(e) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Confirm & Close Ticket';
+  }
+}
+
+// 1-Click Approve Support Ticket Modal (Public & Internal Requests)
+async function openApproveTicketModal(repairId) {
+  try {
+    const repair = (window._cachedRepairs || []).find(r => r.id === repairId);
+    if (!repair) return;
+
+    document.getElementById('approve-ticket-id').value = repair.id;
+    document.getElementById('approve-ticket-number').textContent = repair.ticket_number;
+    document.getElementById('approve-ticket-priority').textContent = `${repair.priority || 'Normal'} Priority`;
+    document.getElementById('approve-ticket-priority').className = `px-2 py-0.5 rounded text-[10px] font-bold ${repair.priority === 'Critical' ? 'bg-rose-100 text-rose-800' : (repair.priority === 'High' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700')}`;
+    document.getElementById('approve-ticket-requester').textContent = `${repair.requester_name || 'Staff'}${repair.requester_department ? ' (' + repair.requester_department + ')' : ''}`;
+    document.getElementById('approve-ticket-asset').textContent = `#${repair.internal_serial_number || 'GEN-IT'}`;
+    document.getElementById('approve-ticket-issue').textContent = repair.issue_description || 'No description provided';
+
+    document.getElementById('approve-technician-name').value = currentUser?.full_name || currentUser?.username || 'IT Support';
+    document.getElementById('approve-technician-contact').value = '';
+    document.getElementById('approve-repair-type').value = repair.repair_type || 'Software Installation / Service';
+
+    // Set default target due date: today + 2 days
+    const due = new Date();
+    due.setDate(due.getDate() + 2);
+    document.getElementById('approve-due-date').value = due.toISOString().split('T')[0];
+    document.getElementById('approve-remarks').value = '';
+
+    openModal('modal-approve-ticket');
+  } catch (err) {
+    console.error('Error opening approve ticket modal:', err);
+  }
+}
+
+async function submitApproveTicket(e) {
+  e.preventDefault();
+  const repairId = document.getElementById('approve-ticket-id').value;
+  const btn = document.getElementById('btn-submit-approve-ticket');
+  btn.disabled = true;
+  btn.textContent = 'Approving...';
+
+  const payload = {
+    technician_name: document.getElementById('approve-technician-name').value.trim(),
+    technician_contact: document.getElementById('approve-technician-contact').value.trim(),
+    repair_type: document.getElementById('approve-repair-type').value,
+    due_date: document.getElementById('approve-due-date').value,
+    remarks: document.getElementById('approve-remarks').value.trim()
+  };
+
+  try {
+    const res = await apiFetch(`/api/repairs/${repairId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Ticket approved and moved to In Progress!', 'success');
+      closeModal('modal-approve-ticket');
+      loadRepairs();
+      loadDashboard();
+    } else {
+      showToast(data.error || 'Failed to approve ticket', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Approve & Start Ticket';
+  }
+}
+
+function openRejectTicketModal(repairId) {
+  const repair = (window._cachedRepairs || []).find(r => r.id === repairId);
+  if (!repair) return;
+  document.getElementById('reject-ticket-id').value = repair.id;
+  document.getElementById('reject-modal-ticket-num').textContent = `${repair.ticket_number} (Requester: ${repair.requester_name || 'Staff'})`;
+  document.getElementById('reject-reason').value = '';
+  openModal('modal-reject-ticket');
+}
+
+function openRejectTicketFromApprove() {
+  const id = document.getElementById('approve-ticket-id').value;
+  closeModal('modal-approve-ticket');
+  if (id) openRejectTicketModal(Number(id));
+}
+
+async function submitRejectTicket(e) {
+  e.preventDefault();
+  const repairId = document.getElementById('reject-ticket-id').value;
+  const reason = document.getElementById('reject-reason').value.trim();
+
+  try {
+    const res = await apiFetch(`/api/repairs/${repairId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ rejection_reason: reason })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message || 'Ticket rejected', 'success');
+      closeModal('modal-reject-ticket');
+      loadRepairs();
+    } else {
+      showToast(data.error || 'Failed to reject ticket', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }
 
@@ -2588,8 +2800,9 @@ async function loadAccessories(filterParams = {}) {
       if (item.status === 'Assigned') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Assigned</span>`;
       else if (item.status === 'Damaged') statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Damaged</span>`;
 
+      const displaySerial = (item.internal_serial_number || item.accessory_code || '').replace(/^#/, '');
       tr.innerHTML = `
-        <td class="py-3 px-4 font-mono font-bold text-brand-600">${escapeHtml(item.accessory_code)}</td>
+        <td class="py-3 px-4 font-mono font-bold text-brand-600">#${escapeHtml(displaySerial)}</td>
         <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(item.name)}</td>
         <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700">${escapeHtml(item.category)}</span></td>
         <td class="py-3 px-4 text-slate-600">${escapeHtml(item.brand || '')} ${escapeHtml(item.model || '')}</td>
@@ -2650,9 +2863,10 @@ async function openEditAccessoryModal(accId) {
     const current = (window._cachedAccessories || []).find(a => a.id === accId);
     if (!current) return;
 
-    document.getElementById('acc-form-title').textContent = `Edit Accessory ${current.accessory_code}`;
+    const displaySerial = (current.internal_serial_number || current.accessory_code || '').replace(/^#/, '');
+    document.getElementById('acc-form-title').textContent = `Edit Accessory #${displaySerial}`;
     document.getElementById('acc-form-id').value = current.id;
-    document.getElementById('acc-code').value = current.accessory_code;
+    document.getElementById('acc-code').value = displaySerial;
     document.getElementById('acc-category').value = current.category;
     document.getElementById('acc-name').value = current.name;
     document.getElementById('acc-brand').value = current.brand || '';
@@ -2670,15 +2884,16 @@ async function openEditAccessoryModal(accId) {
 async function handleAccessorySubmit(e) {
   e.preventDefault();
   const id = document.getElementById('acc-form-id').value;
+  const serialVal = document.getElementById('acc-code').value.trim();
   const payload = {
-    accessory_code: document.getElementById('acc-code').value.trim(),
+    accessory_code: serialVal,
+    internal_serial_number: serialVal,
     category: document.getElementById('acc-category').value,
     name: document.getElementById('acc-name').value.trim(),
     brand: document.getElementById('acc-brand').value.trim(),
     quantity: Number(document.getElementById('acc-qty').value) || 1,
     location: document.getElementById('acc-location').value.trim(),
     status: document.getElementById('acc-status').value,
-    remarks: document.getElementById('acc-remarks').value.trim()
   };
 
   try {
@@ -2726,7 +2941,8 @@ async function openAssignAccessoryModal(accId) {
   if (!item) return;
 
   document.getElementById('assign-acc-id').value = item.id;
-  document.getElementById('assign-acc-item-title').textContent = `${item.name} (${item.accessory_code})`;
+  const displaySerial = (item.internal_serial_number || item.accessory_code || '').replace(/^#/, '');
+  document.getElementById('assign-acc-item-title').textContent = `${item.name} (#${displaySerial})`;
   document.getElementById('assign-acc-item-info').textContent = `Brand: ${item.brand || 'Standard'} • Available Quantity: ${item.quantity}`;
   
   const qtyInput = document.getElementById('assign-acc-quantity');
@@ -3677,16 +3893,18 @@ async function executeMasterSearch(query, targetContainerId, isModal = false) {
             <span>Accessories (${data.accessories.length})</span>
           </div>
           <div class="grid grid-cols-1 gap-2">
-            ${data.accessories.map(acc => `
-              <div onclick="if(${isModal}){closeModal('modal-master-search');} navigate('accessories', { search: '${acc.accessory_code}' })" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
+            ${data.accessories.map(acc => {
+              const serialCode = (acc.internal_serial_number || acc.accessory_code || '').replace(/^#/, '');
+              return `
+              <div onclick="if(${isModal}){closeModal('modal-master-search');} navigate('accessories', { search: '${serialCode}' })" class="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer flex items-center justify-between transition-colors">
                 <div>
-                  <span class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(acc.accessory_code)}</span>
+                  <span class="font-mono font-bold text-brand-600 text-xs">#${escapeHtml(serialCode)}</span>
                   <span class="font-bold text-slate-900 text-xs ml-1">${escapeHtml(acc.name)}</span>
                   <div class="text-[11px] text-slate-500 mt-0.5">Location: ${escapeHtml(acc.location || 'Store')} • Stock: ${acc.quantity} units</div>
                 </div>
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">${escapeHtml(acc.status)}</span>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
       `;
@@ -5012,7 +5230,7 @@ async function viewUserAssets(empId) {
               <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
                 <div>
                   <div class="flex items-center gap-1.5">
-                    <span class="font-mono font-bold text-brand-600 text-xs">${escapeHtml(a.accessory_code || '')}</span>
+                    <span class="font-mono font-bold text-brand-600 text-xs">#${escapeHtml((a.internal_serial_number || a.accessory_code || '').replace(/^#/, ''))}</span>
                     <span class="font-bold text-xs text-slate-900">${escapeHtml(a.name)}</span>
                   </div>
                   <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(a.category)} • Qty: <strong>${a.quantity}</strong> ${a.remarks ? '• ' + escapeHtml(a.remarks) : ''}</div>

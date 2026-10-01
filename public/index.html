@@ -570,25 +570,37 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Maintenance & Lifecycle Center</h2>
-            <p class="text-xs sm:text-sm text-slate-500 font-medium">Track component repairs, part replacements, service expenses, and identify assets reaching End of Life</p>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium">Track component repairs, software installation, service expenses, and approve staff requests</p>
           </div>
-          <button onclick="openRepairModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            <span>Log Repair Ticket</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <a href="/help" target="_blank" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/90 shadow-xs transition-all">
+              <i data-lucide="life-buoy" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>Public Help Desk (/help)</span>
+              <i data-lucide="external-link" class="w-3 h-3 text-slate-400"></i>
+            </a>
+            <button onclick="openRepairModal()" class="tech-action inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/20 transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Log Repair Ticket</span>
+            </button>
+          </div>
         </div>
 
         <!-- Ticket Status Filter Tabs -->
-        <div class="flex items-center gap-2 border-b border-slate-200 pb-3">
-          <button id="tab-repairs-all" onclick="filterRepairTab('all')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+        <div class="flex items-center gap-2 border-b border-slate-200 pb-3 overflow-x-auto">
+          <button id="tab-repairs-all" onclick="filterRepairTab('all')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white shadow-sm flex items-center gap-1.5 flex-shrink-0">
             <span>All Tickets</span>
             <span id="repairs-total-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-700 text-slate-200">0</span>
           </button>
-          <button id="tab-repairs-open" onclick="filterRepairTab('open')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5">
-            <span>Open Tickets</span>
-            <span id="repairs-open-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold">0</span>
+          <button id="tab-repairs-pending" onclick="filterRepairTab('pending')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-amber-700 hover:bg-amber-50 border border-amber-300 flex items-center gap-1.5 flex-shrink-0">
+            <i data-lucide="bell" class="w-3 h-3 text-amber-600"></i>
+            <span>Pending Approval</span>
+            <span id="repairs-pending-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-200 text-amber-900 font-extrabold">0</span>
           </button>
-          <button id="tab-repairs-closed" onclick="filterRepairTab('closed')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5">
+          <button id="tab-repairs-open" onclick="filterRepairTab('open')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 flex-shrink-0">
+            <span>In Progress / Open</span>
+            <span id="repairs-open-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-800 font-extrabold">0</span>
+          </button>
+          <button id="tab-repairs-closed" onclick="filterRepairTab('closed')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 flex-shrink-0">
             <span>Closed / Resolved</span>
             <span id="repairs-closed-counter" class="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-extrabold">0</span>
           </button>
@@ -598,15 +610,17 @@
         <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
           <div class="relative flex-1 min-w-[200px]">
             <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="repair-filter-search" oninput="debounceRepairSearch()" placeholder="Search ticket #, issue, parts, technician..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+            <input type="text" id="repair-filter-search" oninput="debounceRepairSearch()" placeholder="Search ticket #, requester, issue, parts, technician..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
           </div>
 
           <select id="repair-filter-status" onchange="loadRepairs()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
             <option value="">All Statuses</option>
+            <option value="Pending Approval">🟡 Pending Approval</option>
             <option value="In Progress">In Progress</option>
             <option value="Awaiting Parts">Awaiting Parts</option>
             <option value="Completed">Completed</option>
             <option value="Beyond Repair">Beyond Repair</option>
+            <option value="Rejected">Rejected</option>
           </select>
 
           <!-- Repairs Date Range -->
@@ -711,7 +725,7 @@
             <p class="text-[10px] text-indigo-600 mt-0.5">Active on workstations</p>
           </div>
           <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600">Expiring (90d)</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600">Expiring (30d)</span>
             <div id="keys-kpi-expiring" class="text-2xl font-black text-amber-600 mt-1">0</div>
             <p class="text-[10px] text-amber-600 mt-0.5">Needs renewal</p>
           </div>
@@ -820,7 +834,7 @@
         <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
           <div class="relative flex-1 min-w-[200px]">
             <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="acc-filter-search" oninput="debounceAccSearch()" placeholder="Search code, item name, brand, location..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500">
+            <input type="text" id="acc-filter-search" oninput="debounceAccSearch()" placeholder="Search internal serial #, item name, brand, location..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500">
           </div>
 
           <select id="acc-filter-cat" onchange="loadAccessories()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
@@ -852,7 +866,7 @@
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase font-semibold">
                 <tr>
-                  <th class="py-3 px-4">Code</th>
+                  <th class="py-3 px-4">Internal Serial #</th>
                   <th class="py-3 px-4">Item Name</th>
                   <th class="py-3 px-4">Category</th>
                   <th class="py-3 px-4">Brand / Model</th>
@@ -959,6 +973,7 @@
 
             <select id="exp-filter-type" onchange="loadExpenses()" class="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 py-2 pl-3 pr-8 focus:bg-white focus:ring-2 focus:ring-brand-500">
               <option value="">All Service Types</option>
+              <option value="Software Installation / Service">Software Installation / Service</option>
               <option value="Component Repair">Component Repair</option>
               <option value="Part Replacement">Part Replacement</option>
               <option value="Hardware Upgrade">Hardware Upgrade</option>
@@ -1914,6 +1929,7 @@
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Repair / Maintenance Type</label>
             <select id="repair-type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500">
+              <option value="Software Installation / Service">Software Installation / Service</option>
               <option value="Component Repair">Component Repair</option>
               <option value="Part Replacement">Part Replacement</option>
               <option value="Hardware Upgrade">Hardware Upgrade (SSD/RAM)</option>
@@ -2181,6 +2197,122 @@
     </div>
   </div>
 
+  <!-- Approve Repair Ticket Modal (From Public / Pending Queue) -->
+  <div id="modal-approve-ticket" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <i data-lucide="badge-check" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="approve-ticket-modal-title" class="text-base font-bold text-slate-900">Approve Support Ticket</h3>
+            <p class="text-xs text-slate-500">Move ticket to In Progress & assign technician</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-approve-ticket')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-approve-ticket" onsubmit="submitApproveTicket(event)" class="space-y-4">
+        <input type="hidden" id="approve-ticket-id">
+
+        <!-- Ticket Summary Banner -->
+        <div id="approve-ticket-banner" class="p-3.5 bg-amber-50/70 border border-amber-200/90 rounded-xl text-xs space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-mono font-bold text-brand-600 text-sm" id="approve-ticket-number">REP-2026-001</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" id="approve-ticket-priority">Normal Priority</span>
+          </div>
+          <div class="text-slate-700">
+            <span class="text-slate-500">Requester:</span> <strong id="approve-ticket-requester">Rohan Gupta</strong>
+            <span class="text-slate-500 ml-2">Asset:</span> <strong class="font-mono" id="approve-ticket-asset">#DESK-001</strong>
+          </div>
+          <div class="text-slate-600 italic bg-white p-2 rounded-lg border border-amber-100" id="approve-ticket-issue">
+            Loading issue details...
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Assign Technician Name *</label>
+            <input type="text" id="approve-technician-name" placeholder="e.g. IT Support / Technician Name" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-amber-500" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Technician Contact / Extension</label>
+            <input type="text" id="approve-technician-contact" placeholder="e.g. +91 98765 00000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Service / Repair Category</label>
+            <select id="approve-repair-type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-amber-500">
+              <option value="Software Installation / Service">Software Installation / Service</option>
+              <option value="Component Repair">Component Repair</option>
+              <option value="Part Replacement">Part Replacement</option>
+              <option value="Hardware Upgrade (SSD/RAM)">Hardware Upgrade (SSD/RAM)</option>
+              <option value="Preventive Maintenance">Preventive Maintenance</option>
+              <option value="General IT Support">General IT Support</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Target Resolution Date</label>
+            <input type="date" id="approve-due-date" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Admin Approval Notes (Optional)</label>
+          <input type="text" id="approve-remarks" placeholder="e.g. Approved. Assigned to hardware engineer for inspection." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-amber-500">
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+          <button type="button" onclick="openRejectTicketFromApprove()" class="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline">
+            Reject Ticket Instead
+          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="closeModal('modal-approve-ticket')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+            <button type="submit" id="btn-submit-approve-ticket" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-md shadow-amber-600/20">Approve & Start Ticket</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Reject Repair Ticket Modal -->
+  <div id="modal-reject-ticket" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+            <i data-lucide="x-circle" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Reject Support Ticket</h3>
+            <p class="text-xs text-slate-500" id="reject-modal-ticket-num">REP-2026-001</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-reject-ticket')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="submitRejectTicket(event)" class="space-y-4">
+        <input type="hidden" id="reject-ticket-id">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Reason for Rejection *</label>
+          <textarea id="reject-reason" rows="3" placeholder="e.g. Duplicate ticket; Already addressed; Please consult department head first..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-rose-500" required></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-reject-ticket')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 shadow-md shadow-rose-600/20">Confirm Rejection</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Bulk Import IT Assets Modal -->
   <div id="modal-bulk-import" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
     <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
@@ -2295,12 +2427,18 @@
               <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-600"></i>
               <span>Step 1: Download Standard Accessories Template</span>
             </div>
-            <p class="text-[11px] text-emerald-700/90 mt-0.5">Pre-configured CSV template with validated categories (Mouse, Keyboard, Scanner, UPS, Print Head, etc.).</p>
+            <p class="text-[11px] text-emerald-700/90 mt-0.5">Pre-configured Excel or CSV template with Internal Serial Number and validated categories.</p>
           </div>
-          <button onclick="downloadAccessoryTemplate()" type="button" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm flex-shrink-0">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            <span>Download CSV Template</span>
-          </button>
+          <div class="flex items-center gap-2 flex-wrap">
+            <a href="/api/accessories/template/excel" download="accessories_import_template.xlsx" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+              <span>Excel Template</span>
+            </a>
+            <a href="/api/accessories/template/csv" download="accessories_import_template.csv" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 shadow-sm transition-all">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>CSV Template</span>
+            </a>
+          </div>
         </div>
 
         <!-- Step 2: File Selector / Dropzone -->
@@ -2326,7 +2464,7 @@
             <table class="w-full text-left text-[11px]">
               <thead class="bg-slate-50 text-slate-500 uppercase font-semibold">
                 <tr>
-                  <th class="py-2 px-3">Code</th>
+                  <th class="py-2 px-3">Internal Serial #</th>
                   <th class="py-2 px-3">Item Name</th>
                   <th class="py-2 px-3">Category</th>
                   <th class="py-2 px-3">Brand/Model</th>
@@ -2429,8 +2567,8 @@
         <input type="hidden" id="acc-form-id">
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Code</label>
-            <input type="text" id="acc-code" placeholder="e.g. ACC-007" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Internal Serial #</label>
+            <input type="text" id="acc-code" placeholder="e.g. ACC-001 (auto if blank)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-brand-600">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Category *</label>
@@ -2737,6 +2875,6 @@
   <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
   <!-- Core JavaScript -->
-  <script src="/js/app.js?v=2.2.0"></script>
+  <script src="/js/app.js?v=2.3.0"></script>
 </body>
 </html>

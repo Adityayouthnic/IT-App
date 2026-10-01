@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Help Desk & Maintenance Portal • Youthnic</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81'
+            }
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="min-h-full flex flex-col font-sans text-slate-800 bg-slate-50/50 selection:bg-brand-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <i data-lucide="life-buoy" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <span class="text-sm font-extrabold tracking-tight text-slate-900 block leading-tight">Youthnic IT Help Desk</span>
+          <span class="text-[11px] font-semibold text-slate-500 block">IT Support & Hardware Maintenance Portal</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/login" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 transition-all">
+          <i data-lucide="lock" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span>Staff Login</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Banner -->
+  <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white py-10 px-4 sm:px-6 border-b border-slate-800 shadow-inner">
+    <div class="max-w-3xl mx-auto text-center space-y-3">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+        <i data-lucide="sparkles" class="w-3 h-3 text-brand-300"></i> No Login Required
+      </span>
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Need IT Support or System Maintenance?</h1>
+      <p class="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
+        Submit a service request for software installation, hardware repair, or IT peripherals. Your request goes straight into our ticket queue for administrator approval and fast resolution.
+      </p>
+
+      <!-- Segmented Tab Navigation -->
+      <div class="pt-4 flex justify-center">
+        <div class="inline-flex p-1 bg-slate-800/80 backdrop-blur rounded-2xl border border-slate-700/60 shadow-lg">
+          <button id="tab-btn-raise" onclick="switchHelpTab('raise')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-md">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5 inline mr-1.5"></i> Raise Request
+          </button>
+          <button id="tab-btn-track" onclick="switchHelpTab('track')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all text-slate-300 hover:text-white">
+            <i data-lucide="search" class="w-3.5 h-3.5 inline mr-1.5"></i> Track Ticket Status
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-8">
+
+    <!-- ==========================================
+         TAB 1: RAISE SUPPORT REQUEST FORM
+         ========================================== -->
+    <section id="panel-raise" class="space-y-6">
+
+      <!-- Submission Feedback / Success Banner -->
+      <div id="raise-success-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center space-y-4 shadow-sm animate-fade-in">
+        <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+          <i data-lucide="check-circle" class="w-8 h-8"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-emerald-950">Support Request Submitted Successfully!</h3>
+          <p class="text-xs text-emerald-800 mt-1">Your IT ticket has been logged and is awaiting IT administrator approval.</p>
+        </div>
+        <div class="inline-block bg-white border border-emerald-200 rounded-xl px-5 py-3 shadow-xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Your Tracking Ticket #</span>
+          <span id="created-ticket-badge" class="font-mono text-xl font-extrabold text-brand-600">REP-2026-001</span>
+          <span class="inline-block ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Pending Approval</span>
+        </div>
+        <p class="text-[11px] text-slate-500 max-w-md mx-auto">Please note down your Ticket Number. An IT technician will be assigned once approved by the administrator.</p>
+        <div class="flex items-center justify-center gap-3 pt-2">
+          <button onclick="trackCreatedTicket()" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 shadow-md transition-all">
+            Track Ticket Status &rarr;
+          </button>
+          <button onclick="resetRaiseForm()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+            Submit Another Request
+          </button>
+        </div>
+      </div>
+
+      <!-- Request Form Card -->
+      <div id="raise-form-card" class="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-6 py-4 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="clipboard-pen" class="w-4 h-4 text-brand-600"></i>
+            <h2 class="text-sm font-bold text-slate-900">IT Maintenance & Service Form</h2>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500">* Required Fields</span>
+        </div>
+
+        <form id="form-help-request" onsubmit="handleHelpSubmit(event)" class="p-6 space-y-5">
+          <!-- Step 1: Requester Details -->
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
+              <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px]">1</span>
+              <span>Requester Details</span>
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Your Full Name *</label>
+                <input type="text" id="req-name" list="employee-suggestions" oninput="onRequesterNameInput()" placeholder="e.g. Rohan Gupta" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+                <datalist id="employee-suggestions"></datalist>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile / WhatsApp Number *</label>
+                <input type="tel" id="req-phone" placeholder="e.g. 9876543210" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                <select id="req-dept" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500">
+                  <option value="">Select your department...</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Official Email (Optional)</label>
+                <input type="email" id="req-email" placeholder="e.g. name@vbexports.co.in" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500">
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Asset & Request Classification -->
+          <div class="pt-2 border-t border-slate-100">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
+              <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px]">2</span>
+              <span>Asset & Service Category</span>
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Target IT Asset (Workstation, Laptop, Printer, etc.)</label>
+                <select id="req-asset" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500 font-mono">
+                  <option value="">Loading company assets list...</option>
+                </select>
+                <p class="text-[11px] text-slate-500 mt-1">Select your workstation serial tag (e.g. #DESK-001) or choose General IT Support if not listed.</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Service / Maintenance Type *</label>
+                <select id="req-type" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500" required>
+                  <option value="Software Installation / Service">Software Installation / Service</option>
+                  <option value="Component Repair">Component Repair</option>
+                  <option value="Part Replacement">Part Replacement</option>
+                  <option value="Hardware Upgrade (SSD/RAM)">Hardware Upgrade (SSD/RAM)</option>
+                  <option value="Preventive Maintenance">Preventive Maintenance</option>
+                  <option value="Network / WiFi Connectivity">Network / WiFi Connectivity</option>
+                  <option value="Printer / Scanner Support">Printer / Scanner Support</option>
+                  <option value="General IT Support">General IT Support</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Urgency / Priority *</label>
+                <select id="req-priority" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500">
+                  <option value="Normal">🟢 Normal - Standard Turnaround</option>
+                  <option value="High">🟠 High - Hindering Work</option>
+                  <option value="Critical">🔴 Critical - Work Completely Stopped</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Issue Description -->
+          <div class="pt-2 border-t border-slate-100">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
+              <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px]">3</span>
+              <span>Issue Description</span>
+            </h3>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Describe the problem or service needed in detail *</label>
+              <textarea id="req-issue" rows="3" placeholder="e.g. Need MS Office or software installed; System not turning on; Printer paper jam repeatedly; Need RAM upgrade for Photoshop..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500 leading-relaxed" required></textarea>
+            </div>
+          </div>
+
+          <!-- Submit Action -->
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+            <button type="submit" id="btn-submit-request" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/25 transition-all">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              <span>Submit Support Request</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         TAB 2: TRACK TICKET STATUS
+         ========================================== -->
+    <section id="panel-track" class="hidden space-y-6">
+      <div class="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-4">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">Track Support Ticket Status</h2>
+          <p class="text-xs text-slate-500">Enter your Ticket Number (e.g. REP-2026-001) or your mobile number to view live progress.</p>
+        </div>
+
+        <form onsubmit="handleTrackSubmit(event)" class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="track-input" placeholder="Enter Ticket # (e.g. REP-2026-001) or Mobile Number" class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500 font-mono" required>
+          </div>
+          <button type="submit" id="btn-track" class="inline-flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition-all flex-shrink-0">
+            <span>Track Status</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </form>
+      </div>
+
+      <!-- Ticket Details Result Container -->
+      <div id="track-result-container" class="hidden space-y-4">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-5xl mx-auto px-4">
+      <p class="font-medium">Youthnic IT Asset & Hardware Lifecycle Management System</p>
+      <p class="text-[11px] text-slate-400 mt-0.5">Need immediate emergency support? Contact the IT Desk at the Head Office Floor 2.</p>
+    </div>
+  </footer>
+
+  <!-- Help Desk Client Script -->
+  <script>
+    let optionsData = { departments: [], employees: [], assets: [] };
+    let latestCreatedTicketNumber = '';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await loadHelpOptions();
+    });
+
+    function switchHelpTab(tab) {
+      const raiseBtn = document.getElementById('tab-btn-raise');
+      const trackBtn = document.getElementById('tab-btn-track');
+      const raisePanel = document.getElementById('panel-raise');
+      const trackPanel = document.getElementById('panel-track');
+
+      if (tab === 'raise') {
+        raiseBtn.className = 'px-5 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-md';
+        trackBtn.className = 'px-5 py-2 rounded-xl text-xs font-bold transition-all text-slate-300 hover:text-white';
+        raisePanel.classList.remove('hidden');
+        trackPanel.classList.add('hidden');
+      } else {
+        trackBtn.className = 'px-5 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-md';
+        raiseBtn.className = 'px-5 py-2 rounded-xl text-xs font-bold transition-all text-slate-300 hover:text-white';
+        trackPanel.classList.remove('hidden');
+        raisePanel.classList.add('hidden');
+      }
+    }
+
+    async function loadHelpOptions() {
+      try {
+        const res = await fetch('/api/help/options');
+        if (!res.ok) return;
+        optionsData = await res.json();
+
+        // 1. Populate Departments
+        const deptSelect = document.getElementById('req-dept');
+        deptSelect.innerHTML = '<option value="">Select your department...</option>';
+        (optionsData.departments || []).forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.name;
+          opt.textContent = d.name + (d.code ? ` (${d.code})` : '');
+          deptSelect.appendChild(opt);
+        });
+
+        // 2. Populate Employee datalist suggestions
+        const datalist = document.getElementById('employee-suggestions');
+        datalist.innerHTML = '';
+        (optionsData.employees || []).forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.name;
+          opt.label = `${e.department || ''} ${e.phone ? '• ' + e.phone : ''}`;
+          datalist.appendChild(opt);
+        });
+
+        // 3. Populate Assets
+        const assetSelect = document.getElementById('req-asset');
+        assetSelect.innerHTML = '<option value="">General Support (Asset not listed / Common facility)</option>';
+        (optionsData.assets || []).forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          const userPart = a.assigned_user ? ` [👤 ${a.assigned_user}]` : ' [🟢 Free/In Stock]';
+          opt.textContent = `#${a.internal_serial_number} - ${a.brand || ''} ${a.asset_type || ''}${userPart}`;
+          assetSelect.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Error loading help options:', err);
+      }
+    }
+
+    function onRequesterNameInput() {
+      const val = document.getElementById('req-name').value.trim().toLowerCase();
+      if (!val) return;
+
+      // Auto-match employee to pre-fill department and phone if found
+      const matched = (optionsData.employees || []).find(e => e.name.toLowerCase() === val);
+      if (matched) {
+        if (matched.department) document.getElementById('req-dept').value = matched.department;
+        if (matched.phone) document.getElementById('req-phone').value = matched.phone;
+        if (matched.email) document.getElementById('req-email').value = matched.email;
+
+        // Auto-select their assigned asset if available
+        const matchedAsset = (optionsData.assets || []).find(a => (a.assigned_user || '').toLowerCase() === val);
+        if (matchedAsset) {
+          document.getElementById('req-asset').value = matchedAsset.id;
+        }
+      }
+    }
+
+    async function handleHelpSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit-request');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="inline-block animate-spin mr-2">⏳</span> Submitting...`;
+
+      const payload = {
+        requester_name: document.getElementById('req-name').value.trim(),
+        requester_phone: document.getElementById('req-phone').value.trim(),
+        requester_department: document.getElementById('req-dept').value,
+        requester_email: document.getElementById('req-email').value.trim(),
+        asset_id: document.getElementById('req-asset').value || null,
+        repair_type: document.getElementById('req-type').value,
+        priority: document.getElementById('req-priority').value,
+        issue_description: document.getElementById('req-issue').value.trim()
+      };
+
+      try {
+        const res = await fetch('/api/help/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to submit request');
+        }
+
+        latestCreatedTicketNumber = data.ticket_number;
+        document.getElementById('created-ticket-badge').textContent = data.ticket_number;
+        document.getElementById('raise-form-card').classList.add('hidden');
+        document.getElementById('raise-success-box').classList.remove('hidden');
+        lucide.createIcons();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="send" class="w-4 h-4"></i><span>Submit Support Request</span>`;
+        lucide.createIcons();
+      }
+    }
+
+    function resetRaiseForm() {
+      document.getElementById('form-help-request').reset();
+      document.getElementById('raise-success-box').classList.add('hidden');
+      document.getElementById('raise-form-card').classList.remove('hidden');
+    }
+
+    function trackCreatedTicket() {
+      switchHelpTab('track');
+      if (latestCreatedTicketNumber) {
+        document.getElementById('track-input').value = latestCreatedTicketNumber;
+        handleTrackSubmit(new Event('submit'));
+      }
+    }
+
+    async function handleTrackSubmit(e) {
+      if (e) e.preventDefault();
+      const raw = document.getElementById('track-input').value.trim();
+      if (!raw) return;
+
+      const container = document.getElementById('track-result-container');
+      container.classList.remove('hidden');
+      container.innerHTML = `
+        <div class="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
+          <span class="inline-block animate-spin text-xl mb-2">⏳</span>
+          <p class="text-xs">Fetching ticket status...</p>
+        </div>
+      `;
+
+      try {
+        const res = await fetch(`/api/help/track/${encodeURIComponent(raw)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          container.innerHTML = `
+            <div class="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center space-y-2">
+              <i data-lucide="alert-circle" class="w-8 h-8 text-rose-500 mx-auto"></i>
+              <h4 class="text-sm font-bold text-rose-950">Ticket Not Found</h4>
+              <p class="text-xs text-rose-700">${data.error || 'No matching ticket found.'}</p>
+            </div>
+          `;
+          lucide.createIcons();
+          return;
+        }
+
+        const t = data.ticket;
+
+        let statusBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">Pending Approval</span>`;
+        if (t.status === 'In Progress') {
+          statusBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">In Progress</span>`;
+        } else if (t.status === 'Completed') {
+          statusBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed / Resolved</span>`;
+        } else if (t.status === 'Rejected') {
+          statusBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">Rejected</span>`;
+        } else if (t.status === 'Awaiting Parts') {
+          statusBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">Awaiting Parts</span>`;
+        }
+
+        container.innerHTML = `
+          <div class="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden space-y-4">
+            <div class="px-6 py-4 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Ticket #</span>
+                <span class="text-lg font-black font-mono text-brand-600">${t.ticket_number}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                ${statusBadge}
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${t.priority === 'Critical' ? 'bg-rose-100 text-rose-800' : (t.priority === 'High' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700')}">${t.priority || 'Normal'} Priority</span>
+              </div>
+            </div>
+
+            <div class="p-6 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-4 border-b border-slate-100 text-xs">
+                <div>
+                  <span class="text-slate-500 block">Requester:</span>
+                  <strong class="text-slate-900">${t.requester_name || '—'}</strong>
+                  <div class="text-[11px] text-slate-500">${t.requester_department || ''} ${t.requester_phone ? '• ' + t.requester_phone : ''}</div>
+                </div>
+                <div>
+                  <span class="text-slate-500 block">Target Asset:</span>
+                  <strong class="text-slate-900 font-mono">#${t.internal_serial_number || 'GEN-IT'}</strong>
+                  <div class="text-[11px] text-slate-500">${t.brand || ''} ${t.asset_type || ''}</div>
+                </div>
+                <div>
+                  <span class="text-slate-500 block">Service Type:</span>
+                  <strong class="text-slate-900">${t.repair_type || 'Maintenance'}</strong>
+                  <div class="text-[11px] text-slate-500">Date: ${t.repair_date || t.created_at || '—'}</div>
+                </div>
+              </div>
+
+              <div>
+                <span class="text-xs font-bold text-slate-700 block mb-1">Issue Reported:</span>
+                <div class="p-3 bg-slate-50 rounded-xl text-xs text-slate-800 leading-relaxed border border-slate-100 font-medium">
+                  ${t.issue_description || 'No description provided.'}
+                </div>
+              </div>
+
+              ${t.status === 'Pending Approval' ? `
+                <div class="p-3.5 bg-amber-50/70 border border-amber-200/90 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                  <i data-lucide="clock" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+                  <div>
+                    <strong class="block font-bold">Ticket is in Open Queue</strong>
+                    <span>Your request has been received. The IT administrator will review and assign a technician shortly.</span>
+                  </div>
+                </div>
+              ` : ''}
+
+              ${t.technician_name ? `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl text-xs">
+                  <div>
+                    <span class="text-indigo-700 block text-[11px] font-bold uppercase tracking-wider">Assigned Technician:</span>
+                    <strong class="text-indigo-950 font-bold">${t.technician_name}</strong>
+                    ${t.technician_contact ? `<div class="text-[11px] text-indigo-700">Contact: ${t.technician_contact}</div>` : ''}
+                  </div>
+                  <div>
+                    <span class="text-indigo-700 block text-[11px] font-bold uppercase tracking-wider">Target Due Date:</span>
+                    <strong class="text-indigo-950 font-bold">${t.due_date || 'In Progress'}</strong>
+                  </div>
+                </div>
+              ` : ''}
+
+              ${t.rejection_reason ? `
+                <div class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900">
+                  <strong class="block font-bold">Rejection Reason:</strong>
+                  <span>${t.rejection_reason}</span>
+                </div>
+              ` : ''}
+
+              ${t.completion_date ? `
+                <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">
+                  <strong class="block font-bold">Resolved on: ${t.completion_date}</strong>
+                  ${t.parts_added ? `<div class="text-[11px] mt-1">Actions / Parts: ${t.parts_added}</div>` : ''}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        lucide.createIcons();
+      } catch (err) {
+        container.innerHTML = `<div class="text-center text-xs text-rose-600 py-4">${err.message}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
