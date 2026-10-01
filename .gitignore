@@ -5,3 +5,4 @@ yarn-error.log*
 .env
 data/it_inventory.db-shm
 data/it_inventory.db-wal
+scratch/

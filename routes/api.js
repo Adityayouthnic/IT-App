@@ -1,13 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const xlsx = require('xlsx');
 const ExcelJS = require('exceljs');
 const { db, purgeOperationalData } = require('../database');
 const { authenticateToken, requireRoles, logAudit } = require('../auth');
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max file size
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext === '.xlsx' || ext === '.csv') {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file format. Only Excel (.xlsx) and CSV (.csv) files are allowed.'));
+    }
+  }
+});
 
 // All API routes require authentication
 router.use(authenticateToken);
@@ -1137,7 +1148,7 @@ router.get('/assets/template/csv', (req, res) => {
 });
 
 // POST /api/assets/bulk-import - Bulk import assets via Excel (.xlsx) or JSON
-router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), (req, res) => {
+router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), async (req, res) => {
   try {
     let rows = [];
 
@@ -1147,10 +1158,43 @@ router.post('/assets/bulk-import', requireRoles('admin', 'technician'), upload.s
           error: 'CSV format is disabled. Please download and upload using the standardized Excel (.xlsx) template with dropdown data validation.'
         });
       }
-      // Parse Excel from uploaded buffer
-      const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
-      const sheetName = wb.SheetNames[0];
-      rows = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+      // Parse Excel safely using ExcelJS (prevents Prototype Pollution)
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) {
+        return res.status(400).json({ error: 'Uploaded Excel file contains no worksheets.' });
+      }
+
+      const headers = [];
+      worksheet.getRow(1).eachCell((cell, colNumber) => {
+        headers[colNumber] = String(cell.value || '').trim();
+      });
+
+      rows = [];
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const rowObj = {};
+        let hasValue = false;
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const header = headers[colNumber];
+          if (header) {
+            let val = cell.value;
+            if (val !== null && typeof val === 'object') {
+              if (val.text !== undefined) val = val.text;
+              else if (val.result !== undefined) val = val.result;
+            }
+            if (val !== null && val !== undefined) {
+              const strVal = String(val).trim();
+              if (strVal) hasValue = true;
+              rowObj[header] = strVal;
+            } else {
+              rowObj[header] = '';
+            }
+          }
+        });
+        if (hasValue) rows.push(rowObj);
+      });
     } else if (req.body.assets && Array.isArray(req.body.assets)) {
       rows = req.body.assets;
     } else {
@@ -2087,8 +2131,12 @@ router.get('/expenses/export/csv', (req, res) => {
 
     const escapeCsv = (val) => {
       if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
+      let str = String(val).trim();
+      // Sanitize CSV / Excel formula injection (neutralize =, +, -, @, \t, \r)
+      if (/^[=+@\-\t\r]/.test(str)) {
+        str = "'" + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
     };
 
     let csvContent = headers.join(',') + '\n';
@@ -2787,7 +2835,14 @@ router.get('/accessories/template/csv', (req, res) => {
     ['ACC-013', 'Print Head', 'TSC Thermal Printhead 203 DPI', 'TSC', 'TE244', '', '3', 'IT Store Room', 'In Stock', 'Replacement thermal heads for barcode printers']
   ];
 
-  const escapeCsv = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+  const escapeCsv = (val) => {
+    if (val === null || val === undefined) return '""';
+    let str = String(val).trim();
+    if (/^[=+@\-\t\r]/.test(str)) {
+      str = "'" + str;
+    }
+    return `"${str.replace(/"/g, '""')}"`;
+  };
   let csv = headers.join(',') + '\n';
   sampleRows.forEach(row => {
     csv += row.map(escapeCsv).join(',') + '\n';
@@ -2799,63 +2854,102 @@ router.get('/accessories/template/csv', (req, res) => {
 });
 
 // GET /api/accessories/template/excel - Download Accessories Excel (.xlsx) Template
-router.get('/accessories/template/excel', (req, res) => {
-  const headers = [
-    'Internal Serial Number',
-    'Category',
-    'Item Name',
-    'Brand',
-    'Model',
-    'Serial Number',
-    'Quantity',
-    'Location',
-    'Status',
-    'Remarks'
-  ];
+router.get('/accessories/template/excel', async (req, res) => {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Accessories');
+    ws.columns = [
+      { header: 'Internal Serial Number', key: 'internal_serial_number', width: 24 },
+      { header: 'Category', key: 'category', width: 16 },
+      { header: 'Item Name', key: 'name', width: 36 },
+      { header: 'Brand', key: 'brand', width: 16 },
+      { header: 'Model', key: 'model', width: 16 },
+      { header: 'Serial Number', key: 'serial_number', width: 22 },
+      { header: 'Quantity', key: 'quantity', width: 12 },
+      { header: 'Location', key: 'location', width: 20 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Remarks', key: 'remarks', width: 32 }
+    ];
 
-  const sampleData = [
-    { 'Internal Serial Number': 'ACC-010', 'Category': 'Mouse', 'Item Name': 'Logitech B100 USB Optical Mouse', 'Brand': 'Logitech', 'Model': 'B100', 'Serial Number': '', 'Quantity': 10, 'Location': 'IT Store Room', 'Status': 'In Stock', 'Remarks': 'Spare optical mice' },
-    { 'Internal Serial Number': 'ACC-011', 'Category': 'Keyboard', 'Item Name': 'Dell KB216 Wired Standard Keyboard', 'Brand': 'Dell', 'Model': 'KB216', 'Serial Number': '', 'Quantity': 5, 'Location': 'IT Store Room', 'Status': 'In Stock', 'Remarks': 'Standard desktop keyboards' },
-    { 'Internal Serial Number': 'ACC-012', 'Category': 'Scanner', 'Item Name': 'Zebra DS2208 Barcode Scanner', 'Brand': 'Zebra', 'Model': 'DS2208', 'Serial Number': '', 'Quantity': 2, 'Location': 'Dispatch Bay', 'Status': 'In Stock', 'Remarks': '2D Barcode scanner' }
-  ];
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
 
-  const ws = xlsx.utils.json_to_sheet(sampleData, { header: headers });
-  ws['!cols'] = [
-    { wch: 22 }, // Internal Serial Number
-    { wch: 15 }, // Category
-    { wch: 35 }, // Item Name
-    { wch: 15 }, // Brand
-    { wch: 15 }, // Model
-    { wch: 20 }, // Serial Number
-    { wch: 10 }, // Quantity
-    { wch: 18 }, // Location
-    { wch: 12 }, // Status
-    { wch: 30 }  // Remarks
-  ];
+    const sampleData = [
+      { internal_serial_number: 'ACC-010', category: 'Mouse', name: 'Logitech B100 USB Optical Mouse', brand: 'Logitech', model: 'B100', serial_number: '', quantity: 10, location: 'IT Store Room', status: 'In Stock', remarks: 'Spare optical mice' },
+      { internal_serial_number: 'ACC-011', category: 'Keyboard', name: 'Dell KB216 Wired Standard Keyboard', brand: 'Dell', model: 'KB216', serial_number: '', quantity: 5, location: 'IT Store Room', status: 'In Stock', remarks: 'Standard desktop keyboards' },
+      { internal_serial_number: 'ACC-012', category: 'Scanner', name: 'Zebra DS2208 Barcode Scanner', brand: 'Zebra', model: 'DS2208', serial_number: '', quantity: 2, location: 'Dispatch Bay', status: 'In Stock', remarks: '2D Barcode scanner' }
+    ];
+    sampleData.forEach(item => ws.addRow(item));
 
-  const wb = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(wb, ws, 'Accessories');
-  const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="accessories_import_template.xlsx"');
-  res.status(200).send(buffer);
+    const buffer = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="accessories_import_template.xlsx"');
+    res.status(200).send(buffer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/accessories/bulk-import - Bulk import accessories from CSV or Excel
-router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), (req, res) => {
+router.post('/accessories/bulk-import', requireRoles('admin', 'technician'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Please upload a CSV or Excel (.xlsx) file.' });
     }
 
-    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      return res.status(400).json({ error: 'Spreadsheet has no sheets.' });
+    let rawRows = [];
+    const isCsv = req.file.originalname && req.file.originalname.toLowerCase().endsWith('.csv');
+
+    if (isCsv) {
+      const csvStr = req.file.buffer.toString('utf8');
+      const lines = csvStr.split(/\r?\n/).filter(line => line.trim());
+      if (lines.length > 1) {
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+          const rowObj = {};
+          headers.forEach((h, idx) => { rowObj[h] = vals[idx] || ''; });
+          rawRows.push(rowObj);
+        }
+      }
+    } else {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) {
+        return res.status(400).json({ error: 'Spreadsheet has no sheets.' });
+      }
+
+      const headers = [];
+      worksheet.getRow(1).eachCell((cell, colNumber) => {
+        headers[colNumber] = String(cell.value || '').trim();
+      });
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const rowObj = {};
+        let hasValue = false;
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const header = headers[colNumber];
+          if (header) {
+            let val = cell.value;
+            if (val !== null && typeof val === 'object') {
+              if (val.text !== undefined) val = val.text;
+              else if (val.result !== undefined) val = val.result;
+            }
+            if (val !== null && val !== undefined) {
+              const strVal = String(val).trim();
+              if (strVal) hasValue = true;
+              rowObj[header] = strVal;
+            } else {
+              rowObj[header] = '';
+            }
+          }
+        });
+        if (hasValue) rawRows.push(rowObj);
+      });
     }
 
-    const rawRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
     if (!rawRows || rawRows.length === 0) {
       return res.status(400).json({ error: 'Spreadsheet contains no data rows.' });
     }

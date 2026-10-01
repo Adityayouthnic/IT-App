@@ -1,7 +1,25 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { db } = require('./database');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'it_app_secure_super_secret_key_2026_vbexport';
+function getJwtSecret() {
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim()) {
+    return process.env.JWT_SECRET.trim();
+  }
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'jwt_secret'").get();
+    if (row && row.value && row.value.trim()) {
+      return row.value.trim();
+    }
+    const generated = crypto.randomBytes(32).toString('hex');
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('jwt_secret', ?)").run(generated);
+    return generated;
+  } catch (err) {
+    return 'it_app_secure_super_secret_key_2026_vbexport';
+  }
+}
+
+const JWT_SECRET = getJwtSecret();
 
 function generateToken(user) {
   return jwt.sign(

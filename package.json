@@ -24,7 +24,9 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
-    "tailwindcss": "^4.3.3",
-    "xlsx": "^0.18.5"
+    "tailwindcss": "^4.3.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

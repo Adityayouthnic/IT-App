@@ -3977,6 +3977,7 @@ async function loadUsers() {
     const res = await apiFetch('/api/users');
     if (!res.ok) return;
     const { users } = await res.json();
+    window._cachedUsers = users || [];
 
     const tbody = document.getElementById('users-table-body');
     tbody.innerHTML = '';
@@ -4001,14 +4002,14 @@ async function loadUsers() {
         <td class="py-3 px-4 text-slate-500">${new Date(u.created_at).toLocaleDateString()}</td>
         <td class="py-3 px-4 text-right">
           <div class="flex items-center justify-end gap-1">
-            <button onclick="openResetPasswordModal(${u.id}, '${escapeHtml(u.username)}')" title="Reset Password" class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+            <button onclick="openResetPasswordModal(${u.id})" title="Reset Password" class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
               <i data-lucide="key" class="w-4 h-4"></i>
             </button>
             <button onclick="openEditUserModal(${u.id})" title="Edit User" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
               <i data-lucide="pencil" class="w-4 h-4"></i>
             </button>
             ${!isSelf ? `
-              <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')" title="Delete User" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+              <button onclick="deleteUser(${u.id})" title="Delete User" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             ` : ''}
@@ -4124,8 +4125,10 @@ function togglePasswordVisibility(inputId, iconId) {
   lucide.createIcons();
 }
 
-function openResetPasswordModal(userId, username) {
+function openResetPasswordModal(userId) {
   document.getElementById('reset-password-user-id').value = userId;
+  const user = (window._cachedUsers || []).find(u => u.id === userId);
+  const username = user ? user.username : '';
   const displayEl = document.getElementById('reset-password-user-display');
   if (displayEl) displayEl.textContent = `Set new login password for @${username}`;
   const input = document.getElementById('reset-new-password');
@@ -4179,7 +4182,9 @@ async function submitResetPassword(e) {
   }
 }
 
-async function deleteUser(userId, username) {
+async function deleteUser(userId) {
+  const user = (window._cachedUsers || []).find(u => u.id === userId);
+  const username = user ? user.username : 'User';
   if (!confirm(`Delete user account @${username}?`)) return;
 
   try {
@@ -4948,7 +4953,7 @@ function renderEmployeesTable(employees) {
             </button>
           ` : ''}
           ${isAdmin ? `
-            <button onclick="deleteEmployee(${emp.id}, '${escapeHtml(emp.name)}')" title="Delete from Master" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+            <button onclick="deleteEmployee(${emp.id})" title="Delete from Master" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
               <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
           ` : ''}
@@ -5040,7 +5045,9 @@ async function handleEmployeeSubmit(e) {
   }
 }
 
-async function deleteEmployee(empId, name) {
+async function deleteEmployee(empId) {
+  const emp = (window._cachedEmployees || []).find(e => e.id === empId);
+  const name = emp ? emp.name : 'this employee';
   if (!confirm(`Are you sure you want to remove '${name}' from User Master?\n\nNote: If this user has assets assigned, you must reassign or unassign them first.`)) {
     return;
   }
@@ -5093,7 +5100,7 @@ async function viewUserAssets(empId) {
           <button onclick="closeModal('modal-user-assets'); openEmployeeModal(${emp.id})" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-violet-700 bg-white hover:bg-violet-100 border border-violet-200 shadow-xs">
             Edit Profile
           </button>
-          <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 shadow-sm">
+          <button onclick="assignNewAssetForEmployee(${emp.id})" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 shadow-sm">
             + Assign IT Asset
           </button>
         </div>
@@ -5108,7 +5115,7 @@ async function viewUserAssets(empId) {
             </div>
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Assigned Workstations (${ws.length})</h4>
           </div>
-          <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ asset_type: 'Desktop', assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="text-xs text-sky-600 hover:text-sky-700 font-bold hover:underline">
+          <button onclick="assignNewAssetForEmployee(${emp.id}, 'Desktop')" class="text-xs text-sky-600 hover:text-sky-700 font-bold hover:underline">
             + Add PC
           </button>
         </div>
@@ -5164,7 +5171,7 @@ async function viewUserAssets(empId) {
             </div>
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Assigned Printers & Scanners (${pr.length})</h4>
           </div>
-          <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ asset_type: 'Tag Printer', assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="text-xs text-amber-700 hover:text-amber-800 font-bold hover:underline">
+          <button onclick="assignNewAssetForEmployee(${emp.id}, 'Tag Printer')" class="text-xs text-amber-700 hover:text-amber-800 font-bold hover:underline">
             + Add Printer
           </button>
         </div>
@@ -5203,7 +5210,7 @@ async function viewUserAssets(empId) {
             <div class="text-xs text-slate-600">
               <span class="font-semibold text-slate-800">Standalone User:</span> ${escapeHtml(emp.name)} does not have any dedicated printer assigned.
             </div>
-            <button onclick="closeModal('modal-user-assets'); openNewAssetModalWithPrefill({ asset_type: 'Tag Printer', assigned_user: '${escapeHtml(emp.name)}', department: '${escapeHtml(emp.department || '')}', location: '${escapeHtml(emp.location || '')}' })" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 flex-shrink-0">
+            <button onclick="assignNewAssetForEmployee(${emp.id}, 'Tag Printer')" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 flex-shrink-0">
               + Assign Printer
             </button>
           </div>
@@ -5252,6 +5259,18 @@ async function viewUserAssets(empId) {
   } catch (err) {
     console.error('Error viewing user assets:', err);
   }
+}
+
+function assignNewAssetForEmployee(empId, assetType) {
+  closeModal('modal-user-assets');
+  const emp = (window._cachedEmployees || []).find(e => e.id === empId);
+  if (!emp) return;
+  openNewAssetModalWithPrefill({
+    asset_type: assetType || '',
+    assigned_user: emp.name,
+    department: emp.department || '',
+    location: emp.location || ''
+  });
 }
 
 // ==========================================
@@ -5502,7 +5521,7 @@ function renderDepartmentsGrid(departments) {
                 <i data-lucide="pencil" class="w-4 h-4"></i>
               </button>
               ${isAdmin ? `
-                <button onclick="deleteDepartment(${d.id}, '${escapeHtml(d.name)}')" title="Delete Department" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer">
+                <button onclick="deleteDepartment(${d.id})" title="Delete Department" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer">
                   <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
               ` : ''}
@@ -5587,7 +5606,7 @@ async function viewDepartmentDetail(deptId) {
           <p class="text-xs text-slate-600 font-medium">${escapeHtml(dept.description || 'No operational description recorded.')}</p>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-          <button onclick="closeModal('modal-department-detail'); openNewAssetModalWithPrefill({ department: '${escapeHtml(dept.name)}', location: '${escapeHtml(dept.location || '')}' })" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-pink-600 hover:bg-pink-500 shadow-sm cursor-pointer">
+          <button onclick="assignNewAssetForDepartment(${dept.id})" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-pink-600 hover:bg-pink-500 shadow-sm cursor-pointer">
             + Allocate Asset
           </button>
         </div>
@@ -5647,7 +5666,7 @@ async function viewDepartmentDetail(deptId) {
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Department Assets (${assets.length})</h4>
-          <button onclick="closeModal('modal-department-detail'); navigate('assets', { department: '${escapeHtml(dept.name)}' })" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline cursor-pointer">
+          <button onclick="filterAssetsForDepartment(${dept.id})" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline cursor-pointer">
             View in Master Asset List &rarr;
           </button>
         </div>
@@ -5700,7 +5719,7 @@ async function viewDepartmentDetail(deptId) {
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Department Personnel (${employees.length})</h4>
-          <button onclick="closeModal('modal-department-detail'); navigate('employees', { department: '${escapeHtml(dept.name)}' })" class="text-xs text-violet-600 hover:text-violet-700 font-bold hover:underline cursor-pointer">
+          <button onclick="filterEmployeesForDepartment(${dept.id})" class="text-xs text-violet-600 hover:text-violet-700 font-bold hover:underline cursor-pointer">
             View in User Master &rarr;
           </button>
         </div>
@@ -5833,9 +5852,46 @@ async function handleDepartmentSubmit(e) {
   }
 }
 
+// Department Action Helpers
+function assignNewAssetForDepartment(deptId) {
+  closeModal('modal-department-detail');
+  let deptName = '';
+  if (Array.isArray(cachedDepartmentsList)) {
+    const found = cachedDepartmentsList.find(d => String(d.id) === String(deptId));
+    if (found) deptName = found.name;
+  }
+  openNewAssetModalWithPrefill({ department: deptName });
+}
+
+function filterAssetsForDepartment(deptId) {
+  closeModal('modal-department-detail');
+  let deptName = '';
+  if (Array.isArray(cachedDepartmentsList)) {
+    const found = cachedDepartmentsList.find(d => String(d.id) === String(deptId));
+    if (found) deptName = found.name;
+  }
+  navigate('assets', { department: deptName });
+}
+
+function filterEmployeesForDepartment(deptId) {
+  closeModal('modal-department-detail');
+  let deptName = '';
+  if (Array.isArray(cachedDepartmentsList)) {
+    const found = cachedDepartmentsList.find(d => String(d.id) === String(deptId));
+    if (found) deptName = found.name;
+  }
+  navigate('employees', { department: deptName });
+}
+
 // Delete Department
 async function deleteDepartment(deptId, deptName) {
-  if (!confirm(`Are you sure you want to delete department '${deptName}' from Department Master?\n\nNote: If this department has assets or staff assigned, you must reassign them first.`)) {
+  let name = deptName;
+  if (!name && Array.isArray(cachedDepartmentsList)) {
+    const found = cachedDepartmentsList.find(d => String(d.id) === String(deptId));
+    if (found) name = found.name;
+  }
+  name = name || 'this department';
+  if (!confirm(`Are you sure you want to delete department '${name}' from Department Master?\n\nNote: If this department has assets or staff assigned, you must reassign them first.`)) {
     return;
   }
   try {
@@ -5883,6 +5939,9 @@ window.openDepartmentModal = openDepartmentModal;
 window.openEditDepartmentModal = openEditDepartmentModal;
 window.handleDepartmentSubmit = handleDepartmentSubmit;
 window.deleteDepartment = deleteDepartment;
+window.assignNewAssetForDepartment = assignNewAssetForDepartment;
+window.filterAssetsForDepartment = filterAssetsForDepartment;
+window.filterEmployeesForDepartment = filterEmployeesForDepartment;
 window.exportAssetsExcel = exportAssetsExcel;
 window.downloadAssetTemplate = downloadAssetTemplate;
 window.handleBulkFileSelect = handleBulkFileSelect;

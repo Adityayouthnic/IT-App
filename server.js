@@ -41,7 +41,9 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' https:;"
+    "connect-src 'self' https:; " +
+    "object-src 'none'; " +
+    "base-uri 'self';"
   );
 
   next();
@@ -61,19 +63,38 @@ app.use((req, res, next) => {
     return res.status(403).send('Forbidden: Path Traversal Detected');
   }
 
-  // Block direct requests attempting to download database, env, git, config, or source code files
-  if (/\.(db|sqlite|sqlite3|env|git|json|md|bak|sql|log|ya?ml)$/i.test(decodedPath)) {
+  // Block direct requests attempting to download database, env, git, config, or backend source files
+  if (
+    /^\/(\.git|\.env|data|node_modules|scratch|routes)(\/|$)/i.test(decodedPath) ||
+    /^\/(server|auth|database|test_app)\.js$/i.test(decodedPath) ||
+    /\.(db|sqlite|sqlite3|env|git|json|md|bak|sql|log|ya?ml|sh|bat|cmd)$/i.test(decodedPath)
+  ) {
     return res.status(404).send('Not Found');
   }
 
   next();
 });
 
-// 5. Standard Body Parsers & Cookie Parser
-app.use(cors());
+// 5. Standard Body Parsers & Cookie Parser with Explicit Size Boundaries
+const allowedOrigins = [
+  'https://it.youthnic.shop',
+  'http://it.youthnic.shop',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || origin.endsWith('.youthnic.shop') || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return callback(null, true);
+    }
+    callback(null, false);
+  },
+  credentials: true
+}));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // 6. Public Endpoints (Must be reachable before login)
 // Health check endpoint for Railway & uptime monitoring

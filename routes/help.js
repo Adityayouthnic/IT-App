@@ -32,6 +32,38 @@ function getOrCreateFallbackAsset() {
   return asset;
 }
 
+// Simple in-memory rate limiting map
+function createRateLimiter(windowMs, maxRequests, errMsg) {
+  const attempts = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of attempts.entries()) {
+      if (now > data.resetAt) attempts.delete(ip);
+    }
+  }, windowMs).unref();
+
+  return (req, res, next) => {
+    const ip = (req.ip || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+    const now = Date.now();
+    const data = attempts.get(ip);
+    if (!data || now > data.resetAt) {
+      attempts.set(ip, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    if (data.count >= maxRequests) {
+      const waitMinutes = Math.ceil((data.resetAt - now) / 60000);
+      return res.status(429).json({
+        error: errMsg || `Too many requests. Please try again in ${waitMinutes} minute(s).`
+      });
+    }
+    data.count += 1;
+    next();
+  };
+}
+
+const helpRequestLimiter = createRateLimiter(10 * 60 * 1000, 15, 'Too many support requests submitted from this IP. Please wait a few minutes.');
+const helpTrackLimiter = createRateLimiter(60 * 1000, 45, 'Too many lookup requests. Please slow down.');
+
 // GET /api/help/options - Public metadata for dropdowns and auto-complete
 router.get('/options', (req, res) => {
   try {
@@ -39,12 +71,14 @@ router.get('/options', (req, res) => {
       SELECT name, code FROM departments ORDER BY name ASC
     `).all();
 
+    // Only return name and department to prevent personal contact leakage to unauthenticated visitors
     const employees = db.prepare(`
-      SELECT name, department, designation, email, phone, location FROM employees WHERE status = 'Active' ORDER BY name ASC
+      SELECT name, department FROM employees WHERE status = 'Active' ORDER BY name ASC
     `).all();
 
+    // Only expose general asset tagging info (no internal location, assigned custodian, or cost)
     const assets = db.prepare(`
-      SELECT id, internal_serial_number, asset_type, brand, model_name, assigned_user, department, location
+      SELECT id, internal_serial_number, asset_type, brand, model_name
       FROM assets
       WHERE working_status != 'Retired'
       ORDER BY internal_serial_number ASC
@@ -77,7 +111,7 @@ router.get('/options', (req, res) => {
 });
 
 // POST /api/help/request - Submit a new IT repair / service request (No login required)
-router.post('/request', (req, res) => {
+router.post('/request', helpRequestLimiter, (req, res) => {
   try {
     const {
       requester_name,
@@ -89,14 +123,30 @@ router.post('/request', (req, res) => {
       repair_type,
       priority,
       issue_description,
+      description,
       remarks
     } = req.body;
+
+    const resolvedDescription = (issue_description || description || '').trim();
+    const resolvedRepairType = (repair_type || req.body.issue_type || 'General IT Support').trim();
 
     if (!requester_name || !requester_name.trim()) {
       return res.status(400).json({ error: 'Please enter your name.' });
     }
-    if (!issue_description || !issue_description.trim()) {
+    if (requester_name.trim().length > 100) {
+      return res.status(400).json({ error: 'Requester name cannot exceed 100 characters.' });
+    }
+    if (!resolvedDescription) {
       return res.status(400).json({ error: 'Please describe the issue or service needed.' });
+    }
+    if (resolvedDescription.length > 3000) {
+      return res.status(400).json({ error: 'Issue description cannot exceed 3000 characters.' });
+    }
+    if (requester_phone && requester_phone.trim().length > 30) {
+      return res.status(400).json({ error: 'Phone number cannot exceed 30 characters.' });
+    }
+    if (requester_email && requester_email.trim().length > 100) {
+      return res.status(400).json({ error: 'Email address cannot exceed 100 characters.' });
     }
 
     // Determine target asset
@@ -139,7 +189,7 @@ router.post('/request', (req, res) => {
     }
     const ticket_number = `REP-${year}-${String(nextNum).padStart(3, '0')}`;
 
-    const cleanType = (repair_type && repair_type.trim()) ? repair_type.trim() : 'Software Installation / Service';
+    const cleanType = (resolvedRepairType && resolvedRepairType.trim()) ? resolvedRepairType.trim() : 'Software Installation / Service';
     const cleanPriority = ['Normal', 'High', 'Critical'].includes(priority) ? priority : 'Normal';
     const today = new Date().toISOString().split('T')[0];
 
@@ -163,7 +213,7 @@ router.post('/request', (req, res) => {
     const result = insert.run(
       ticket_number,
       targetAssetId,
-      issue_description.trim(),
+      resolvedDescription,
       today,
       cleanType,
       requester_name.trim(),
@@ -171,7 +221,7 @@ router.post('/request', (req, res) => {
       requester_email ? requester_email.trim() : '',
       requester_department ? requester_department.trim() : '',
       cleanPriority,
-      remarks ? remarks.trim() : 'Submitted via Public Help Desk'
+      remarks ? remarks.trim().substring(0, 500) : 'Submitted via Public Help Desk'
     );
 
     // Auto-register user in User Master (employees table) if not already existing
@@ -199,7 +249,8 @@ router.post('/request', (req, res) => {
 
     // Fetch created ticket with linked asset info
     const createdTicket = db.prepare(`
-      SELECT r.*, a.internal_serial_number, a.asset_type, a.brand, a.model_name
+      SELECT r.ticket_number, r.repair_date, r.due_date, r.repair_type, r.status, r.priority, r.issue_description,
+             a.internal_serial_number, a.asset_type, a.brand, a.model_name
       FROM repairs r
       LEFT JOIN assets a ON r.asset_id = a.id
       WHERE r.id = ?
@@ -219,18 +270,24 @@ router.post('/request', (req, res) => {
 });
 
 // GET /api/help/track/:ticket - Public ticket tracking by ticket number or phone
-router.get('/track/:ticket', (req, res) => {
+router.get('/track/:ticket', helpTrackLimiter, (req, res) => {
   try {
     const rawSearch = (req.params.ticket || '').trim();
     if (!rawSearch) {
       return res.status(400).json({ error: 'Please enter a ticket number or phone number.' });
     }
+    if (rawSearch.length > 50) {
+      return res.status(400).json({ error: 'Search query too long.' });
+    }
 
     const cleanTicket = rawSearch.toUpperCase().replace(/^#/, '');
 
     const ticket = db.prepare(`
-      SELECT r.*,
-             a.internal_serial_number, a.asset_type, a.brand, a.model_name, a.department as asset_dept
+      SELECT r.ticket_number, r.repair_date, r.due_date, r.completion_date,
+             r.repair_type, r.priority, r.status, r.issue_description,
+             r.requester_name, r.requester_department,
+             r.technician_name, r.technician_contact, r.rejection_reason,
+             a.internal_serial_number, a.asset_type, a.brand, a.model_name
       FROM repairs r
       LEFT JOIN assets a ON r.asset_id = a.id
       WHERE UPPER(r.ticket_number) = ? OR UPPER(r.ticket_number) = ? OR r.requester_phone = ?

@@ -20,8 +20,11 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 function getClientIp(req) {
-  return (req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  return (req.ip || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
 }
+
+// Rate limiting map for change-password attempts
+const passwordChangeAttempts = new Map();
 
 // POST /api/auth/login
 router.post('/login', (req, res) => {
@@ -78,10 +81,11 @@ router.post('/login', (req, res) => {
 
   const token = generateToken(user);
 
-  // Set HTTP-only cookie
+  // Set HTTP-only cookie with strict secure flags
+  const isHttps = process.env.NODE_ENV === 'production' || req.secure || req.headers['x-forwarded-proto'] === 'https';
   res.cookie('it_app_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttps,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
@@ -114,6 +118,19 @@ router.get('/me', authenticateToken, (req, res) => {
 
 // POST /api/auth/change-password
 router.post('/change-password', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const now = Date.now();
+  const userRate = passwordChangeAttempts.get(userId);
+  if (userRate) {
+    if (now < userRate.resetAt && userRate.count >= 5) {
+      const waitMinutes = Math.ceil((userRate.resetAt - now) / 60000);
+      return res.status(429).json({ error: `Too many password change attempts. Please wait ${waitMinutes} minute(s).` });
+    }
+    if (now >= userRate.resetAt) {
+      passwordChangeAttempts.delete(userId);
+    }
+  }
+
   const { current_password, new_password } = req.body;
   if (!current_password || !new_password) {
     return res.status(400).json({ error: 'Current and new password are required.' });
@@ -122,16 +139,25 @@ router.post('/change-password', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'New password must be at least 6 characters.' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   if (!bcrypt.compareSync(current_password, user.password_hash)) {
+    const existing = passwordChangeAttempts.get(userId);
+    if (!existing || now >= existing.resetAt) {
+      passwordChangeAttempts.set(userId, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    } else {
+      existing.count += 1;
+    }
     return res.status(400).json({ error: 'Incorrect current password.' });
   }
+
+  // Clear failed password change attempts
+  passwordChangeAttempts.delete(userId);
 
   const salt = bcrypt.genSaltSync(10);
   const newHash = bcrypt.hashSync(new_password, salt);
 
-  db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newHash, req.user.id);
-  logAudit(req.user.id, req.user.username, 'CHANGE_PASSWORD', 'user', req.user.id, 'User changed their password');
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newHash, userId);
+  logAudit(userId, req.user.username, 'CHANGE_PASSWORD', 'user', userId, 'User changed their password');
 
   res.json({ message: 'Password changed successfully.' });
 });

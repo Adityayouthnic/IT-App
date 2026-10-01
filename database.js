@@ -271,23 +271,6 @@ function seedFromSheet() {
     }
   }
 
-  // Fallback to reading IT Sheet.xlsx directly if json doesn't exist
-  if (!sheetData) {
-    const xlsxPath = path.join(__dirname, 'IT Sheet.xlsx');
-    if (fs.existsSync(xlsxPath)) {
-      try {
-        const xlsx = require('xlsx');
-        const wb = xlsx.readFile(xlsxPath);
-        sheetData = {};
-        for (const sheetName of wb.SheetNames) {
-          sheetData[sheetName] = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
-        }
-      } catch (err) {
-        console.error('Error reading IT Sheet.xlsx:', err.message);
-      }
-    }
-  }
-
   if (!sheetData) {
     console.warn('No sheet data found to seed.');
     return;
