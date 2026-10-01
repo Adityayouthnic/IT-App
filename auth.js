@@ -46,8 +46,10 @@ function authenticateToken(req, res, next) {
     token = req.query.token;
   }
 
+  const isApi = (req.originalUrl || req.baseUrl || req.path || '').startsWith('/api/');
+
   if (!token) {
-    if (req.path.startsWith('/api/')) {
+    if (isApi) {
       return res.status(401).json({ error: 'Authentication required. Please log in.' });
     }
     return res.redirect('/login');
@@ -58,17 +60,19 @@ function authenticateToken(req, res, next) {
     // Verify user is still active in database
     const user = db.prepare('SELECT id, username, full_name, email, role, status FROM users WHERE id = ?').get(decoded.id);
     if (!user || user.status !== 'active') {
-      if (req.path.startsWith('/api/')) {
+      if (isApi) {
         return res.status(401).json({ error: 'User account is inactive or not found.' });
       }
+      res.clearCookie('it_app_token');
       return res.redirect('/login');
     }
     req.user = user;
     next();
   } catch (err) {
-    if (req.path.startsWith('/api/')) {
-      return res.status(403).json({ error: 'Invalid or expired authentication token.' });
+    if (isApi) {
+      return res.status(401).json({ error: 'Invalid or expired authentication token.' });
     }
+    res.clearCookie('it_app_token');
     return res.redirect('/login');
   }
 }

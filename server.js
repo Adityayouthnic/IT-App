@@ -104,12 +104,20 @@ app.get('/health', (req, res) => {
 
 // Serve Login page (Public)
 app.get(['/login', '/login.html'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   // If user is already authenticated with a valid token, redirect to dashboard
   const token = (req.cookies && req.cookies.it_app_token) || (req.headers['authorization']?.startsWith('Bearer ') ? req.headers['authorization'].substring(7) : null);
   if (token) {
     try {
-      jwt.verify(token, JWT_SECRET);
-      return res.redirect('/');
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const user = db.prepare('SELECT id, status FROM users WHERE id = ?').get(decoded.id);
+      if (user && user.status === 'active') {
+        return res.redirect('/');
+      }
+      res.clearCookie('it_app_token');
     } catch (e) {
       // Invalid/expired token: clear cookie and let them see login page
       res.clearCookie('it_app_token');

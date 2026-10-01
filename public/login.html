@@ -171,18 +171,6 @@
         lucide.createIcons();
       }
     });
-
-    (async () => {
-      try {
-        const token = localStorage.getItem('it_app_token');
-        if (token) {
-          const res = await fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (res.ok) window.location.href = '/';
-        }
-      } catch (e) {}
-    })();
   </script>
 </body>
 </html>
