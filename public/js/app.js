@@ -4431,10 +4431,11 @@ async function populateAccessoryUserSelect(selectedUser = '') {
   }
 }
 
-function openQuickAddUserModal() {
+async function openQuickAddUserModal() {
   const form = document.getElementById('form-quick-add-user');
   if (form) form.reset();
   const currentAssetDept = document.getElementById('asset-department')?.value;
+  await populateDepartmentDropdowns(currentAssetDept || '', 'quick-user-dept');
   if (currentAssetDept) {
     const quickDept = document.getElementById('quick-user-dept');
     if (quickDept) quickDept.value = currentAssetDept;
@@ -4633,6 +4634,7 @@ async function openAssignCustodianModal(assetId) {
     select.appendChild(quickOpt);
 
     // Fill department & location
+    await populateDepartmentDropdowns(asset.department || '', 'assign-custodian-department');
     const deptSelect = document.getElementById('assign-custodian-department');
     if (deptSelect) {
       deptSelect.value = asset.department || '';
@@ -4807,6 +4809,11 @@ function resetEmployeeFilterUI(params = {}) {
 
 async function loadEmployees(filterParams = {}) {
   try {
+    const deptFilterEl = document.getElementById('employee-filter-dept');
+    if (!deptFilterEl || deptFilterEl.options.length <= 1) {
+      await populateDepartmentDropdowns('', null, true);
+    }
+
     const search = filterParams.search !== undefined ? filterParams.search : document.getElementById('employee-search-input')?.value || '';
     const dept = filterParams.department !== undefined ? filterParams.department : document.getElementById('employee-filter-dept')?.value || 'all';
     const printer = filterParams.has_printer !== undefined ? filterParams.has_printer : document.getElementById('employee-filter-printer')?.value || 'all';
@@ -4972,6 +4979,8 @@ async function openEmployeeModal(empId = null) {
   document.getElementById('employee-form-id').value = '';
   document.getElementById('employee-status').value = 'Active';
 
+  await populateDepartmentDropdowns('', 'employee-department', true);
+
   if (!empId) {
     document.getElementById('employee-form-title').textContent = 'Add User to Master';
     openModal('modal-employee-form');
@@ -4983,10 +4992,12 @@ async function openEmployeeModal(empId = null) {
     if (!res.ok) return;
     const { employee } = await res.json();
 
+    await populateDepartmentDropdowns(employee.department || '', 'employee-department', false);
+
     document.getElementById('employee-form-title').textContent = `Edit User: ${employee.name}`;
     document.getElementById('employee-form-id').value = employee.id;
     document.getElementById('employee-name').value = employee.name || '';
-    document.getElementById('employee-department').value = employee.department || 'Orders';
+    document.getElementById('employee-department').value = employee.department || '';
     document.getElementById('employee-designation').value = employee.designation || '';
     document.getElementById('employee-location').value = employee.location || '';
     document.getElementById('employee-status').value = employee.status || 'Active';
@@ -5296,18 +5307,18 @@ async function fetchDepartmentsList(force = false) {
 }
 
 // Dynamically populate all department dropdowns across the application
-async function populateDepartmentDropdowns(selectedDept = '') {
+async function populateDepartmentDropdowns(selectedDept = '', targetSelectId = null, forceFetch = false) {
   try {
-    const depts = await fetchDepartmentsList();
+    const depts = await fetchDepartmentsList(forceFetch);
     const sorted = depts.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-    // 1. Form dropdowns (Asset Form, Quick Add User, Employee Form)
-    const formSelectIds = ['asset-department', 'quick-user-dept', 'emp-department'];
+    // 1. Form dropdowns (Asset Form, Quick Add User, Employee Form, Assign Custodian)
+    const formSelectIds = ['asset-department', 'quick-user-dept', 'employee-department', 'emp-department', 'assign-custodian-department'];
     formSelectIds.forEach(id => {
       const select = document.getElementById(id);
       if (!select) return;
 
-      const currentVal = selectedDept || select.value || '';
+      const currentVal = (targetSelectId ? (targetSelectId === id ? selectedDept : select.value) : (selectedDept || select.value)) || '';
       select.innerHTML = '<option value="">-- Select Department from Master --</option>';
 
       let found = false;
@@ -5352,20 +5363,24 @@ async function populateDepartmentDropdowns(selectedDept = '') {
       select._lastSelectedDept = select.value;
     });
 
-    // 2. Filter dropdowns (Asset List filter, Employee List filter)
-    const filterSelectIds = ['asset-filter-dept', 'employee-filter-dept'];
-    filterSelectIds.forEach(id => {
-      const select = document.getElementById(id);
+    // 2. Filter dropdowns (Asset List filter, Employee List filter, Expense List filter)
+    const filterSelectConfigs = [
+      { id: 'asset-filter-dept', defaultVal: '', defaultLabel: 'All Departments' },
+      { id: 'employee-filter-dept', defaultVal: 'all', defaultLabel: 'All Departments' },
+      { id: 'exp-filter-dept', defaultVal: '', defaultLabel: 'All Departments' }
+    ];
+    filterSelectConfigs.forEach(cfg => {
+      const select = document.getElementById(cfg.id);
       if (!select) return;
 
-      const currentVal = select.value || '';
-      select.innerHTML = '<option value="">All Departments</option>';
+      const currentVal = select.value || cfg.defaultVal;
+      select.innerHTML = `<option value="${cfg.defaultVal}">${cfg.defaultLabel}</option>`;
 
       sorted.forEach(d => {
         const opt = document.createElement('option');
         opt.value = d.name;
         opt.textContent = d.code ? `${d.name} [${d.code}]` : d.name;
-        if (currentVal && currentVal !== 'all' && (d.name.trim().toLowerCase() === currentVal.trim().toLowerCase() || currentVal === d.name)) {
+        if (currentVal && currentVal !== cfg.defaultVal && (d.name.trim().toLowerCase() === currentVal.trim().toLowerCase() || currentVal === d.name)) {
           opt.selected = true;
         }
         select.appendChild(opt);
