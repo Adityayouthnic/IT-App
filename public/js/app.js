@@ -747,15 +747,21 @@ async function loadDashboard() {
     } else {
       data.eolWarnings.forEach(w => {
         const item = document.createElement('div');
-        item.className = 'p-3 rounded-xl bg-rose-50/60 border border-rose-100 cursor-pointer hover:bg-rose-50 transition-colors';
+        const isRepeat = Number(w.repair_count || 0) >= 2;
+        const isNotWorking = w.working_status === 'Not Working';
+        item.className = `p-3 rounded-xl ${isNotWorking ? 'bg-rose-50/70 border-rose-200' : 'bg-amber-50/70 border-amber-200'} border cursor-pointer hover:shadow-xs transition-all`;
         item.onclick = () => viewAssetDetail(w.id);
         item.innerHTML = `
           <div class="flex items-center justify-between">
             <span class="font-bold text-xs text-slate-900">#${escapeHtml(w.internal_serial_number)} • ${escapeHtml(w.brand)} ${escapeHtml(w.asset_type)}</span>
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700">${escapeHtml(w.working_status)}</span>
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${isNotWorking ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">
+              ${isRepeat ? `Repeat Repairs (${w.repair_count}x)` : escapeHtml(w.working_status)}
+            </span>
           </div>
-          <p class="text-[11px] text-slate-600 mt-1">User: <strong>${escapeHtml(w.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(w.department || '')}</p>
-          <div class="text-[10px] text-rose-600 font-semibold mt-1">Repairs: ${w.repair_count} tickets • Total spend: ₹${(w.total_repair_spent || 0).toLocaleString('en-IN')}</div>
+          <p class="text-[11px] text-slate-600 mt-1">Custodian: <strong>${escapeHtml(w.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(w.department || '')}</p>
+          <div class="text-[10px] ${isNotWorking ? 'text-rose-600' : 'text-amber-800'} font-semibold mt-1">
+            Repairs: ${w.repair_count} ticket(s) • Total spend: ₹${(w.total_repair_spent || 0).toLocaleString('en-IN')}
+          </div>
         `;
         eolContainer.appendChild(item);
       });
@@ -1568,7 +1574,8 @@ function initSearchableCombobox({
   previewContainerId,
   previewTextId,
   getAssetsFn,
-  filterFn
+  filterFn,
+  onSelect
 }) {
   const container = document.getElementById(containerId);
   const input = document.getElementById(inputId);
@@ -1671,6 +1678,8 @@ function initSearchableCombobox({
       if (previewContainer) previewContainer.classList.add('hidden');
       if (clearBtn) clearBtn.classList.add('hidden');
       dropdown.classList.add('hidden');
+      hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+      if (typeof onSelect === 'function') onSelect(null);
       return;
     }
 
@@ -1682,6 +1691,8 @@ function initSearchableCombobox({
     }
     if (clearBtn) clearBtn.classList.remove('hidden');
     dropdown.classList.add('hidden');
+    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+    if (typeof onSelect === 'function') onSelect(asset);
   }
 
   input.onfocus = () => {
@@ -1922,50 +1933,189 @@ async function loadEolAnalysis() {
     const data = await res.json();
 
     const container = document.getElementById('eol-recommendations-list');
+    if (!container) return;
     container.innerHTML = '';
 
-    const flagged = data.assets.filter(a => a.repair_count > 0 || a.working_status !== 'Working' || a.healthClass !== 'success');
+    // Strictly highlight only assets with 2 or more repairs (repeat failures), or defective/in-repair units
+    // 0 repairs = never highlighted
+    // 1 repair = routine maintenance wear, NOT highlighted
+    const flagged = (data.assets || []).filter(a => {
+      const repairs = Number(a.repair_count || 0);
+      const isRepeatRepair = repairs >= 2;
+      const isDefective = a.working_status === 'Not Working' || a.working_status === 'In Repair';
+      const isDanger = a.healthClass === 'danger';
+      return isRepeatRepair || isDefective || isDanger;
+    });
 
     if (flagged.length === 0) {
-      container.innerHTML = `<div class="col-span-3 py-6 text-center text-xs text-slate-400">All registered devices are operating at nominal performance thresholds.</div>`;
+      container.innerHTML = `
+        <div class="col-span-1 md:col-span-2 lg:col-span-3 p-8 text-center rounded-2xl bg-emerald-50/70 border border-emerald-200/80">
+          <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 shadow-xs">
+            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+          </div>
+          <div class="text-sm font-bold text-emerald-900">All IT Assets in Healthy Condition</div>
+          <div class="text-xs text-emerald-700 mt-1 max-w-md mx-auto">
+            No devices currently meet the repeat maintenance alert threshold (2 or more repairs) or require End-of-Life intervention.
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
       return;
     }
 
     flagged.forEach(a => {
       const card = document.createElement('div');
-      card.className = 'p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all';
+      const repairs = Number(a.repair_count || 0);
+      const isCritical = repairs >= 4 || a.working_status === 'Not Working' || a.healthClass === 'danger';
+      card.className = `p-4 rounded-2xl ${isCritical ? 'bg-rose-50/70 border-rose-200/90' : 'bg-amber-50/70 border-amber-200/90'} border hover:shadow-md cursor-pointer transition-all flex flex-col justify-between`;
       card.onclick = () => viewAssetDetail(a.id);
 
+      const repeatBadge = repairs >= 2
+        ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${isCritical ? 'bg-rose-200/80 text-rose-800' : 'bg-amber-200/80 text-amber-800'}">Repeat Failure (${repairs}x)</span>`
+        : `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${a.working_status === 'Not Working' ? 'bg-rose-200 text-rose-800' : 'bg-blue-100 text-blue-800'}">${escapeHtml(a.working_status)}</span>`;
+
       card.innerHTML = `
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-mono font-bold text-sm text-slate-900">#${escapeHtml(a.internal_serial_number)} • ${escapeHtml(a.brand)} ${escapeHtml(a.asset_type)}</div>
-            <div class="text-[11px] text-slate-500 mt-0.5">User: ${escapeHtml(a.assigned_user || 'Unassigned')} • ${escapeHtml(a.department || '')}</div>
+        <div>
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="font-mono font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                <span>#${escapeHtml(a.internal_serial_number)}</span>
+                <span class="text-xs font-semibold text-slate-600">• ${escapeHtml(a.brand || '')} ${escapeHtml(a.asset_type)}</span>
+              </div>
+              <div class="text-[11px] text-slate-500 mt-0.5">Custodian: <strong>${escapeHtml(a.assigned_user || 'Unassigned')}</strong> • ${escapeHtml(a.department || 'General')}</div>
+            </div>
+            ${repeatBadge}
           </div>
-          <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${a.healthClass === 'danger' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">${escapeHtml(a.healthScore)}</span>
+
+          <div class="my-3 p-3 rounded-xl bg-white/95 border ${isCritical ? 'border-rose-100' : 'border-amber-100'} text-xs space-y-1.5 shadow-2xs">
+            <div class="flex justify-between items-center text-slate-600">
+              <span>Maintenance Frequency:</span>
+              <span class="font-black ${repairs >= 2 ? (isCritical ? 'text-rose-700' : 'text-amber-700') : 'text-slate-800'}">
+                ${repairs} repair ticket(s) ${repairs >= 2 ? '⚠️' : ''}
+              </span>
+            </div>
+            <div class="flex justify-between items-center text-slate-600">
+              <span>Cumulative Maintenance Spend:</span>
+              <strong class="text-slate-900 font-mono">₹${(a.total_repair_cost || 0).toLocaleString('en-IN')}</strong>
+            </div>
+            <div class="flex justify-between items-center text-slate-600">
+              <span>Parts Replaced / Upgraded:</span>
+              <span class="font-semibold text-slate-700 truncate max-w-[180px]" title="${escapeHtml(a.parts_added_summary || 'Standard')}">${escapeHtml(a.parts_added_summary || 'Standard')}</span>
+            </div>
+          </div>
         </div>
-        <div class="my-3 p-2.5 rounded-xl bg-white border border-slate-200/60 text-xs space-y-1">
-          <div class="flex justify-between text-slate-600">
-            <span>Maintenance Tickets:</span>
-            <strong class="text-slate-900">${a.repair_count} ticket(s)</strong>
+
+        <div>
+          <div class="p-2.5 rounded-lg ${isCritical ? 'bg-rose-100/80 text-rose-800 border border-rose-200/60' : 'bg-amber-100/80 text-amber-800 border border-amber-200/60'} text-xs font-medium">
+            <span class="font-bold">💡 Intelligence Engine:</span> ${escapeHtml(a.eolReason)}
           </div>
-          <div class="flex justify-between text-slate-600">
-            <span>Total Maintenance Cost:</span>
-            <strong class="text-slate-900">₹${(a.total_repair_cost || 0).toLocaleString('en-IN')}</strong>
-          </div>
-          <div class="flex justify-between text-slate-600">
-            <span>Parts Installed:</span>
-            <span class="font-semibold text-sky-600 truncate max-w-[180px]">${escapeHtml(a.parts_added_summary || 'Standard')}</span>
+          <div class="mt-2.5 flex items-center justify-between text-[11px] text-slate-500">
+            <span class="hover:text-brand-600 font-semibold flex items-center gap-1">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Inspect Complete Dossier
+            </span>
+            <span class="text-[10px] font-bold text-slate-400">Click to evaluate</span>
           </div>
         </div>
-        <p class="text-xs text-rose-700 font-medium">💡 Recommendation: ${escapeHtml(a.eolReason)}</p>
       `;
       container.appendChild(card);
     });
 
+    lucide.createIcons();
   } catch (err) {
     console.error('EOL analysis error:', err);
   }
+}
+
+// Render Repeat Repair Warning Banner in Repair Modal
+async function handleRepairAssetSelected(asset) {
+  const banner = document.getElementById('repair-repeat-alert-banner');
+  if (!banner) return;
+
+  const repairFormId = document.getElementById('repair-form-id').value;
+  // If editing an existing ticket, do not treat as new repeat ticket attempt
+  if (repairFormId) {
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+    return;
+  }
+
+  if (!asset) {
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+    return;
+  }
+
+  let repairCount = Number(asset.repair_count || 0);
+  let totalCost = Number(asset.total_repair_cost || 0);
+  let partsSummary = asset.parts_added_summary || '';
+
+  // Cross check against cached repairs
+  if (window._cachedRepairs && Array.isArray(window._cachedRepairs)) {
+    const existing = window._cachedRepairs.filter(r => r.asset_id === asset.id);
+    if (existing.length > repairCount) {
+      repairCount = existing.length;
+      totalCost = existing.reduce((s, r) => s + (Number(r.repair_cost) || 0), 0);
+    }
+  }
+
+  if (repairCount === 0) {
+    banner.className = 'mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5';
+    banner.innerHTML = `
+      <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs flex-shrink-0">
+        1st
+      </div>
+      <div>
+        <span class="font-bold text-emerald-900">First-Time Maintenance</span>
+        <span class="text-emerald-700 ml-1">Asset #${escapeHtml(asset.internal_serial_number)} has 0 prior repairs on record. This ticket will be logged as Repair #1.</span>
+      </div>
+    `;
+    banner.classList.remove('hidden');
+    return;
+  }
+
+  // REPEAT REPAIR! (repairCount >= 1 -> this will be Repair #2, #3, etc.)
+  const nextRepairNum = repairCount + 1;
+  const isCritical = repairCount >= 3;
+
+  banner.className = `mt-2.5 p-3.5 rounded-xl border ${
+    isCritical 
+      ? 'bg-rose-50/95 border-rose-300 text-rose-900 shadow-xs' 
+      : 'bg-amber-50/95 border-amber-300 text-amber-900 shadow-xs'
+  } text-xs`;
+
+  banner.innerHTML = `
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 ${
+        isCritical ? 'bg-rose-200 text-rose-800' : 'bg-amber-200 text-amber-800'
+      }">
+        #${nextRepairNum}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-extrabold uppercase tracking-wider text-[11px] ${
+            isCritical ? 'text-rose-900' : 'text-amber-900'
+          }">
+            ⚠️ REPEAT MAINTENANCE ALERT — REPAIR #${nextRepairNum}
+          </span>
+          <span class="px-2 py-0.5 rounded-md font-bold text-[10px] ${
+            isCritical ? 'bg-rose-200 text-rose-900' : 'bg-amber-200 text-amber-900'
+          }">
+            Prior Repairs: ${repairCount}
+          </span>
+        </div>
+        <p class="mt-1 leading-relaxed ${isCritical ? 'text-rose-800' : 'text-amber-800'}">
+          Asset <strong>#${escapeHtml(asset.internal_serial_number)}</strong> (${escapeHtml(asset.brand || '')} ${escapeHtml(asset.asset_type)}) has already been serviced <strong>${repairCount} time(s)</strong> with cumulative spend of <strong>₹${totalCost.toLocaleString('en-IN')}</strong>.
+          ${partsSummary ? `<br><span class="text-[11px] opacity-90">Previous parts replaced: <em>${escapeHtml(partsSummary)}</em></span>` : ''}
+        </p>
+        <div class="mt-2.5 p-2 rounded-lg font-medium text-[11px] ${
+          isCritical ? 'bg-rose-100/90 border border-rose-200 text-rose-900' : 'bg-amber-100/90 border border-amber-200 text-amber-900'
+        }">
+          <strong>Management Decision Gate:</strong> This asset is undergoing repeat repairs. Please evaluate whether to authorize Repair #${nextRepairNum} or review this unit for replacement/decommissioning.
+        </div>
+      </div>
+    </div>
+  `;
+  banner.classList.remove('hidden');
 }
 
 // Open Repair Ticket Form
@@ -1976,6 +2126,12 @@ async function openRepairModal(preselectedAssetId = null) {
   document.getElementById('repair-form-title').textContent = 'Log Asset Repair / Part Replacement';
   document.getElementById('repair-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('repair-due-date').value = '';
+
+  const banner = document.getElementById('repair-repeat-alert-banner');
+  if (banner) {
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+  }
 
   await fetchMasterAssets(false);
 
@@ -1989,11 +2145,20 @@ async function openRepairModal(preselectedAssetId = null) {
       previewContainerId: 'repair-selected-asset-preview',
       previewTextId: 'repair-selected-asset-text',
       getAssetsFn: () => (window._allMasterAssets || []),
-      filterFn: () => true
+      filterFn: () => true,
+      onSelect: (asset) => {
+        handleRepairAssetSelected(asset);
+      }
     });
   }
 
   repairCombobox.setValue(preselectedAssetId);
+  if (preselectedAssetId) {
+    const selAsset = (window._allMasterAssets || []).find(a => a.id === Number(preselectedAssetId) || a.internal_serial_number === String(preselectedAssetId));
+    if (selAsset) {
+      handleRepairAssetSelected(selAsset);
+    }
+  }
   openModal('modal-repair-form');
 }
 
@@ -2020,6 +2185,13 @@ async function openEditRepairModal(repairId) {
     document.getElementById('repair-status').value = repair.status || 'In Progress';
     document.getElementById('repair-remarks').value = repair.remarks || '';
 
+    // Hide repeat warning banner on edit since this is an existing ticket
+    const banner = document.getElementById('repair-repeat-alert-banner');
+    if (banner) {
+      banner.classList.add('hidden');
+      banner.innerHTML = '';
+    }
+
   } catch (err) {
     console.error(err);
   }
@@ -2037,6 +2209,42 @@ async function handleRepairSubmit(e) {
   const btn = document.getElementById('btn-save-repair');
   btn.disabled = true;
   btn.textContent = 'Saving...';
+
+  // Repeat Repair Confirmation Gate (Only for new repair tickets)
+  if (!id) {
+    const asset = (window._allMasterAssets || []).find(a => a.id === Number(assetId) || a.internal_serial_number === String(assetId));
+    let repairCount = asset ? Number(asset.repair_count || 0) : 0;
+    let totalCost = asset ? Number(asset.total_repair_cost || 0) : 0;
+
+    if (window._cachedRepairs && Array.isArray(window._cachedRepairs)) {
+      const existing = window._cachedRepairs.filter(r => r.asset_id === Number(assetId));
+      if (existing.length > repairCount) {
+        repairCount = existing.length;
+        totalCost = existing.reduce((s, r) => s + (Number(r.repair_cost) || 0), 0);
+      }
+    }
+
+    if (repairCount >= 1) {
+      const nextNum = repairCount + 1;
+      const serial = asset ? asset.internal_serial_number : `#${assetId}`;
+      const assetDesc = asset ? `${asset.brand || ''} ${asset.asset_type || ''}`.trim() : '';
+
+      const confirmProceed = window.confirm(
+        `⚠️ REPEAT REPAIR CONFIRMATION\n\n` +
+        `Asset #${serial} (${assetDesc}) has already undergone ${repairCount} repair(s) (Total spent: ₹${totalCost.toLocaleString('en-IN')}).\n\n` +
+        `This new ticket will be Repair #${nextNum}.\n\n` +
+        `Are you sure you want to proceed with creating Repair #${nextNum}?\n\n` +
+        `• Click [OK] to proceed and log Repair #${nextNum}.\n` +
+        `• Click [Cancel] to stop and consider decommissioning or replacement.`
+      );
+
+      if (!confirmProceed) {
+        btn.disabled = false;
+        btn.textContent = 'Save Repair Ticket';
+        return;
+      }
+    }
+  }
 
   const payload = {
     asset_id: assetId,
@@ -2185,6 +2393,58 @@ async function openApproveTicketModal(repairId) {
     document.getElementById('approve-technician-contact').value = '';
     document.getElementById('approve-repair-type').value = repair.repair_type || 'Software Installation / Service';
 
+    // Repeat Repair check for the linked asset
+    const repeatBanner = document.getElementById('approve-repeat-warning-banner');
+    if (repeatBanner) {
+      repeatBanner.classList.add('hidden');
+      repeatBanner.innerHTML = '';
+
+      if (repair.asset_id) {
+        await fetchMasterAssets(false);
+        const asset = (window._allMasterAssets || []).find(a => a.id === repair.asset_id);
+        let repairCount = asset ? Number(asset.repair_count || 0) : 0;
+        let totalCost = asset ? Number(asset.total_repair_cost || 0) : 0;
+
+        if (window._cachedRepairs && Array.isArray(window._cachedRepairs)) {
+          const completedOrExisting = window._cachedRepairs.filter(r => r.asset_id === repair.asset_id && r.id !== repair.id);
+          if (completedOrExisting.length > repairCount) {
+            repairCount = completedOrExisting.length;
+            totalCost = completedOrExisting.reduce((s, r) => s + (Number(r.repair_cost) || 0), 0);
+          }
+        }
+
+        if (repairCount >= 1) {
+          const nextRepairNum = repairCount + 1;
+          const isCritical = repairCount >= 3;
+          repeatBanner.className = `p-3.5 rounded-xl border ${
+            isCritical ? 'bg-rose-50/95 border-rose-300 text-rose-900 shadow-xs' : 'bg-amber-50/95 border-amber-300 text-amber-900 shadow-xs'
+          } text-xs`;
+          repeatBanner.innerHTML = `
+            <div class="flex items-start gap-2.5">
+              <span class="text-base flex-shrink-0">⚠️</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <strong class="font-extrabold uppercase tracking-wide text-[11px] ${isCritical ? 'text-rose-900' : 'text-amber-900'}">
+                    REPEAT REPAIR ALERT — THIS WILL BE REPAIR #${nextRepairNum}
+                  </strong>
+                  <span class="px-2 py-0.5 rounded-md font-bold text-[10px] ${isCritical ? 'bg-rose-200 text-rose-900' : 'bg-amber-200 text-amber-900'}">
+                    Prior Repairs: ${repairCount}
+                  </span>
+                </div>
+                <p class="mt-1 leading-relaxed ${isCritical ? 'text-rose-800' : 'text-amber-800'}">
+                  Asset <strong>#${escapeHtml(repair.internal_serial_number || '')}</strong> has already been repaired <strong>${repairCount} time(s)</strong> (Cumulative spend: <strong>₹${totalCost.toLocaleString('en-IN')}</strong>).
+                </p>
+                <div class="mt-2 text-[11px] p-2 rounded-lg font-medium ${isCritical ? 'bg-rose-100/90 border border-rose-200 text-rose-900' : 'bg-amber-100/90 border border-amber-200 text-amber-900'}">
+                  <strong>Decision Gate:</strong> This asset is showing recurring issues. Evaluate whether to proceed with Repair #${nextRepairNum} or review for replacement.
+                </div>
+              </div>
+            </div>
+          `;
+          repeatBanner.classList.remove('hidden');
+        }
+      }
+    }
+
     // Set default target due date: today + 2 days
     const due = new Date();
     due.setDate(due.getDate() + 2);
@@ -2201,6 +2461,30 @@ async function submitApproveTicket(e) {
   e.preventDefault();
   const repairId = document.getElementById('approve-ticket-id').value;
   const btn = document.getElementById('btn-submit-approve-ticket');
+
+  // Repeat repair confirmation check
+  const repair = (window._cachedRepairs || []).find(r => r.id === Number(repairId));
+  if (repair && repair.asset_id) {
+    const asset = (window._allMasterAssets || []).find(a => a.id === repair.asset_id);
+    let repairCount = asset ? Number(asset.repair_count || 0) : 0;
+    if (window._cachedRepairs && Array.isArray(window._cachedRepairs)) {
+      const past = window._cachedRepairs.filter(r => r.asset_id === repair.asset_id && r.id !== repair.id);
+      if (past.length > repairCount) repairCount = past.length;
+    }
+    if (repairCount >= 1) {
+      const nextNum = repairCount + 1;
+      const confirmApprove = window.confirm(
+        `⚠️ REPEAT REPAIR APPROVAL CONFIRMATION\n\n` +
+        `Asset #${repair.internal_serial_number || 'GEN-IT'} has already undergone ${repairCount} repair(s).\n\n` +
+        `Approving this ticket will make it Repair #${nextNum}.\n\n` +
+        `Do you want to proceed with approving this repeat repair?`
+      );
+      if (!confirmApprove) {
+        return;
+      }
+    }
+  }
+
   btn.disabled = true;
   btn.textContent = 'Approving...';
 

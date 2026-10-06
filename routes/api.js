@@ -131,12 +131,13 @@ router.get('/dashboard/stats', (req, res) => {
       LIMIT 5
     `).all();
 
-    // Assets Needing Attention / Lifecycle Warning (High repair count or not working)
+    // Assets Needing Attention / Lifecycle Warning (2+ repairs or not working / in repair)
     const eolWarnings = db.prepare(`
       SELECT a.*, COUNT(r.id) as repair_count, COALESCE(SUM(r.repair_cost), 0) as total_repair_spent
       FROM assets a
       LEFT JOIN repairs r ON a.id = r.asset_id
-      WHERE a.working_status = 'Not Working' OR a.is_repaired = 1
+      WHERE a.working_status IN ('Not Working', 'In Repair')
+         OR (SELECT COUNT(*) FROM repairs WHERE asset_id = a.id) >= 2
       GROUP BY a.id
       ORDER BY repair_count DESC, a.working_status DESC
       LIMIT 5
@@ -206,7 +207,13 @@ function computeAssetLifecycle(asset, repairCount = 0, totalRepairCost = 0) {
     }
   }
 
+  const numRepairs = Number(repairCount) || 0;
+  const numCost = Number(totalRepairCost) || 0;
+
   // Health and End-of-Life (EOL) calculation
+  // Strict rule: Only flag assets with 2 or more repairs (numRepairs >= 2), or non-functional / defective units.
+  // 0 repairs = Healthy
+  // 1 repair = Routine maintenance (functioning normally, not flagged for EOL)
   let healthScore = 'Healthy';
   let healthClass = 'success';
   let eolReason = 'Operating normally with no critical issues.';
@@ -219,18 +226,27 @@ function computeAssetLifecycle(asset, repairCount = 0, totalRepairCost = 0) {
     healthScore = 'Critical / Non-Functional';
     healthClass = 'danger';
     eolReason = 'Device is currently defective and non-operational.';
-  } else if (repairCount >= 4 || (totalRepairCost > 0 && asset.purchase_cost > 0 && totalRepairCost >= asset.purchase_cost * 0.6)) {
+  } else if (asset.working_status === 'In Repair') {
+    healthScore = 'Currently In Repair';
+    healthClass = 'warning';
+    eolReason = 'Device is actively undergoing maintenance.';
+  } else if (numRepairs >= 4 || (numCost > 0 && asset.purchase_cost > 0 && numCost >= asset.purchase_cost * 0.6)) {
     healthScore = 'End-of-Life Warning';
     healthClass = 'danger';
-    eolReason = `Exceeded maintenance threshold (${repairCount} repairs, spent ₹${totalRepairCost}). Recommend replacement.`;
-  } else if (repairCount >= 2 || ageYears >= 4) {
-    healthScore = 'High Maintenance / Aging';
+    eolReason = `Exceeded maintenance threshold (${numRepairs} repairs, spent ₹${numCost.toLocaleString('en-IN')}). High failure frequency; recommend replacement.`;
+  } else if (numRepairs >= 2) {
+    healthScore = `Repeat Repairs (${numRepairs}x)`;
     healthClass = 'warning';
-    eolReason = `Frequent repairs (${repairCount}) or age (${ageYears} yrs). Monitor closely for wear.`;
-  } else if (repairCount === 1 || asset.is_repaired === 1) {
-    healthScore = 'Moderate Wear';
+    eolReason = `Attention Needed: Asset has undergone ${numRepairs} repairs (Spent ₹${numCost.toLocaleString('en-IN')}). Review hardware stability before approving further repairs.`;
+  } else if (numRepairs === 1) {
+    // 1 repair is acceptable routine maintenance — NOT flagged as needing EOL intervention
+    healthScore = '1 Routine Repair';
+    healthClass = 'success';
+    eolReason = 'Asset has had 1 routine maintenance ticket; currently functioning adequately.';
+  } else if (ageYears >= 5) {
+    healthScore = 'Aging Hardware';
     healthClass = 'info';
-    eolReason = 'Asset has had 1 repair/upgrade; functioning adequately.';
+    eolReason = `Asset is ${ageYears} years old. Operating normally, but monitor for obsolescence.`;
   }
 
   return { ageString, ageYears, healthScore, healthClass, eolReason };
@@ -1554,6 +1570,10 @@ router.post('/repairs', requireRoles('admin', 'technician'), (req, res) => {
     }
     const ticket_number = `REP-${year}-${String(nextNum).padStart(3, '0')}`;
 
+    // Count prior repairs for this asset
+    const priorRepairCount = db.prepare('SELECT COUNT(*) as c FROM repairs WHERE asset_id = ?').get(asset_id).c;
+    const repairSequence = priorRepairCount + 1;
+
     const insert = db.prepare(`
       INSERT INTO repairs (
         ticket_number, asset_id, issue_description, repair_date, due_date, repair_vendor,
@@ -1594,9 +1614,10 @@ router.post('/repairs', requireRoles('admin', 'technician'), (req, res) => {
       `).run(updatedParts, asset_id);
     }
 
-    logAudit(req.user.id, req.user.username, 'CREATE_REPAIR', 'repair', result.lastInsertRowid, `Logged repair ticket ${ticket_number} for asset ${asset.internal_serial_number}`);
+    const repeatTag = priorRepairCount >= 1 ? ` [REPEAT REPAIR #${repairSequence}]` : '';
+    logAudit(req.user.id, req.user.username, 'CREATE_REPAIR', 'repair', result.lastInsertRowid, `Logged repair ticket ${ticket_number}${repeatTag} for asset ${asset.internal_serial_number}`);
 
-    res.status(201).json({ message: 'Repair ticket created successfully', ticket_number, id: result.lastInsertRowid });
+    res.status(201).json({ message: 'Repair ticket created successfully', ticket_number, id: result.lastInsertRowid, repair_sequence: repairSequence });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1866,6 +1887,10 @@ router.delete('/repairs/:id', requireRoles('admin'), (req, res) => {
     }
 
     db.prepare('DELETE FROM repairs WHERE id = ?').run(req.params.id);
+    if (existing.asset_id) {
+      const remaining = db.prepare('SELECT COUNT(*) as count FROM repairs WHERE asset_id = ?').get(existing.asset_id).count;
+      db.prepare('UPDATE assets SET is_repaired = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(remaining > 0 ? 1 : 0, existing.asset_id);
+    }
     logAudit(req.user.id, req.user.username, 'DELETE_REPAIR', 'repair', req.params.id, `Deleted repair ticket ${existing.ticket_number}`);
 
     res.json({ message: 'Repair ticket deleted successfully.' });

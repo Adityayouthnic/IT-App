@@ -222,6 +222,17 @@ function initSchema() {
   } catch (e) {
     console.warn('Migration non-workstation key cleanup warning:', e.message);
   }
+
+  // Migration: Synchronize is_repaired flag with actual repairs table count
+  try {
+    db.exec(`
+      UPDATE assets
+      SET is_repaired = (CASE WHEN (SELECT COUNT(*) FROM repairs WHERE repairs.asset_id = assets.id) > 0 THEN 1 ELSE 0 END)
+      WHERE is_repaired != (CASE WHEN (SELECT COUNT(*) FROM repairs WHERE repairs.asset_id = assets.id) > 0 THEN 1 ELSE 0 END);
+    `);
+  } catch (e) {
+    console.warn('Migration repair sync warning:', e.message);
+  }
 }
 
 // Seed Initial Users
