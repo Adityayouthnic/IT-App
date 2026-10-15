@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: it-app
+    runtime: docker
+    plan: starter
+    region: singapore
+    disk:
+      name: it-app-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_PATH
+        value: /app/data/it_inventory.db
