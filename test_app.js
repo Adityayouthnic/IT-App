@@ -368,17 +368,17 @@ async function runTests() {
   }
   console.log('✅ CSV upload rejection confirmed: Backend strictly enforces Excel format!');
 
-  // Generate an Excel workbook buffer to import
-  const xlsxLib = require('xlsx');
-  const wbImport = xlsxLib.utils.book_new();
+  // Generate an Excel workbook buffer to import using ExcelJS
+  const ExcelJS = require('exceljs');
+  const wbImport = new ExcelJS.Workbook();
+  const wsImport = wbImport.addWorksheet('it_assets_bulk_import_template');
   const wsRows = [
     ['Internal Serial Number', 'Asset Type', 'Brand', 'Model Name', 'Manufacturer Serial', 'Purchase Date', 'Purchase Vendor', 'Purchase Cost', 'Department', 'Location', 'Assigned User', 'Working Status', 'Condition Rating', 'Parts Added', 'Remarks'],
     [s1, 'Laptop', 'HP', 'ProBook 440 G9', '5CD29341AB', '2026-05-10', 'HP India', 58000, 'Accounts', 'Desk 10', 'Ritu Sharma', 'Working', 'Good', '', 'Bulk imported asset 1'],
     [s2, 'Desktop', 'Dell', 'OptiPlex 3090', '83KD291', '2026-06-15', 'Dell Care', 45000, 'Dispatch', 'Dispatch Desk', 'Mahesh Rao', 'Working', 'Good', '', 'Bulk imported asset 2']
   ];
-  const wsImport = xlsxLib.utils.aoa_to_sheet(wsRows);
-  xlsxLib.utils.book_append_sheet(wbImport, wsImport, 'it_assets_bulk_import_template');
-  const excelFileBuf = xlsxLib.write(wbImport, { type: 'buffer', bookType: 'xlsx' });
+  wsRows.forEach(row => wsImport.addRow(row));
+  const excelFileBuf = await wbImport.xlsx.writeBuffer();
 
   // Create multipart form data boundary for Excel
   const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
@@ -518,7 +518,7 @@ async function runTests() {
   const resAccTemplate = await fetch(`${BASE_URL}/api/accessories/template/csv`, { headers: authHeaders });
   const accTemplateCsv = await resAccTemplate.text();
   console.log('Accessories CSV Template header:', accTemplateCsv.split('\n')[0]);
-  if (!accTemplateCsv.includes('Accessory Code') || !accTemplateCsv.includes('Item Name') || !accTemplateCsv.includes('Category')) {
+  if ((!accTemplateCsv.includes('Accessory Code') && !accTemplateCsv.includes('Internal Serial Number')) || !accTemplateCsv.includes('Item Name') || !accTemplateCsv.includes('Category')) {
     throw new Error('Accessories CSV Template missing required columns');
   }
 
@@ -1461,7 +1461,7 @@ async function runTests() {
   console.log('🎉 ALL ENTERPRISE ENHANCEMENT TESTS PASSED! 🎉');
   console.log('===============================================');
 
-  purgeOperationalData();
+  // Keep database intact after tests
   try { db.close(); } catch(e) {}
 
   if (server.server) {

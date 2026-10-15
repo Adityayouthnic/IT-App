@@ -4,7 +4,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
-const { db, purgeOperationalData } = require('../database');
+const { db, purgeOperationalData, restoreRailwaySeedData } = require('../database');
 const { authenticateToken, requireRoles, logAudit } = require('../auth');
 
 const upload = multer({
@@ -4046,6 +4046,28 @@ router.post('/admin/clear-inventory-data', requireRoles('admin'), (req, res) => 
     res.json({
       success: true,
       message: 'All operational records (IT Assets, Repairs, Quick Heal Keys, Accessories, and Expenses) have been completely removed. Database is clean for fresh real data entry.'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/restore-railway-data - Admin endpoint to restore exact Railway production dataset
+router.post('/admin/restore-railway-data', requireRoles('admin'), (req, res) => {
+  try {
+    const result = restoreRailwaySeedData();
+    logAudit(
+      req.user.id,
+      req.user.username,
+      'RESTORE_RAILWAY_DATA',
+      'system',
+      'all',
+      `Restored complete Railway inventory dataset by ${req.user.username}`
+    );
+    res.json({
+      success: true,
+      message: 'Railway production inventory dataset restored successfully.',
+      details: result
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

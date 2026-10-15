@@ -653,6 +653,94 @@ function purgeOperationalData() {
   console.log('Database purge completed: All IT assets, repairs, keys, accessories, employees, and expenses cleared.');
 }
 
+// Function to restore all operational data from railway_seed.db or fallback sheet
+function restoreRailwaySeedData() {
+  const seedCandidates = [
+    path.join(__dirname, 'seed_data', 'railway_seed.db'),
+    path.join(__dirname, 'data', 'railway_seed.db'),
+    path.join(__dirname, 'railway_seed.db'),
+    path.join(dbDir, 'railway_seed.db'),
+    path.join(__dirname, 'data', 'it_inventory.db')
+  ];
+
+  let seedPath = null;
+  for (const cand of seedCandidates) {
+    if (fs.existsSync(cand) && path.resolve(cand) !== path.resolve(dbPath)) {
+      try {
+        const testDb = new Database(cand, { readonly: true });
+        const c = testDb.prepare('SELECT COUNT(*) as count FROM assets').get().count;
+        testDb.close();
+        if (c > 1) {
+          seedPath = cand;
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (!seedPath) {
+    console.log('No external seed database found. Falling back to sheet seeding.');
+    db.prepare("DELETE FROM settings WHERE key = 'seed_completed'").run();
+    seedFromSheet();
+    seedEmployeesFromAssets();
+    seedDepartments();
+    ensureAdityaAdmin();
+    return {
+      method: 'sheet',
+      assets: db.prepare('SELECT count(*) as c FROM assets').get().c,
+      keys: db.prepare('SELECT count(*) as c FROM quick_heal_keys').get().c
+    };
+  }
+
+  try {
+    console.log(`Attaching seed database from ${seedPath}...`);
+    db.pragma('foreign_keys = OFF');
+    const safeSeedPath = seedPath.replace(/'/g, "''");
+    db.prepare(`ATTACH DATABASE '${safeSeedPath}' AS seed`).run();
+
+    const tables = ['users', 'quick_heal_keys', 'assets', 'repairs', 'accessories', 'employees', 'departments'];
+    for (const t of tables) {
+      try {
+        db.prepare(`INSERT OR REPLACE INTO ${t} SELECT * FROM seed.${t}`).run();
+      } catch (err) {
+        console.warn(`Warning syncing table ${t}:`, err.message);
+      }
+    }
+    db.prepare("DETACH DATABASE seed").run();
+    db.pragma('foreign_keys = ON');
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('seed_completed', 'true')").run();
+    ensureAdityaAdmin();
+    console.log('Successfully restored Railway production dataset.');
+    return {
+      success: true,
+      assets: db.prepare('SELECT count(*) as c FROM assets').get().c,
+      keys: db.prepare('SELECT count(*) as c FROM quick_heal_keys').get().c,
+      repairs: db.prepare('SELECT count(*) as c FROM repairs').get().c,
+      accessories: db.prepare('SELECT count(*) as c FROM accessories').get().c,
+      employees: db.prepare('SELECT count(*) as c FROM employees').get().c,
+      departments: db.prepare('SELECT count(*) as c FROM departments').get().c
+    };
+  } catch (err) {
+    console.error('restoreRailwaySeedData error:', err.message);
+    db.pragma('foreign_keys = ON');
+    throw err;
+  }
+}
+
+// Auto-check on startup: If assets count is 0 or only has the fallback 'GEN-IT' asset and 0 keys, auto-restore
+function checkAndAutoRestore() {
+  try {
+    const assetCount = db.prepare('SELECT COUNT(*) as count FROM assets').get().count;
+    const keyCount = db.prepare('SELECT COUNT(*) as count FROM quick_heal_keys').get().count;
+    if (assetCount <= 1 && keyCount === 0) {
+      console.log('Database has no operational inventory data (assets: ' + assetCount + ', keys: ' + keyCount + '). Auto-restoring production dataset from Railway...');
+      restoreRailwaySeedData();
+    }
+  } catch (err) {
+    console.warn('checkAndAutoRestore warning:', err.message);
+  }
+}
+
 // Initialize tables and run seeding
 initSchema();
 seedUsers();
@@ -661,6 +749,7 @@ seedEmployeesFromAssets();
 seedDepartments();
 patchAssignedQuantities();
 ensureAdityaAdmin();
+checkAndAutoRestore();
 
 // Optional environment flag for automated zero-state reset
 if (process.env.PURGE_DATA_ON_STARTUP === 'true') {
@@ -672,6 +761,7 @@ module.exports = {
   initSchema,
   seedEmployeesFromAssets,
   seedDepartments,
-  purgeOperationalData
+  purgeOperationalData,
+  restoreRailwaySeedData
 };
 
