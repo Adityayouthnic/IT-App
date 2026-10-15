@@ -727,13 +727,15 @@ function restoreRailwaySeedData() {
   }
 }
 
-// Auto-check on startup: If assets count is 0 or only has the fallback 'GEN-IT' asset and 0 keys, auto-restore
+// Auto-check on startup: If assets count is 0 or only has the fallback 'GEN-IT' asset, or keys are unmapped, auto-restore
 function checkAndAutoRestore() {
   try {
     const assetCount = db.prepare('SELECT COUNT(*) as count FROM assets').get().count;
     const keyCount = db.prepare('SELECT COUNT(*) as count FROM quick_heal_keys').get().count;
-    if (assetCount <= 1 && keyCount === 0) {
-      console.log('Database has no operational inventory data (assets: ' + assetCount + ', keys: ' + keyCount + '). Auto-restoring production dataset from Railway...');
+    const assignedKeys = db.prepare("SELECT COUNT(*) as count FROM quick_heal_keys WHERE status = 'Assigned'").get().count;
+
+    if ((assetCount <= 1 && keyCount === 0) || (keyCount > 0 && assignedKeys === 0)) {
+      console.log(`Database state needs sync (assets: ${assetCount}, keys: ${keyCount}, assignedKeys: ${assignedKeys}). Auto-restoring production dataset from Railway...`);
       restoreRailwaySeedData();
     }
   } catch (err) {
